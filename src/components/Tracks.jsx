@@ -5,52 +5,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Play, Sparkles, BookOpen, Clock, Users, ArrowRight, Zap } from "lucide-react";
 
 const tracksData = {
-  motion: [
-    {
-      id: "m-1",
-      title: "Interactive Web Animation with Framer Motion",
-      duration: "14 hrs",
-      lessons: 28,
-      students: "3.4k",
-      difficulty: "Intermediate",
-      gradient: "from-purple-500/10 via-indigo-500/5 to-transparent",
-      accent: "#a855f7",
-    },
-    {
-      id: "m-2",
-      title: "Introduction to Three.js & 3D WebGL Spaces",
-      duration: "20 hrs",
-      lessons: 35,
-      students: "2.1k",
-      difficulty: "Advanced",
-      gradient: "from-cyan-500/10 via-blue-500/5 to-transparent",
-      accent: "#06b6d4",
-    },
-    {
-      id: "m-3",
-      title: "SVG Animation Mechanics & Micro-interactions",
-      duration: "8 hrs",
-      lessons: 14,
-      students: "1.8k",
-      difficulty: "Beginner",
-      gradient: "from-pink-500/10 via-rose-500/5 to-transparent",
-      accent: "#ec4899",
-    },
-  ],
   frontend: [
     {
-      id: "f-1",
-      title: "Advanced React 19 Ecosystem & Hooks",
+      id: "react",
+      title: "React.js Foundations",
       duration: "18 hrs",
       lessons: 30,
       students: "4.2k",
-      difficulty: "Advanced",
+      difficulty: "Beginner-Intermediate",
       gradient: "from-blue-500/10 via-cyan-500/5 to-transparent",
       accent: "#3b82f6",
     },
     {
-      id: "f-2",
-      title: "Next.js Full-Stack Architecture & App Router",
+      id: "next",
+      title: "Next.js App Router",
       duration: "22 hrs",
       lessons: 45,
       students: "5.1k",
@@ -59,8 +27,8 @@ const tracksData = {
       accent: "#6366f1",
     },
     {
-      id: "f-5",
-      title: "Node.js & Express REST API Development",
+      id: "node",
+      title: "Node.js & Express API",
       duration: "15 hrs",
       lessons: 24,
       students: "3.5k",
@@ -69,101 +37,143 @@ const tracksData = {
       accent: "#10b981",
     },
     {
-      id: "f-3",
-      title: "CSS Architecture: Custom Properties & Tailwind Core",
-      duration: "10 hrs",
-      lessons: 18,
-      students: "2.9k",
-      difficulty: "Beginner",
-      gradient: "from-teal-500/10 via-emerald-500/5 to-transparent",
-      accent: "#14b8a6",
-    },
-    {
-      id: "f-4",
-      title: "Complete Web Development: HTML, CSS, & JS",
+      id: "web-development",
+      title: "Complete Web Dev",
       duration: "16 Weeks",
       lessons: 16,
       students: "6.8k",
       difficulty: "Beginner",
+      gradient: "from-red-500/10 via-orange-500/5 to-transparent",
+      accent: "#ef4444",
+    },
+    {
+      id: "flutter",
+      title: "Flutter Development",
+      duration: "20 hrs",
+      lessons: 35,
+      students: "2.4k",
+      difficulty: "Beginner-Intermediate",
+      gradient: "from-cyan-500/10 via-blue-500/5 to-transparent",
+      accent: "#06b6d4",
+    },
+    {
+      id: "react-native",
+      title: "React Native",
+      duration: "16 hrs",
+      lessons: 28,
+      students: "3.1k",
+      difficulty: "Intermediate",
+      gradient: "from-fuchsia-500/10 via-purple-500/5 to-transparent",
+      accent: "#d946ef",
+    },
+    {
+      id: "mongodb",
+      title: "MongoDB Mastery",
+      duration: "10 hrs",
+      lessons: 18,
+      students: "2.8k",
+      difficulty: "Intermediate",
       gradient: "from-green-500/10 via-emerald-500/5 to-transparent",
       accent: "#10b981",
-    },
+    }
   ],
   ai: [
     {
-      id: "a-1",
-      title: "Introduction to LLMs, Neural Nets, & Transformers",
+      id: "ml-ai",
+      title: "Machine Learning & AI",
+      duration: "30 hrs",
+      lessons: 48,
+      students: "3.9k",
+      difficulty: "Advanced",
+      gradient: "from-amber-500/10 via-orange-500/5 to-transparent",
+      accent: "#f59e0b",
+    },
+    {
+      id: "generative-ai",
+      title: "Generative AI Specialist",
       duration: "25 hrs",
       lessons: 40,
-      students: "3.9k",
+      students: "4.5k",
       difficulty: "Intermediate",
       gradient: "from-amber-500/10 via-orange-500/5 to-transparent",
       accent: "#f59e0b",
     },
     {
-      id: "a-2",
-      title: "Building Autonomous Agents with LangChain",
-      duration: "16 hrs",
-      lessons: 24,
-      students: "1.5k",
+      id: "data-science",
+      title: "Data Science & Analytics",
+      duration: "15 hrs",
+      lessons: 25,
+      students: "3.2k",
+      difficulty: "Beginner-Intermediate",
+      gradient: "from-emerald-500/10 via-teal-500/5 to-transparent",
+      accent: "#10b981",
+    }
+  ],
+  devops: [
+    {
+      id: "devops",
+      title: "DevOps & CI/CD",
+      duration: "14 hrs",
+      lessons: 22,
+      students: "2.7k",
       difficulty: "Advanced",
-      gradient: "from-red-500/10 via-orange-500/5 to-transparent",
+      gradient: "from-indigo-500/10 via-blue-500/5 to-transparent",
+      accent: "#6366f1",
+    },
+    {
+      id: "cybersecurity",
+      title: "Cybersecurity Foundations",
+      duration: "18 hrs",
+      lessons: 30,
+      students: "3.6k",
+      difficulty: "Intermediate-Advanced",
+      gradient: "from-red-500/10 via-rose-500/5 to-transparent",
       accent: "#ef4444",
     },
     {
-      id: "a-3",
-      title: "Prompt Engineering & Vector Databases",
-      duration: "9 hrs",
-      lessons: 15,
-      students: "2.6k",
-      difficulty: "Beginner",
-      gradient: "from-yellow-500/10 via-amber-500/5 to-transparent",
-      accent: "#eab308",
-    },
-  ],
-  ux: [
-    {
-      id: "u-1",
-      title: "Interactive Prototype Design in Figma",
+      id: "cloud-computing",
+      title: "Cloud Computing",
       duration: "12 hrs",
       lessons: 20,
-      students: "2.7k",
-      difficulty: "Beginner",
-      gradient: "from-fuchsia-500/10 via-purple-500/5 to-transparent",
-      accent: "#d946ef",
-    },
-    {
-      id: "u-2",
-      title: "Design Systems & High-Fidelity Styling Handshake",
-      duration: "15 hrs",
-      lessons: 25,
-      students: "1.9k",
+      students: "4.1k",
       difficulty: "Intermediate",
-      gradient: "from-emerald-500/10 via-teal-500/5 to-transparent",
-      accent: "#10b981",
+      gradient: "from-blue-500/10 via-indigo-500/5 to-transparent",
+      accent: "#6366f1",
+    }
+  ],
+  creative: [
+    {
+      id: "blockchain",
+      title: "Blockchain & Web3",
+      duration: "20 hrs",
+      lessons: 32,
+      students: "2.1k",
+      difficulty: "Advanced",
+      gradient: "from-purple-500/10 via-indigo-500/5 to-transparent",
+      accent: "#a855f7",
     },
     {
-      id: "u-3",
-      title: "Cognitive UX: Psychology behind User Retention",
+      id: "trending-tech",
+      title: "Trending Tech Stack",
       duration: "14 hrs",
       lessons: 22,
-      students: "2.2k",
-      difficulty: "Advanced",
-      gradient: "from-cyan-500/10 via-indigo-500/5 to-transparent",
-      accent: "#06b6d4",
-    },
-  ],
+      students: "2.9k",
+      difficulty: "Intermediate-Advanced",
+      gradient: "from-fuchsia-500/10 via-purple-500/5 to-transparent",
+      accent: "#d946ef",
+    }
+  ]
 };
 
 const tabList = [
-  { id: "motion", name: "Creative Motion" },
   { id: "frontend", name: "Frontend Architect" },
   { id: "ai", name: "AI Agents" },
-  { id: "ux", name: "UX/UI Craft" },
+  { id: "devops", name: "Cloud & DevOps" },
+  { id: "creative", name: "Creative Tech" },
 ];
 
 export default function Tracks() {
-  const [activeTab, setActiveTab] = useState("motion");
+  const [activeTab, setActiveTab] = useState("frontend");
   const [hoveredCourseId, setHoveredCourseId] = useState(null);
 
   return (
@@ -268,22 +278,7 @@ export default function Tracks() {
                 onMouseEnter={() => setHoveredCourseId(course.id)}
                 onMouseLeave={() => setHoveredCourseId(null)}
                 onClick={() => {
-                  const courseIdMap = {
-                    "f-1": "react",
-                    "f-2": "next",
-                    "f-5": "node",
-                    "f-4": "web-development",
-                    "a-1": "ml-ai",
-                    "a-2": "generative-ai",
-                    "a-3": "generative-ai"
-                  };
-                  const mappedId = courseIdMap[course.id];
-                  if (mappedId) {
-                    window.location.href = `/courses/${mappedId}`;
-                  } else {
-                    // If no exact lesson course mapping matches, go to catalog
-                    window.location.href = "/courses";
-                  }
+                  window.location.href = `/courses/${course.id}`;
                 }}
                 className="group relative flex flex-col justify-between h-full rounded-2xl p-6 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer"
                 style={{
