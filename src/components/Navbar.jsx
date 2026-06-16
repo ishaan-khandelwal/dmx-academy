@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Menu, X, ArrowRight, ChevronDown } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
@@ -8,6 +9,7 @@ import ThemeToggle from "./ThemeToggle";
 const navItems = [
   { name: "Tracks", href: "/#tracks" },
   { name: "Curriculum", href: "/#process" },
+  { name: "Contests", href: "/contest" },
   { name: "Pricing", href: "/#pricing" },
 ];
 
@@ -39,7 +41,7 @@ export default function Navbar() {
           }}
         >
           {/* Logo */}
-          <a href="/" className="flex items-center space-x-2 text-xl font-bold font-display tracking-tight group"
+          <Link href="/" className="flex items-center space-x-2 text-xl font-bold font-display tracking-tight group"
             style={{ color: "var(--text-primary)" }}
           >
             <motion.div
@@ -53,7 +55,7 @@ export default function Navbar() {
             <span style={{ color: "var(--text-primary)" }}>
               Synapse
             </span>
-          </a>
+          </Link>
 
           {/* Desktop Nav Items */}
           <ul className="hidden md:flex items-center space-x-1">
@@ -129,14 +131,14 @@ export default function Navbar() {
                       </a>
                     ))}
                     <div className="border-t my-1" style={{ borderColor: "var(--border-primary)" }} />
-                    <a
+                    <Link
                       href="/courses"
                       className="block rounded-xl px-4 py-2 text-xs font-bold text-center transition-all hover:bg-slate-500/10"
                       style={{ color: "var(--text-accent)" }}
                       onClick={() => setIsDropdownOpen(false)}
                     >
                       View All Courses &rarr;
-                    </a>
+                    </Link>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -216,14 +218,14 @@ export default function Navbar() {
                 </li>
               ))}
               <li>
-                <a
+                <Link
                   href="/courses"
                   onClick={() => setIsOpen(false)}
                   className="block text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
                   style={{ color: "var(--text-accent)" }}
                 >
                   View Course Catalog &rarr;
-                </a>
+                </Link>
               </li>
 
               <li className="pt-2 border-t" style={{ borderColor: "var(--border-primary)" }}>
