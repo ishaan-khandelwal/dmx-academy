@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Menu, X, ArrowRight, ChevronDown, User, GraduationCap, ShieldAlert } from "lucide-react";
+import { Sparkles, Menu, X, ArrowRight, ChevronDown, User, GraduationCap, ShieldAlert, LogOut } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { name: "Tracks", href: "/#tracks" },
@@ -21,6 +23,8 @@ const courseCategories = [
 ];
 
 export default function Navbar() {
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -150,103 +154,223 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             <ThemeToggle />
 
-            {/* Sign In Dropdown */}
-            <div
-              className="relative"
-              onMouseEnter={() => setIsSignInDropdownOpen(true)}
-              onMouseLeave={() => setIsSignInDropdownOpen(false)}
-            >
-              <button
-                className="relative flex items-center gap-1.5 px-4 py-2 text-sm font-semibold transition-colors outline-none cursor-pointer rounded-full border"
-                style={{
-                  color: isSignInDropdownOpen ? "var(--text-accent)" : "var(--text-secondary)",
-                  backgroundColor: "var(--bg-card)",
-                  borderColor: "var(--border-primary)",
-                }}
+            {/* Auth User Panel / Sign In Dropdown */}
+            {user ? (
+              <div
+                className="relative"
+                onMouseEnter={() => setIsSignInDropdownOpen(true)}
+                onMouseLeave={() => setIsSignInDropdownOpen(false)}
               >
-                <span>Sign In</span>
-                <motion.span
-                  animate={{ rotate: isSignInDropdownOpen ? 180 : 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="shrink-0"
+                <button
+                  className="relative flex items-center gap-1.5 px-4 py-2 text-sm font-semibold transition-colors outline-none cursor-pointer rounded-full border"
+                  style={{
+                    color: isSignInDropdownOpen ? "var(--text-accent)" : "var(--text-secondary)",
+                    backgroundColor: "var(--bg-card)",
+                    borderColor: "var(--border-primary)",
+                  }}
                 >
-                  <ChevronDown size={14} />
-                </motion.span>
-              </button>
-
-              <AnimatePresence>
-                {isSignInDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  <User size={14} className="text-[var(--text-accent)]" />
+                  <span>{user.username}</span>
+                  <motion.span
+                    animate={{ rotate: isSignInDropdownOpen ? 180 : 0 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute right-0 mt-2 w-56 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl z-50 text-left"
-                    style={{
-                      backgroundColor: "var(--bg-card)",
-                      borderColor: "var(--border-primary)",
-                      boxShadow: "0 10px 30px rgba(0,0,0,0.08)"
-                    }}
+                    className="shrink-0"
                   >
-                    <Link
-                      href="/student"
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-500/5 transition-all"
-                      onClick={() => setIsSignInDropdownOpen(false)}
-                    >
-                      <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0">
-                        <User size={15} />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
-                          Student Portal
-                        </div>
-                        <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
-                          Access your study desk
-                        </div>
-                      </div>
-                    </Link>
+                    <ChevronDown size={14} />
+                  </motion.span>
+                </button>
 
-                    <Link
-                      href="/mentor"
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-500/5 transition-all"
-                      onClick={() => setIsSignInDropdownOpen(false)}
+                <AnimatePresence>
+                  {isSignInDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-2 w-56 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl z-50 text-left"
+                      style={{
+                        backgroundColor: "var(--bg-card)",
+                        borderColor: "var(--border-primary)",
+                        boxShadow: "0 10px 30px rgba(0,0,0,0.08)"
+                      }}
                     >
-                      <div className="p-2 rounded-lg bg-violet-500/10 text-violet-500 shrink-0">
-                        <GraduationCap size={15} />
+                      <div className="px-3 py-2 text-[10px] font-bold border-b select-none mb-1 text-slate-400" style={{ borderColor: "var(--border-primary)" }}>
+                        Logged in as: <span className="text-[var(--text-primary)] block font-mono font-medium truncate">{user.email}</span>
                       </div>
-                      <div>
-                        <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
-                          Mentor Board
-                        </div>
-                        <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
-                          Review submissions
-                        </div>
-                      </div>
-                    </Link>
 
-                    <div className="border-t my-1" style={{ borderColor: "var(--border-primary)" }} />
+                      {user.role === "ADMIN" ? (
+                        <>
+                          <Link
+                            href="/admin"
+                            className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-500/5 transition-all"
+                            onClick={() => setIsSignInDropdownOpen(false)}
+                          >
+                            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
+                              <ShieldAlert size={15} />
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                                Admin Panel
+                              </div>
+                              <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                                Create contests & problems
+                              </div>
+                            </div>
+                          </Link>
+                          <Link
+                            href="/mentor"
+                            className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-500/5 transition-all"
+                            onClick={() => setIsSignInDropdownOpen(false)}
+                          >
+                            <div className="p-2 rounded-lg bg-violet-500/10 text-violet-500 shrink-0">
+                              <GraduationCap size={15} />
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                                Mentor Portal
+                              </div>
+                              <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                                Review submissions
+                              </div>
+                            </div>
+                          </Link>
+                        </>
+                      ) : (
+                        <Link
+                          href="/student"
+                          className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-500/5 transition-all"
+                          onClick={() => setIsSignInDropdownOpen(false)}
+                        >
+                          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0">
+                            <User size={15} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                              Student Desk
+                            </div>
+                            <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                              Access study room
+                            </div>
+                          </div>
+                        </Link>
+                      )}
 
-                    <Link
-                      href="/admin"
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-500/5 transition-all"
-                      onClick={() => setIsSignInDropdownOpen(false)}
+                      <div className="border-t my-1" style={{ borderColor: "var(--border-primary)" }} />
+
+                      <button
+                        onClick={() => {
+                          logout();
+                          setIsSignInDropdownOpen(false);
+                          router.push("/");
+                        }}
+                        className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-rose-500/10 text-rose-500 transition-all font-bold text-xs cursor-pointer"
+                      >
+                        <LogOut size={15} />
+                        <span>Sign Out</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              /* Sign In Dropdown */
+              <div
+                className="relative"
+                onMouseEnter={() => setIsSignInDropdownOpen(true)}
+                onMouseLeave={() => setIsSignInDropdownOpen(false)}
+              >
+                <button
+                  className="relative flex items-center gap-1.5 px-4 py-2 text-sm font-semibold transition-colors outline-none cursor-pointer rounded-full border"
+                  style={{
+                    color: isSignInDropdownOpen ? "var(--text-accent)" : "var(--text-secondary)",
+                    backgroundColor: "var(--bg-card)",
+                    borderColor: "var(--border-primary)",
+                  }}
+                >
+                  <span>Sign In</span>
+                  <motion.span
+                    animate={{ rotate: isSignInDropdownOpen ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="shrink-0"
+                  >
+                    <ChevronDown size={14} />
+                  </motion.span>
+                </button>
+
+                <AnimatePresence>
+                  {isSignInDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-2 w-56 rounded-2xl border p-2 shadow-2xl backdrop-blur-xl z-50 text-left"
+                      style={{
+                        backgroundColor: "var(--bg-card)",
+                        borderColor: "var(--border-primary)",
+                        boxShadow: "0 10px 30px rgba(0,0,0,0.08)"
+                      }}
                     >
-                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
-                        <ShieldAlert size={15} />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
-                          Admin Control
+                      <Link
+                        href="/login?redirect=/student"
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-500/5 transition-all"
+                        onClick={() => setIsSignInDropdownOpen(false)}
+                      >
+                        <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0">
+                          <User size={15} />
                         </div>
-                        <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
-                          Manage competitions
+                        <div>
+                          <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                            Student Portal
+                          </div>
+                          <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                            Access your study desk
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                      </Link>
+
+                      <Link
+                        href="/login?redirect=/mentor"
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-500/5 transition-all"
+                        onClick={() => setIsSignInDropdownOpen(false)}
+                      >
+                        <div className="p-2 rounded-lg bg-violet-500/10 text-violet-500 shrink-0">
+                          <GraduationCap size={15} />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                            Mentor Board
+                          </div>
+                          <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                            Review submissions
+                          </div>
+                        </div>
+                      </Link>
+
+                      <div className="border-t my-1" style={{ borderColor: "var(--border-primary)" }} />
+
+                      <Link
+                        href="/login?redirect=/admin"
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-500/5 transition-all"
+                        onClick={() => setIsSignInDropdownOpen(false)}
+                      >
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
+                          <ShieldAlert size={15} />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                            Admin Control
+                          </div>
+                          <div className="text-[9px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                            Manage competitions
+                          </div>
+                        </div>
+                      </Link>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
 
             <motion.a
               href="#pricing"
@@ -330,43 +454,103 @@ export default function Navbar() {
 
               <li className="border-t my-1" style={{ borderColor: "var(--border-primary)" }} />
 
-              <li className="text-[10px] font-bold uppercase tracking-wider pl-1" style={{ color: "var(--text-muted)" }}>
-                Sign In Portals
-              </li>
-
-              <li>
-                <Link
-                  href="/student"
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  <User size={14} className="text-indigo-500" />
-                  <span>Student Portal</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/mentor"
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  <GraduationCap size={14} className="text-violet-500" />
-                  <span>Mentor Board</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/admin"
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
-                  style={{ color: "var(--text-accent)" }}
-                >
-                  <ShieldAlert size={14} className="text-emerald-500" />
-                  <span>Admin Control</span>
-                </Link>
-              </li>
+              {user ? (
+                <>
+                  <li className="text-[10px] font-bold uppercase tracking-wider pl-1" style={{ color: "var(--text-muted)" }}>
+                    Hello, {user.username}
+                  </li>
+                  {user.role === "ADMIN" ? (
+                    <>
+                      <li>
+                        <Link
+                          href="/admin"
+                          onClick={() => setIsOpen(false)}
+                          className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          <ShieldAlert size={14} className="text-emerald-500" />
+                          <span>Admin Control</span>
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/mentor"
+                          onClick={() => setIsOpen(false)}
+                          className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          <GraduationCap size={14} className="text-violet-500" />
+                          <span>Mentor Board</span>
+                        </Link>
+                      </li>
+                    </>
+                  ) : (
+                    <li>
+                      <Link
+                        href="/student"
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        <User size={14} className="text-indigo-500" />
+                        <span>Student Portal</span>
+                      </Link>
+                    </li>
+                  )}
+                  <li className="pt-2">
+                    <button
+                      onClick={() => {
+                        logout();
+                        setIsOpen(false);
+                        router.push("/");
+                      }}
+                      className="w-full flex items-center justify-center gap-2.5 rounded-xl py-3 font-semibold text-rose-500 border border-rose-500/20 bg-rose-500/5 cursor-pointer"
+                    >
+                      <LogOut size={16} />
+                      <span>Sign Out</span>
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li className="text-[10px] font-bold uppercase tracking-wider pl-1" style={{ color: "var(--text-muted)" }}>
+                    Sign In Portals
+                  </li>
+                  <li>
+                    <Link
+                      href="/login?redirect=/student"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      <User size={14} className="text-indigo-500" />
+                      <span>Student Portal</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/login?redirect=/mentor"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      <GraduationCap size={14} className="text-violet-500" />
+                      <span>Mentor Board</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/login?redirect=/admin"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
+                      style={{ color: "var(--text-accent)" }}
+                    >
+                      <ShieldAlert size={14} className="text-emerald-500" />
+                      <span>Admin Control</span>
+                    </Link>
+                  </li>
+                </>
+              )}
 
               <li className="pt-2 border-t" style={{ borderColor: "var(--border-primary)" }}>
                 <a

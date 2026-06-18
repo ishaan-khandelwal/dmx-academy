@@ -11,6 +11,7 @@ import {
   Trophy, Clock, Lock, Flag, Volume2
 } from "lucide-react";
 import { contests } from "@/data/contestData";
+import { useAuth } from "@/context/AuthContext";
 
 const getRandom = () => Math.random();
 const getCurrentTime = () => Date.now();
@@ -62,6 +63,7 @@ function highlightCode(code, lang) {
 export default function ContestWorkspace() {
   const params = useParams();
   const contestId = params.contestId;
+  const { token, API_BASE } = useAuth();
   const [contest, setContest] = useState(null);
   const [loadingContest, setLoadingContest] = useState(true);
 
@@ -114,23 +116,135 @@ export default function ContestWorkspace() {
   const highlightRef = useRef(null);
   const [lineCount, setLineCount] = useState(1);
 
-  // Fetch contest metadata on mount / id change
+  // Fetch contest metadata and linked problem definitions on mount / id change
   useEffect(() => {
-    let found = contests.find(c => c.id === contestId);
-    if (!found && typeof window !== "undefined") {
-      const dynamicRaw = localStorage.getItem("synapse_dynamic_contests");
-      if (dynamicRaw) {
-        try {
-          const dynamicContests = JSON.parse(dynamicRaw);
-          found = dynamicContests.find(c => c.id === contestId) || null;
-        } catch (e) {
-          console.error("Error reading dynamic contest detail:", e);
+    async function loadContest() {
+      let found = null;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/contests/${contestId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.contest) {
+            const dbContest = data.contest;
+            
+            const now = new Date();
+            const start = new Date(dbContest.startTime);
+            const end = new Date(dbContest.endTime);
+            const durationMins = Math.round((end - start) / 60000);
+            
+            let status = "upcoming";
+            if (now >= start && now <= end) {
+              status = "active";
+            } else if (now > end) {
+              status = "past";
+            }
+
+            const resolvedProblems = [];
+            if (dbContest.contestProblems && dbContest.contestProblems.length > 0) {
+              for (const cp of dbContest.contestProblems) {
+                const dbProb = cp.problem;
+                if (!dbProb) continue;
+                
+                try {
+                  const resProb = await fetch(`${API_BASE}/api/problems/${dbProb.slug}`);
+                  if (resProb.ok) {
+                    const dataProb = await resProb.json();
+                    if (dataProb.success && dataProb.problem) {
+                      const fullProb = dataProb.problem;
+                      
+                      const mappedProb = {
+                        id: String(fullProb.id),
+                        title: fullProb.title,
+                        difficulty: fullProb.difficulty.charAt(0).toUpperCase() + fullProb.difficulty.slice(1).toLowerCase(),
+                        category: fullProb.category || "General",
+                        desc: fullProb.statement,
+                        points: cp.points || 100,
+                        defaultLanguage: "javascript",
+                        editorTemplates: {
+                          javascript: `// JavaScript Starter Code\nfunction solve(input) {\n  // Write your code here\n  return "";\n}`,
+                          python: `# Python 3 Starter Code\ndef solve(input_data):\n    # Write your code here\n    pass`
+                        },
+                        testcases: (fullProb.testCases || []).map((tc, index) => ({
+                          name: `Test Case ${index + 1}`,
+                          input: tc.input || "",
+                          expected: tc.expectedOutput || "",
+                          expectedOutput: tc.expectedOutput || "",
+                          isSample: tc.isSample || false,
+                          assertion: (codeStr, runFunc) => {
+                            if (!runFunc) return false;
+                            try {
+                              const cleanExpected = (tc.expectedOutput || "").trim().replace(/\r/g, "");
+                              let parsedInputs;
+                              try {
+                                parsedInputs = JSON.parse(`[${tc.input}]`);
+                              } catch {
+                                parsedInputs = [tc.input];
+                              }
+                              const actual = runFunc(...parsedInputs);
+                              const cleanActual = (actual !== undefined ? actual : "").toString().trim().replace(/\r/g, "");
+                              return cleanActual === cleanExpected;
+                            } catch {
+                              return false;
+                            }
+                          }
+                        })),
+                        tabs: {
+                          description: `### ${fullProb.title}\n\n${fullProb.statement}\n\n### Input Format\n${fullProb.inputFormat}\n\n### Output Format\n${fullProb.outputFormat}\n\n### Constraints\n${fullProb.constraints}`,
+                          followup: `### Followup\n${fullProb.explanation || "No follow-up explanations provided."}`,
+                          editorial: "No official editorial provided.",
+                          solution: "No official solutions provided.",
+                          evaluation: `Time Limit: ${fullProb.timeLimitMs || 1000}ms\nMemory Limit: ${fullProb.memoryLimitMb || 256}MB`
+                        }
+                      };
+                      resolvedProblems.push(mappedProb);
+                    }
+                  }
+                } catch (errProb) {
+                  console.error("Failed fetching problem details for slug:", dbProb.slug, errProb);
+                }
+              }
+            }
+
+            found = {
+              id: String(dbContest.id),
+              title: dbContest.title,
+              desc: dbContest.description || "No description provided.",
+              durationMins,
+              totalPoints: resolvedProblems.reduce((sum, p) => sum + p.points, 0) || 300,
+              status,
+              timeLeftStr: status === "active" ? `${Math.round((end - now) / 60000)}m remaining` : "Completed",
+              startTime: `Starts at ${start.toLocaleTimeString()} on ${start.toLocaleDateString()}`,
+              problems: resolvedProblems,
+              leaderboard: []
+            };
+          }
+        }
+      } catch (err) {
+        console.error("Failed fetching contest details from API:", err);
+      }
+
+      if (!found) {
+        found = contests.find(c => c.id === contestId);
+        if (!found && typeof window !== "undefined") {
+          const dynamicRaw = localStorage.getItem("synapse_dynamic_contests");
+          if (dynamicRaw) {
+            try {
+              const dynamicContests = JSON.parse(dynamicRaw);
+              found = dynamicContests.find(c => c.id === contestId) || null;
+            } catch (e) {
+              console.error("Error reading dynamic contest detail:", e);
+            }
+          }
         }
       }
+
+      setContest(found);
+      setLoadingContest(false);
     }
-    setContest(found);
-    setLoadingContest(false);
-  }, [contestId]);
+
+    loadContest();
+  }, [contestId, API_BASE]);
 
   // Terminate contest callback
   const finishContest = useCallback(() => {

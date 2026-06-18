@@ -10,6 +10,7 @@ import {
   UserCheck, AlertCircle
 } from "lucide-react";
 import { contests } from "@/data/contestData";
+import { useAuth } from "@/context/AuthContext";
 
 const globalLeaderboardMock = [
   { rank: 1, name: "quantum_coder", points: 2840, contests: 12, rankClass: "Grandmaster", color: "text-rose-500" },
@@ -23,42 +24,104 @@ const globalLeaderboardMock = [
 ];
 
 export default function ContestLobby() {
+  const { API_BASE } = useAuth();
   const [activeTab, setActiveTab] = useState("all"); // all, active, upcoming, past, leaderboard
   const [searchQuery, setSearchQuery] = useState("");
   const [allContests, setAllContests] = useState([]);
   const [registeredContests, setRegisteredContests] = useState([]);
   const [pastContestResults, setPastContestResults] = useState(null);
 
-  // Load registration history and dynamic contests from localStorage
+  // Load registration history and dynamic contests from backend + local fallback
   useEffect(() => {
-    let merged = [...contests];
-    if (typeof window !== "undefined") {
-      const savedRegs = localStorage.getItem("contest_registrations");
-      if (savedRegs) {
-        try {
-          const parsed = JSON.parse(savedRegs);
-          setTimeout(() => {
-            setRegisteredContests(parsed);
-          }, 0);
-        } catch {
-          // ignore error
+    async function fetchContests() {
+      let merged = [...contests];
+      try {
+        const res = await fetch(`${API_BASE}/api/contests`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.contests) {
+            const dbContests = data.contests.map(c => {
+              const now = new Date();
+              const start = new Date(c.startTime);
+              const end = new Date(c.endTime);
+              
+              let status = "upcoming";
+              if (now >= start && now <= end) {
+                status = "active";
+              } else if (now > end) {
+                status = "past";
+              }
+
+              const durationMins = Math.round((end - start) / 60000);
+              
+              const startTimeStr = `Starts at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} on ${start.toLocaleDateString()}`;
+              
+              let timeLeftStr = "Completed";
+              if (status === "active") {
+                timeLeftStr = `${Math.round((end - now) / 60000)}m remaining`;
+              } else if (status === "upcoming") {
+                const diffHours = Math.round((start - now) / 3600000);
+                timeLeftStr = diffHours > 0 ? `Starts in ${diffHours} hours` : "Starts soon";
+              }
+
+              return {
+                id: String(c.id),
+                title: c.title,
+                desc: c.description || "No description provided.",
+                durationMins,
+                totalPoints: 300, 
+                status,
+                category: "Backend Development",
+                timeLeftStr,
+                startTime: startTimeStr,
+                problems: [], 
+                leaderboard: []
+              };
+            });
+
+            const savedRaw = localStorage.getItem("synapse_dynamic_contests");
+            let savedList = [];
+            if (savedRaw) {
+              try { savedList = JSON.parse(savedRaw); } catch(e) {}
+            }
+
+            const combined = [
+              ...dbContests,
+              ...savedList.filter(dc => !dbContests.some(dbc => dbc.id === dc.id)),
+              ...contests.filter(sc => !dbContests.some(dbc => dbc.id === sc.id) && !savedList.some(dc => dc.id === sc.id))
+            ];
+            merged = combined;
+          }
+        }
+      } catch (err) {
+        console.error("Backend fetch failed, falling back to local storage / static:", err);
+        const dynamicRaw = localStorage.getItem("synapse_dynamic_contests");
+        if (dynamicRaw) {
+          try {
+            const dynamicContests = JSON.parse(dynamicRaw);
+            const dynamicFiltered = dynamicContests.filter(dc => !contests.some(sc => sc.id === dc.id));
+            merged = [...dynamicFiltered, ...contests];
+          } catch (e) {
+            console.error("Error loading dynamic contests:", e);
+          }
         }
       }
 
-      // Load dynamic contests created by the Admin
-      const dynamicRaw = localStorage.getItem("synapse_dynamic_contests");
-      if (dynamicRaw) {
-        try {
-          const dynamicContests = JSON.parse(dynamicRaw);
-          const dynamicFiltered = dynamicContests.filter(dc => !contests.some(sc => sc.id === dc.id));
-          merged = [...dynamicFiltered, ...contests];
-        } catch (e) {
-          console.error("Error loading dynamic contests:", e);
+      if (typeof window !== "undefined") {
+        const savedRegs = localStorage.getItem("contest_registrations");
+        if (savedRegs) {
+          try {
+            const parsed = JSON.parse(savedRegs);
+            setRegisteredContests(parsed);
+          } catch {}
         }
       }
+
+      setAllContests(merged);
     }
-    setAllContests(merged);
-  }, []);
+
+    fetchContests();
+  }, [API_BASE]);
 
   const handleRegister = (contestId) => {
     const nextRegs = [...registeredContests, contestId];

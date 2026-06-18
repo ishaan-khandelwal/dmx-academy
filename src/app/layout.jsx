@@ -1,4 +1,5 @@
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata = {
   title: "DMX Academy | The Creative & Tech Learning Platform",
@@ -38,7 +39,9 @@ export default function RootLayout({ children }) {
         style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
         suppressHydrationWarning={true}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

@@ -8,9 +8,11 @@ import {
   Plus, Trash2, Calendar, HelpCircle, ArrowLeft, X, RefreshCw
 } from "lucide-react";
 import { practiceProblems } from "@/data/practiceProblems";
+import { useAuth } from "@/context/AuthContext";
 
 export default function CreateContest() {
   const router = useRouter();
+  const { token, API_BASE } = useAuth();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [category, setCategory] = useState("Algorithms & Frontend");
@@ -67,11 +69,138 @@ export default function CreateContest() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title || !slug) return;
+    setSuccess(false);
 
-    // Build the problems array from selection
+    // Formulate dates
+    const startObj = new Date(`${startDate}T${startTime}:00`);
+    const endObj = new Date(startObj.getTime() + Number(durationMins) * 60 * 1000);
+
+    const startTimeStr = startObj.toISOString();
+    const endTimeStr = endObj.toISOString();
+
+    // 1. Get existing problems from backend database
+    let dbProblems = [];
+    try {
+      const resProbs = await fetch(`${API_BASE}/api/problems`);
+      if (resProbs.ok) {
+        const dataProbs = await resProbs.json();
+        if (dataProbs.success) {
+          dbProblems = dataProbs.problems;
+        }
+      }
+    } catch (err) {
+      console.error("Error checking database problems:", err);
+    }
+
+    // 2. Map chosen problem IDs to database integer IDs (self-healing creation if missing)
+    const linkedProblems = [];
+    for (const probId of selectedProblemIds) {
+      const localProb = availableProblems.find(p => p.id === probId);
+      if (!localProb) continue;
+
+      const localSlug = localProb.id; // slug matches local id
+      const match = dbProblems.find(p => p.slug === localSlug);
+      
+      let dbId;
+      if (match) {
+        dbId = match.id;
+      } else {
+        // Create problem in database
+        try {
+          const testCases = (localProb.testcases || []).map(tc => ({
+            input: tc.input || "",
+            expectedOutput: (tc.expected || tc.expectedOutput || "").toString(),
+            isSample: tc.isSample || false
+          }));
+          
+          if (testCases.length === 0) {
+            testCases.push({ input: "", expectedOutput: "", isSample: true });
+          }
+
+          const newProbData = {
+            title: localProb.title.replace(/^\d+\.\s*/, ""),
+            difficulty: (localProb.difficulty || "MEDIUM").toUpperCase(),
+            statement: localProb.desc || localProb.tabs?.description || "Detailed problem statement.",
+            inputFormat: localProb.inputFormat || "Standard input format.",
+            outputFormat: localProb.outputFormat || "Standard output format.",
+            constraints: localProb.constraints || "Standard constraints.",
+            explanation: localProb.explanation || "No explanation provided.",
+            testCases
+          };
+
+          const resCreate = await fetch(`${API_BASE}/api/problems`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(newProbData)
+          });
+
+          if (resCreate.ok) {
+            const dataCreate = await resCreate.json();
+            if (dataCreate.success) {
+              dbId = dataCreate.problem.id;
+            }
+          }
+        } catch (err) {
+          console.error("Failed to create problem in database:", err);
+        }
+      }
+
+      if (dbId) {
+        linkedProblems.push({
+          problemId: dbId,
+          points: Math.round(Number(totalPoints) / (selectedProblemIds.length || 1))
+        });
+      }
+    }
+
+    // 3. Create the contest in the database
+    let dbContestId = null;
+    try {
+      const contestPayload = {
+        title,
+        description: desc,
+        startTime: startTimeStr,
+        endTime: endTimeStr
+      };
+
+      const resContest = await fetch(`${API_BASE}/api/contests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(contestPayload)
+      });
+
+      const contestData = await resContest.json();
+      if (!resContest.ok) {
+        throw new Error(contestData.message || "Failed to create contest.");
+      }
+
+      dbContestId = contestData.contest.id;
+
+      // Link problems to contest in the database
+      for (const link of linkedProblems) {
+        await fetch(`${API_BASE}/api/contests/${dbContestId}/problem`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(link)
+        });
+      }
+    } catch (err) {
+      console.error("Failed backend contest synchronization:", err);
+    }
+
+    // 4. Save to localStorage as a fallback backup
     const contestProblems = selectedProblemIds.map(id => {
       const prob = availableProblems.find(p => p.id === id);
       return {
@@ -80,7 +209,6 @@ export default function CreateContest() {
       };
     });
 
-    // Formulate dates/strings
     const startStr = startDate && startTime 
       ? `Starts at ${startTime} on ${startDate}` 
       : status === "active" ? "Started just now" : "Starts soon";
@@ -90,7 +218,7 @@ export default function CreateContest() {
       : status === "upcoming" ? "Starts in 2 hours" : "Completed";
 
     const newContestObj = {
-      id: slug,
+      id: dbContestId ? String(dbContestId) : slug,
       title,
       desc,
       durationMins: Number(durationMins),
@@ -103,7 +231,6 @@ export default function CreateContest() {
       leaderboard: []
     };
 
-    // Save to localStorage
     if (typeof window !== "undefined") {
       const existingRaw = localStorage.getItem("synapse_dynamic_contests");
       let existing = [];
@@ -114,8 +241,7 @@ export default function CreateContest() {
           existing = [];
         }
       }
-      // Avoid duplicate slug
-      existing = existing.filter(c => c.id !== slug);
+      existing = existing.filter(c => c.id !== newContestObj.id);
       existing.unshift(newContestObj);
       localStorage.setItem("synapse_dynamic_contests", JSON.stringify(existing));
     }
