@@ -135,3 +135,17 @@ recordingSize Int? // Size in bytes, for storage management
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 }
+
+model ContestParticipation {
+id Int @id @default(autoincrement())
+userId Int
+user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+contestId Int
+contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+completed Boolean @default(false)
+score Int @default(0)
+timeSpent String?
+createdAt DateTime @default(now())
+
+@@unique([userId, contestId])
+}
