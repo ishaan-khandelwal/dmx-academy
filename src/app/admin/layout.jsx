@@ -22,9 +22,9 @@ export default function AdminLayout({ children }) {
       const session = localStorage.getItem("synapse_admin_session");
       const isLoginRoute = pathname === "/admin";
 
-      if (!session && !isLoginRoute) {
-        router.push("/admin");
-      } else if (session && isLoginRoute) {
+      if (!session) {
+        router.push("/login?redirect=/admin/dashboard");
+      } else if (isLoginRoute) {
         router.push("/admin/dashboard");
       } else {
         setAdminUser({
@@ -41,7 +41,9 @@ export default function AdminLayout({ children }) {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("synapse_admin_session");
-      router.push("/admin");
+      localStorage.removeItem("dmx_auth_token");
+      localStorage.removeItem("dmx_auth_user");
+      router.push("/login?redirect=/admin/dashboard");
     }
   };
 

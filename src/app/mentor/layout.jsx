@@ -22,9 +22,9 @@ export default function MentorLayout({ children }) {
       const session = localStorage.getItem("synapse_mentor_session");
       const isLoginRoute = pathname === "/mentor";
 
-      if (!session && !isLoginRoute) {
-        router.push("/mentor");
-      } else if (session && isLoginRoute) {
+      if (!session) {
+        router.push("/login?redirect=/mentor/dashboard");
+      } else if (isLoginRoute) {
         router.push("/mentor/dashboard");
       } else {
         setMentorUser({
@@ -41,7 +41,9 @@ export default function MentorLayout({ children }) {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("synapse_mentor_session");
-      router.push("/mentor");
+      localStorage.removeItem("dmx_auth_token");
+      localStorage.removeItem("dmx_auth_user");
+      router.push("/login?redirect=/mentor/dashboard");
     }
   };
 

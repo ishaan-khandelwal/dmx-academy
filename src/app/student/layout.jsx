@@ -22,9 +22,9 @@ export default function StudentLayout({ children }) {
       const session = localStorage.getItem("synapse_student_session");
       const isLoginRoute = pathname === "/student";
 
-      if (!session && !isLoginRoute) {
-        router.push("/student");
-      } else if (session && isLoginRoute) {
+      if (!session) {
+        router.push("/login?redirect=/student/dashboard");
+      } else if (isLoginRoute) {
         router.push("/student/dashboard");
       } else {
         setStudentUser({
@@ -41,7 +41,9 @@ export default function StudentLayout({ children }) {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("synapse_student_session");
-      router.push("/student");
+      localStorage.removeItem("dmx_auth_token");
+      localStorage.removeItem("dmx_auth_user");
+      router.push("/login?redirect=/student/dashboard");
     }
   };
 
