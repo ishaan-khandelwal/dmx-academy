@@ -9,17 +9,19 @@ const protect = async (req, res, next) => {
     // Development bypass for local Next.js frontend integration
     if (process.env.NODE_ENV === 'development' && req.headers['x-bypass-auth'] === 'true') {
       const bypassRole = req.headers['x-bypass-role'] || 'ADMIN';
-      const bypassUsername = bypassRole === 'ADMIN' ? 'admin' : 'student';
-      const bypassEmail = bypassRole === 'ADMIN' ? 'admin@example.com' : 'student@example.com';
+      const bypassUsername = bypassRole === 'ADMIN' ? 'admin' : bypassRole === 'MENTOR' ? 'mentor' : 'student';
+      const bypassEmail = bypassRole === 'ADMIN' ? 'admin@example.com' : bypassRole === 'MENTOR' ? 'mentor@synapse.com' : 'student@example.com';
       
-      let dbUser = await prisma.user.findFirst({ where: { role: bypassRole } });
+      let dbUser = await prisma.user.findFirst({ 
+        where: bypassRole === 'MENTOR' ? { email: 'mentor@synapse.com' } : { role: bypassRole } 
+      });
       if (!dbUser) {
         dbUser = await prisma.user.create({
           data: {
             username: bypassUsername,
             email: bypassEmail,
             password: 'devbypasshashedpassword',
-            role: bypassRole,
+            role: bypassRole === 'MENTOR' ? 'USER' : bypassRole,
           }
         });
       }
@@ -95,7 +97,12 @@ const protect = async (req, res, next) => {
  */
 const restrictTo = (...roles) => {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    const userRole = req.user?.role;
+    const isAllowedRole = roles.includes(userRole);
+    const isMentorEmail = req.user?.email === 'mentor@synapse.com';
+    const isAllowedMentor = roles.includes('MENTOR') && isMentorEmail;
+
+    if (!req.user || (!isAllowedRole && !isAllowedMentor)) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to perform this action.',
@@ -115,16 +122,18 @@ const fetchUserIfExists = async (req, res, next) => {
     if (process.env.NODE_ENV === 'development' && req.headers['x-bypass-auth'] === 'true') {
       const bypassRole = req.headers['x-bypass-role'] || 'USER';
       const bypassUsername = bypassRole === 'ADMIN' ? 'admin' : bypassRole === 'MENTOR' ? 'mentor' : 'student';
-      const bypassEmail = bypassRole === 'ADMIN' ? 'admin@example.com' : bypassRole === 'MENTOR' ? 'mentor@example.com' : 'student@example.com';
+      const bypassEmail = bypassRole === 'ADMIN' ? 'admin@example.com' : bypassRole === 'MENTOR' ? 'mentor@synapse.com' : 'student@example.com';
 
-      let dbUser = await prisma.user.findFirst({ where: { role: bypassRole } });
+      let dbUser = await prisma.user.findFirst({ 
+        where: bypassRole === 'MENTOR' ? { email: 'mentor@synapse.com' } : { role: bypassRole } 
+      });
       if (!dbUser) {
         dbUser = await prisma.user.create({
           data: {
             username: bypassUsername,
             email: bypassEmail,
             password: 'devbypasshashedpassword',
-            role: bypassRole,
+            role: bypassRole === 'MENTOR' ? 'USER' : bypassRole,
           }
         });
       }

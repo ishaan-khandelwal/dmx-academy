@@ -76,7 +76,7 @@ const seedDefaultUsers = async () => {
         username: 'mentor',
         email: 'mentor@synapse.com',
         password: 'mentor123',
-        role: 'MENTOR',
+        role: 'USER',
       },
       {
         username: 'student',
@@ -125,12 +125,12 @@ const seedDefaultUsers = async () => {
       }
     }
 
-    // Demote any other users who might have ADMIN or MENTOR roles to USER
+    // Demote any other users who might have ADMIN roles to USER
     const demoted = await prisma.user.updateMany({
       where: {
-        role: { in: ['ADMIN', 'MENTOR'] },
+        role: 'ADMIN',
         NOT: {
-          email: { in: ['admin@synapse.com', 'mentor@synapse.com'] }
+          email: 'admin@synapse.com'
         }
       },
       data: {
