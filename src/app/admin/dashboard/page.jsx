@@ -7,9 +7,12 @@ import {
   Trophy, Clock, Users, Terminal, Plus, 
   ChevronRight, ArrowUpRight, Activity, Calendar
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { contests } from "@/data/contestData";
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { token, API_BASE } = useAuth();
   const [totalContestsCount, setTotalContestsCount] = useState(contests.length);
   const [activeContestsCount, setActiveContestsCount] = useState(0);
   const [allContests, setAllContests] = useState([]);
@@ -17,12 +20,17 @@ export default function AdminDashboard() {
   useEffect(() => {
     const loadContests = async () => {
       let merged = [];
+      const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(hasRealToken
+          ? { Authorization: `Bearer ${token}` }
+          : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" }),
+      };
 
       // Fetch from backend API
       try {
-        const res = await fetch("http://localhost:5000/api/contests", {
-          headers: { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" }
-        });
+        const res = await fetch(`${API_BASE}/api/contests`, { headers });
         const data = await res.json();
         if (data.success && data.contests) {
           const now = new Date();
@@ -57,13 +65,46 @@ export default function AdminDashboard() {
         console.error("Failed to fetch backend contests:", err);
       }
 
-      setAllContests(merged);
-      setTotalContestsCount(merged.length);
-      setActiveContestsCount(merged.filter(c => c.status === "active").length);
+      // Merge with local storage dynamic contests & static contests
+      let localContests = [];
+      if (typeof window !== "undefined") {
+        try {
+          const localRaw = localStorage.getItem("synapse_dynamic_contests");
+          if (localRaw) localContests = JSON.parse(localRaw);
+        } catch { }
+      }
+
+      const combinedContests = [
+        ...merged,
+        ...localContests.filter(dc => !merged.some(bc => String(bc.id) === String(dc.id))),
+        ...contests.filter(sc =>
+          !merged.some(bc => String(bc.id) === String(sc.id)) &&
+          !localContests.some(dc => String(dc.id) === String(sc.id))
+        )
+      ].map(c => {
+        if (c.isDbContest) return c;
+        // Compute status if static/local
+        const start = new Date(c.startTime);
+        const end = new Date(c.endTime);
+        const now = new Date();
+        let status = c.status || "upcoming";
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          if (now >= start && now <= end) status = "active";
+          else if (now > end) status = "past";
+        }
+        return {
+          ...c,
+          status
+        };
+      });
+
+      setAllContests(combinedContests);
+      setTotalContestsCount(combinedContests.length);
+      setActiveContestsCount(combinedContests.filter(c => c.status === "active").length);
     };
 
     loadContests();
-  }, []);
+  }, [API_BASE, token]);
 
   const stats = [
     {

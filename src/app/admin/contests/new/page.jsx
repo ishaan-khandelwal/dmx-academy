@@ -31,7 +31,7 @@ export default function CreateContest() {
   const refreshProblemsList = async () => {
     let merged = [];
     try {
-      const res = await fetch("http://localhost:5000/api/problems");
+      const res = await fetch(`${API_BASE}/api/problems`);
       const data = await res.json();
       if (data.success && data.problems) {
         // Map database problems to match the UI format
@@ -150,16 +150,65 @@ export default function CreateContest() {
       localStorage.setItem("synapse_dynamic_contests", JSON.stringify(existing));
     }
 
+    // Try posting to backend database
+    let start = new Date();
+    if (startDate && startTime) {
+      start = new Date(`${startDate}T${startTime}`);
+    }
+    const end = new Date(start.getTime() + durationMins * 60000);
+
+    const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
+    const headers = {
+      "Content-Type": "application/json",
+      ...(hasRealToken
+        ? { Authorization: `Bearer ${token}` }
+        : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" }),
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/contests`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          title,
+          description: desc,
+          category,
+          startTime: start.toISOString(),
+          endTime: end.toISOString()
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.contest) {
+        const createdContest = data.contest;
+        // Post problem links to the contest
+        for (const problemId of selectedProblemIds) {
+          const numId = typeof problemId === "number" ? problemId : parseInt(problemId);
+          if (!isNaN(numId)) {
+            try {
+              await fetch(`${API_BASE}/api/contests/${createdContest.id}/problem`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                  problemId: numId,
+                  points: Math.round(totalPoints / (selectedProblemIds.length || 1))
+                })
+              });
+            } catch (err) {
+              console.error("Failed to add problem to contest in database:", err);
+            }
+          }
+        }
+        console.log("Contest created and problems linked in backend database successfully");
+      }
+    } catch (err) {
+      console.error("Failed to save contest to database, fallback to local storage:", err);
+    }
+
     setSuccess(true);
     setTimeout(() => {
       router.push("/contest");
     }, 1200);
-
-  } catch (err) {
-    console.error("Error creating contest:", err);
-    alert(err.message || "Something went wrong while creating the contest.");
-  }
-};
+  };
 
 return (
   <div className="space-y-6">

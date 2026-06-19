@@ -60,7 +60,13 @@ function LoginForm() {
       }
 
       if (result.success) {
-        router.replace(redirectTo);
+        if (result.offlineMode) {
+          // Registered locally — show brief warning then redirect
+          setErrorMsg("⚠️ Backend offline. Your account is saved locally only.");
+          setTimeout(() => router.replace(redirectTo), 2000);
+        } else {
+          router.replace(redirectTo);
+        }
       } else {
         setErrorMsg(result.message || "An error occurred. Please check your credentials.");
       }
@@ -109,10 +115,14 @@ function LoginForm() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="flex items-center space-x-2 p-3.5 rounded-2xl border text-xs font-bold bg-rose-500/10 border-rose-500/20 text-rose-500"
+              className={`flex items-start space-x-2 p-3.5 rounded-2xl border text-xs font-bold ${
+                errorMsg.startsWith("⚠️")
+                  ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                  : "bg-rose-500/10 border-rose-500/20 text-rose-500"
+              }`}
             >
-              <AlertCircle size={16} className="shrink-0" />
-              <span>{errorMsg}</span>
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <span className="whitespace-pre-line">{errorMsg}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -255,7 +265,7 @@ function LoginForm() {
           </button>
         </form>
 
-        <div className="border-t pt-4 text-center" style={{ borderColor: "var(--border-primary)" }}>
+        <div className="border-t pt-4 text-center space-y-3" style={{ borderColor: "var(--border-primary)" }}>
           <button
             type="button"
             onClick={() => {
@@ -266,6 +276,25 @@ function LoginForm() {
           >
             {isRegistering ? "Already have an account? Sign In" : "New to DMX? Register an account"}
           </button>
+
+          {/* Demo credentials hint */}
+          <div
+            className="p-3 rounded-2xl border text-left space-y-1"
+            style={{
+              backgroundColor: "var(--bg-badge)",
+              borderColor: "var(--border-accent)"
+            }}
+          >
+            <p className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-accent)" }}>
+              Demo Accounts (no backend needed)
+            </p>
+            <div className="text-[10px] space-y-0.5" style={{ color: "var(--text-secondary)" }}>
+              <p><span className="font-bold" style={{ color: "var(--text-primary)" }}>Admin:</span> admin@demo.com</p>
+              <p><span className="font-bold" style={{ color: "var(--text-primary)" }}>Student:</span> student@demo.com</p>
+              <p><span className="font-bold" style={{ color: "var(--text-primary)" }}>Mentor:</span> mentor@demo.com</p>
+              <p className="pt-1"><span className="font-bold" style={{ color: "var(--text-primary)" }}>Password:</span> demo123</p>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>

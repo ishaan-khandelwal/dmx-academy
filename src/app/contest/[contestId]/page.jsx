@@ -12,6 +12,32 @@ import {
 } from "lucide-react";
 import { contests } from "@/data/contestData";
 import { useAuth } from "@/context/AuthContext";
+import { wrapCodeForBackend } from "@/utils/codeWrapper";
+
+function saveLocalSubmission(sub) {
+  if (typeof window === "undefined") return;
+  const key = "dmx_local_submissions";
+  let existing = [];
+  try {
+    existing = JSON.parse(localStorage.getItem(key) || "[]");
+  } catch { }
+  
+  const newSub = {
+    id: `local-sub-${Date.now()}`,
+    problemId: sub.problemId,
+    dbProblemId: sub.dbProblemId || null,
+    problem: {
+      title: sub.title,
+      slug: sub.problemId,
+    },
+    status: sub.status || "ACCEPTED",
+    language: sub.language,
+    code: sub.code,
+    createdAt: new Date().toISOString(),
+  };
+  existing.unshift(newSub);
+  localStorage.setItem(key, JSON.stringify(existing));
+}
 
 const getRandom = () => Math.random();
 const getCurrentTime = () => Date.now();
@@ -63,6 +89,10 @@ function highlightCode(code, lang) {
 // Helper: returns auth bypass headers based on current session
 function getAuthHeaders() {
   if (typeof window === "undefined") return {};
+  const token = localStorage.getItem("dmx_auth_token");
+  if (token && !token.startsWith("demo-") && !token.startsWith("local-")) {
+    return { "Authorization": `Bearer ${token}` };
+  }
   if (localStorage.getItem("synapse_admin_session") === "true")
     return { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" };
   if (localStorage.getItem("synapse_mentor_session") === "true")
@@ -338,7 +368,7 @@ export default function ContestWorkspace() {
     const isNumeric = /^\d+$/.test(contestId);
     if (isNumeric) {
       try {
-        await fetch(`http://localhost:5000/api/contests/${contestId}/finish`, {
+        await fetch(`${API_BASE}/api/contests/${contestId}/finish`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -503,7 +533,7 @@ export default function ContestWorkspace() {
     const isNumeric = /^\d+$/.test(contestId);
     if (isNumeric) {
       try {
-        await fetch(`http://localhost:5000/api/contests/${contestId}/participate`, {
+        await fetch(`${API_BASE}/api/contests/${contestId}/participate`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -900,6 +930,7 @@ export default function ContestWorkspace() {
 
       // Use fresh local results — NOT stale testResults state
       const allPassed = results.length > 0 && results.every(r => r.passed);
+      const verdict = allPassed ? "ACCEPTED" : "WRONG_ANSWER";
       if (allPassed) {
         triggerConfettiParticles();
         // Award points only once per question
@@ -908,6 +939,53 @@ export default function ContestWorkspace() {
           setUserScore(score => score + activeQuestion.points);
           return [...prev, activeQuestion.id];
         });
+      }
+
+      // Prepare wrapped code for backend validation
+      const mappedLang = selectedLanguage.toUpperCase() === "JAVASCRIPT" ? "JAVASCRIPT" : selectedLanguage.toUpperCase() === "PYTHON" ? "PYTHON" : "CPP";
+      const wrappedCode = wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
+
+      const localSub = {
+        problemId: activeQuestion.slug || activeQuestion.id,
+        dbProblemId: activeQuestion.id,
+        title: activeQuestion.title,
+        language: mappedLang,
+        code: currentCode,
+        status: verdict,
+      };
+
+      // Save locally
+      saveLocalSubmission(localSub);
+
+      // Post submission to backend DB if it's a database contest (numeric ID)
+      const isNumeric = /^\d+$/.test(contestId);
+      if (isNumeric) {
+        try {
+          const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
+          const headers = {
+            "Content-Type": "application/json",
+            ...(hasRealToken
+              ? { Authorization: `Bearer ${token}` }
+              : { "x-bypass-auth": "true", "x-bypass-role": "USER" }),
+          };
+          fetch(`${API_BASE}/api/submissions/problem/${activeQuestion.id}`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              language: mappedLang,
+              code: wrappedCode,
+            }),
+            signal: AbortSignal.timeout(6000),
+          }).then(res => {
+            if (res.ok) {
+              console.log("Contest submission recorded in backend database");
+            }
+          }).catch(err => {
+            console.error("Failed to post contest submission to backend:", err);
+          });
+        } catch (err) {
+          console.error("Failed to send contest submission:", err);
+        }
       }
     }, 1200);
   };

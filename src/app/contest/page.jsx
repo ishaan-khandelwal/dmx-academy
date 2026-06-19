@@ -173,7 +173,7 @@ export default function ContestLobby() {
             headersObj = { "x-bypass-auth": "true", "x-bypass-role": "USER" };
           }
         }
-        const res = await fetch(`http://localhost:5000/api/contests/${contest.id}/leaderboard`, { headers: headersObj });
+        const res = await fetch(`${API_BASE}/api/contests/${contest.id}/leaderboard`, { headers: headersObj });
         const data = await res.json();
         if (data.success) {
           const formattedLeaderboard = data.leaderboard.map((item, index) => ({

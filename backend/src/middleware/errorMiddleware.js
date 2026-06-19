@@ -9,6 +9,13 @@ const errorHandler = (err, req, res, next) => {
   let message = err.message || 'Internal Server Error';
 
   // Handle Prisma Database Errors
+  if (err.name === 'PrismaClientInitializationError' || err.code === 'P1001' || err.code === 'P1008' || err.code === 'P1017') {
+    return res.status(503).json({
+      success: false,
+      message: 'Database is currently unavailable. Please try again in a moment.'
+    });
+  }
+
   if (err.code) {
     switch (err.code) {
       case 'P2002': {

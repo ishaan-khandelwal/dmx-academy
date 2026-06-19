@@ -6,20 +6,25 @@ import { motion } from "framer-motion";
 import {
   Trophy, Users, Clock, ArrowLeft, CheckCircle2, XCircle, RefreshCw
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ContestParticipantsPage() {
   const params = useParams();
   const router = useRouter();
   const contestId = params.contestId;
+  const { token, API_BASE } = useAuth();
 
   const [contest, setContest] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
   const adminHeaders = {
-    "x-bypass-auth": "true",
-    "x-bypass-role": "ADMIN"
+    "Content-Type": "application/json",
+    ...(hasRealToken
+      ? { Authorization: `Bearer ${token}` }
+      : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" }),
   };
 
   const fetchData = async () => {
@@ -27,7 +32,7 @@ export default function ContestParticipantsPage() {
     setError(null);
     try {
       // Fetch contest details
-      const contestRes = await fetch(`http://localhost:5000/api/contests/${contestId}`, {
+      const contestRes = await fetch(`${API_BASE}/api/contests/${contestId}`, {
         headers: adminHeaders
       });
       const contestData = await contestRes.json();
@@ -36,7 +41,7 @@ export default function ContestParticipantsPage() {
       }
 
       // Fetch participants
-      const partRes = await fetch(`http://localhost:5000/api/contests/${contestId}/participants`, {
+      const partRes = await fetch(`${API_BASE}/api/contests/${contestId}/participants`, {
         headers: adminHeaders
       });
       const partData = await partRes.json();

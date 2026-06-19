@@ -40,13 +40,17 @@ const register = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Map MENTOR to USER for DB storage (DB enum: USER | ADMIN)
+    // MENTOR is a UI-only role label until a migration adds it to DB
+    const dbRole = role === 'MENTOR' ? 'USER' : (role || 'USER');
+
     // Create user
     const user = await prisma.user.create({
       data: {
         username,
         email,
         password: hashedPassword,
-        role: role || 'USER',
+        role: dbRole,
       },
     });
 
