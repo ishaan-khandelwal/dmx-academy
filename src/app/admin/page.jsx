@@ -4,9 +4,11 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Lock, Mail, ArrowRight, ShieldAlert } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminLogin() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,21 +24,29 @@ export default function AdminLogin() {
     }
   }, [router]);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    // Simple mock auth for the prototype
-    setTimeout(() => {
-      if (email === "admin@synapse.com" && password === "admin123") {
-        localStorage.setItem("synapse_admin_session", "true");
-        router.push("/admin/dashboard");
-      } else {
-        setError("Invalid email or password. Use the quick-fill helper below!");
+    if (email === "admin@synapse.com" && password === "admin123") {
+      try {
+        const result = await login("admin@synapse.com", "admin123");
+        if (result.success) {
+          localStorage.setItem("synapse_admin_session", "true");
+          router.push("/admin/dashboard");
+        } else {
+          setError(result.message || "Failed to establish a database session.");
+          setLoading(false);
+        }
+      } catch (err) {
+        setError("Unable to connect to the backend server.");
         setLoading(false);
       }
-    }, 800);
+    } else {
+      setError("Invalid email or password. Use the quick-fill helper below!");
+      setLoading(false);
+    }
   };
 
   const handleQuickFill = () => {

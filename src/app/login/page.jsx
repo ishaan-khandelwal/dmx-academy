@@ -202,37 +202,7 @@ function LoginForm() {
             </div>
           </div>
 
-          {/* Role Select */}
-          <AnimatePresence>
-            {isRegistering && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-1.5"
-              >
-                <label className="text-[10px] font-extrabold uppercase tracking-wider pl-1" style={{ color: "var(--text-secondary)" }}>
-                  Account Role (For Demo Testing)
-                </label>
-                <div className="relative">
-                  <ShieldAlert size={15} className="absolute left-4 top-3.5 text-slate-400" />
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full rounded-2xl py-3 pl-11 pr-4 text-xs outline-none border transition-all appearance-none"
-                    style={{
-                      backgroundColor: "var(--bg-input)",
-                      borderColor: "var(--border-primary)",
-                      color: "var(--text-primary)"
-                    }}
-                  >
-                    <option value="USER">Student (USER)</option>
-                    <option value="ADMIN">Administrator (ADMIN)</option>
-                  </select>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
 
           {/* Submit Button */}
           <button

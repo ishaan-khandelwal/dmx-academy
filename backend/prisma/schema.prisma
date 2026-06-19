@@ -10,6 +10,7 @@ generator client {
 enum Role {
   USER
   ADMIN
+  MENTOR
 }
 
 enum Difficulty {
@@ -34,15 +35,16 @@ enum SubmissionStatus {
 }
 
 model User {
-  id               Int          @id @default(autoincrement())
-  email            String       @unique
-  username         String       @unique
+  id               Int           @id @default(autoincrement())
+  email            String        @unique
+  username         String        @unique
   password         String
-  role             Role         @default(USER)
+  role             Role          @default(USER)
   submissions      Submission[]
-  contestsCreated  Contest[]    @relation("ContestCreator")
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  contestsCreated  Contest[]     @relation("ContestCreator")
+  liveSessions     LiveSession[] @relation("SessionHost")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
 
 model Problem {
@@ -108,4 +110,26 @@ model ContestProblem {
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, problemId])
+}
+
+// ─── Live Session (LiveKit Integration) ─────────────────────────────
+model LiveSession {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  thumbnailUrl  String?               // URL or base64 of session thumbnail
+  roomName      String    @unique     // LiveKit room identifier
+  hostId        Int
+  host          User      @relation("SessionHost", fields: [hostId], references: [id])
+  isLive        Boolean   @default(false)
+  scheduledAt   DateTime?             // Optional: when session is scheduled to start
+  startedAt     DateTime?             // Actual start time
+  endedAt       DateTime?             // Actual end time
+
+  // ── Recording placeholder (for future VPS implementation) ──
+  recordingUrl  String?               // Will hold path/URL to recorded file
+  recordingSize Int?                  // Size in bytes, for storage management
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }

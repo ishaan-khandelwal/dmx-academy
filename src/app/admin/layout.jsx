@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
   LayoutDashboard, PlusCircle, Trophy, LogOut, 
-  Menu, X, ChevronLeft, ChevronRight, ShieldAlert, ArrowLeftRight, Code
+  Menu, X, ChevronLeft, ChevronRight, ShieldAlert, ArrowLeftRight, Code, Radio
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -78,6 +78,11 @@ export default function AdminLayout({ children }) {
       label: "Create Problem",
       href: "/admin/problems/new",
       icon: Code
+    },
+    {
+      label: "Go Live",
+      href: "/admin/live",
+      icon: Radio
     },
     {
       label: "Public Lobby",

@@ -6,6 +6,7 @@ import Testimonials from "@/components/Testimonials";
 import Pricing from "@/components/Pricing";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
+import LiveBanner from "@/components/LiveBanner";
 
 export default function Home() {
   return (
@@ -19,6 +20,10 @@ export default function Home() {
       {/* Main landing sections */}
       <main className="flex-grow">
         <Hero />
+        
+        {/* Live Session Banner — shows active/past live sessions */}
+        <LiveBanner />
+
         <Tracks />
         <Process />
         <Testimonials />
@@ -31,3 +36,4 @@ export default function Home() {
     </div>
   );
 }
+

@@ -25,6 +25,7 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       className="h-full antialiased scroll-smooth"
+      data-scroll-behavior="smooth"
       suppressHydrationWarning={true}
     >
       <head>

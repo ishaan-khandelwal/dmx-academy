@@ -46,7 +46,7 @@ const register = async (req, res, next) => {
         username,
         email,
         password: hashedPassword,
-        role: role || 'USER',
+        role: 'USER', // Force USER (Student) role for all public registrations
       },
     });
 

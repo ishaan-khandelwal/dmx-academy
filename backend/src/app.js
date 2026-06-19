@@ -13,6 +13,8 @@ const authRoutes = require('./routes/authRoutes');
 const problemRoutes = require('./routes/problemRoutes');
 const submissionRoutes = require('./routes/submissionRoutes');
 const contestRoutes = require('./routes/contestRoutes');
+const livekitRoutes = require('./routes/livekitRoutes');
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +46,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/contests', contestRoutes);
+app.use('/api/livekit', livekitRoutes);
 
 // Fallback for undefined routes
 app.use((req, res, next) => {
@@ -56,13 +59,101 @@ app.use((req, res, next) => {
 // Global Error Handler
 app.use(errorHandler);
 
+// Seeding helper to enforce single Admin/Mentor users
+const seedDefaultUsers = async () => {
+  try {
+    const prisma = require('./prisma');
+    const bcrypt = require('bcryptjs');
+
+    const defaultUsers = [
+      {
+        username: 'admin',
+        email: 'admin@synapse.com',
+        password: 'admin123',
+        role: 'ADMIN',
+      },
+      {
+        username: 'mentor',
+        email: 'mentor@synapse.com',
+        password: 'mentor123',
+        role: 'MENTOR',
+      },
+      {
+        username: 'student',
+        email: 'student@synapse.com',
+        password: 'student123',
+        role: 'USER',
+      }
+    ];
+
+    for (const u of defaultUsers) {
+      const existing = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: u.email },
+            { username: u.username }
+          ]
+        }
+      });
+
+      if (!existing) {
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(u.password, salt);
+        await prisma.user.create({
+          data: {
+            username: u.username,
+            email: u.email,
+            password: hashedPassword,
+            role: u.role,
+          }
+        });
+        console.log(`[SEED] Created default ${u.role} user: ${u.email}`);
+      } else {
+        // Enforce default role and credentials
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(u.password, salt);
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            email: u.email, // Make sure the email is updated to the correct default value
+            role: u.role,
+            username: u.username,
+            password: hashedPassword
+          }
+        });
+        console.log(`[SEED] Enforced default settings for ${u.role}: ${u.email}`);
+      }
+    }
+
+    // Demote any other users who might have ADMIN or MENTOR roles to USER
+    const demoted = await prisma.user.updateMany({
+      where: {
+        role: { in: ['ADMIN', 'MENTOR'] },
+        NOT: {
+          email: { in: ['admin@synapse.com', 'mentor@synapse.com'] }
+        }
+      },
+      data: {
+        role: 'USER'
+      }
+    });
+    if (demoted.count > 0) {
+      console.log(`[SEED] Demoted ${demoted.count} other users back to USER role.`);
+    }
+
+  } catch (err) {
+    console.error('[SEED] Failed to seed default users:', err);
+  }
+};
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`=================================`);
   console.log(`  Server running in ${process.env.NODE_ENV || 'development'} mode`);
   console.log(`  Listening on port: ${PORT}`);
   console.log(`  Health check: http://localhost:${PORT}/health`);
   console.log(`=================================`);
+  await seedDefaultUsers();
 });
 
 module.exports = app;
