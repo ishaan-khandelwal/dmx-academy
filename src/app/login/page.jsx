@@ -31,9 +31,9 @@ function LoginForm() {
   const isMismatched = (() => {
     if (!user || !redirectTo) return false;
     const path = redirectTo.toLowerCase();
-    if (path.startsWith('/admin') && user.role !== 'ADMIN') return true;
-    if (path.startsWith('/mentor') && user.email !== 'mentor@synapse.com') return true;
-    if (path.startsWith('/student') && user.role === 'ADMIN') return true;
+    if (path.startsWith('/admin') && user.role !== 'ADMIN' && user.role !== 'MENTOR') return true;
+    if (path.startsWith('/mentor') && user.role !== 'MENTOR' && user.email !== 'mentor@synapse.com') return true;
+    if (path.startsWith('/student') && user.role === 'ADMIN' && user.role !== 'MENTOR') return true;
     return false;
   })();
 
@@ -45,7 +45,7 @@ function LoginForm() {
   }, [user, redirectTo, router, isMismatched]);
 
   if (user && isMismatched) {
-    const userRoleLabel = user.email === 'mentor@synapse.com' 
+    const userRoleLabel = (user.role === 'MENTOR' || user.email === 'mentor@synapse.com')
       ? 'Mentor' 
       : user.role === 'ADMIN' 
         ? 'Administrator' 
@@ -58,7 +58,7 @@ function LoginForm() {
         : 'Student Desk';
 
     const getDashboardPath = () => {
-      if (user.email === 'mentor@synapse.com') return '/mentor/dashboard';
+      if (user.role === 'MENTOR' || user.email === 'mentor@synapse.com') return '/mentor/dashboard';
       if (user.role === 'ADMIN') return '/admin/dashboard';
       return '/student/dashboard';
     };

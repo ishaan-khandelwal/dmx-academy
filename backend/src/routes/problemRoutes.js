@@ -14,9 +14,9 @@ const router = express.Router();
 router.get('/', getAllProblems);
 router.get('/:slug', fetchUserIfExists, getSingleProblem);
 
-// Admin-only routes
-router.post('/', protect, restrictTo('ADMIN'), createProblem);
-router.put('/:id', protect, restrictTo('ADMIN'), updateProblem);
-router.delete('/:id', protect, restrictTo('ADMIN'), deleteProblem);
+// Admin/Mentor routes
+router.post('/', protect, restrictTo('ADMIN', 'MENTOR'), createProblem);
+router.put('/:id', protect, restrictTo('ADMIN', 'MENTOR'), updateProblem);
+router.delete('/:id', protect, restrictTo('ADMIN', 'MENTOR'), deleteProblem);
 
 module.exports = router;

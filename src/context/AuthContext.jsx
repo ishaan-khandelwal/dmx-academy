@@ -48,7 +48,7 @@ function findLocalAccount(email, password) {
 const DEMO_ACCOUNTS = [
   { email: "admin@demo.com",   password: "demo123", user: { id: "demo-1", username: "Admin",   email: "admin@demo.com",   role: "ADMIN" } },
   { email: "student@demo.com", password: "demo123", user: { id: "demo-2", username: "Student", email: "student@demo.com", role: "USER"  } },
-  { email: "mentor@demo.com",  password: "demo123", user: { id: "demo-3", username: "Mentor",  email: "mentor@demo.com",  role: "USER"  } },
+  { email: "mentor@demo.com",  password: "demo123", user: { id: "demo-3", username: "Mentor",  email: "mentor@demo.com",  role: "MENTOR" } },
 ];
 
 // ---------------------------------------------------------------------------
@@ -59,8 +59,14 @@ function setLegacySession(role) {
   localStorage.removeItem("synapse_admin_session");
   localStorage.removeItem("synapse_student_session");
   localStorage.removeItem("synapse_mentor_session");
-  if (role === "ADMIN")  localStorage.setItem("synapse_admin_session",   "true");
-  else                   localStorage.setItem("synapse_student_session", "true");
+  if (role === "ADMIN") {
+    localStorage.setItem("synapse_admin_session", "true");
+  } else if (role === "MENTOR") {
+    localStorage.setItem("synapse_admin_session", "true");
+    localStorage.setItem("synapse_mentor_session", "true");
+  } else {
+    localStorage.setItem("synapse_student_session", "true");
+  }
 }
 
 function clearLegacySessions() {
@@ -76,6 +82,29 @@ export function AuthProvider({ children }) {
   const [user, setUser]     = useState(null);
   const [token, setToken]   = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeSession, setActiveSession] = useState(null);
+
+  // Sync / check active session for host
+  useEffect(() => {
+    async function checkActiveSession() {
+      if (!token || !user) {
+        setActiveSession(null);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/api/livekit/session/active`);
+        const data = await res.json();
+        if (data.success && data.session && data.session.hostId === user?.id) {
+          setActiveSession(data.session);
+        } else {
+          setActiveSession(null);
+        }
+      } catch (e) {
+        console.error("AuthContext: failed to check active session:", e);
+      }
+    }
+    checkActiveSession();
+  }, [token, user]);
 
   // On mount: restore session from localStorage
   useEffect(() => {
@@ -248,7 +277,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, API_BASE }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, API_BASE, activeSession, setActiveSession }}>
       {children}
     </AuthContext.Provider>
   );

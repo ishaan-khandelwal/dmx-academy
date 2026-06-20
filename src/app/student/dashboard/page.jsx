@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { contests as staticContests } from "@/data/contestData";
+import LiveBanner from "@/components/LiveBanner";
 
 // Helper: time-ago formatter
 function timeAgo(dateStr) {
@@ -314,6 +315,9 @@ export default function StudentDashboard() {
           })}
         </div>
       )}
+
+      {/* Live Classes Display */}
+      <LiveBanner />
 
       {/* Bottom section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

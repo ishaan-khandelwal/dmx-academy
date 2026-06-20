@@ -7,6 +7,7 @@ const {
   getActiveSession,
   getAllSessions,
   endSession,
+  deleteSession,
 } = require('../controllers/livekitController');
 
 // ─── Public Routes ──────────────────────────────────────────────────
@@ -19,5 +20,6 @@ router.post('/token', protect, generateToken);      // Any logged-in user can re
 // ─── Admin/Mentor Only ──────────────────────────────────────────────
 router.post('/session', protect, restrictTo('ADMIN', 'MENTOR'), createSession);
 router.patch('/session/:id/end', protect, restrictTo('ADMIN', 'MENTOR'), endSession);
+router.delete('/session/:id', protect, restrictTo('ADMIN', 'MENTOR'), deleteSession);
 
 module.exports = router;

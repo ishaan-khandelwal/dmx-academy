@@ -100,7 +100,7 @@ const restrictTo = (...roles) => {
     const userRole = req.user?.role;
     const isAllowedRole = roles.includes(userRole);
     const isMentorEmail = req.user?.email === 'mentor@synapse.com';
-    const isAllowedMentor = roles.includes('MENTOR') && isMentorEmail;
+    const isAllowedMentor = (roles.includes('MENTOR') || roles.includes('ADMIN')) && (userRole === 'MENTOR' || isMentorEmail);
 
     if (!req.user || (!isAllowedRole && !isAllowedMentor)) {
       return res.status(403).json({
@@ -133,7 +133,7 @@ const fetchUserIfExists = async (req, res, next) => {
             username: bypassUsername,
             email: bypassEmail,
             password: 'devbypasshashedpassword',
-            role: bypassRole === 'MENTOR' ? 'USER' : bypassRole,
+            role: bypassRole,
           }
         });
       }

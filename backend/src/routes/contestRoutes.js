@@ -24,10 +24,10 @@ router.post('/:id/participate', protect, participateInContest);
 router.post('/:id/finish', protect, finishContestAttempt);
 router.get('/:id/participation', protect, getContestParticipation);
 
-// Admin-only routes
-router.post('/', protect, restrictTo('ADMIN'), createContest);
-router.post('/:id/problem', protect, restrictTo('ADMIN'), addProblemToContest);
-router.get('/:id/participants', protect, restrictTo('ADMIN'), getContestParticipants);
+// Admin/Mentor routes
+router.post('/', protect, restrictTo('ADMIN', 'MENTOR'), createContest);
+router.post('/:id/problem', protect, restrictTo('ADMIN', 'MENTOR'), addProblemToContest);
+router.get('/:id/participants', protect, restrictTo('ADMIN', 'MENTOR'), getContestParticipants);
 
 module.exports = router;
 

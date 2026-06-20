@@ -1,8 +1,14 @@
 const prisma = require('../prisma');
-const { AccessToken } = require('livekit-server-sdk');
+const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 
+const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
+
+const getHttpLivekitUrl = (url) => {
+  if (!url) return '';
+  return url.replace(/^wss?:\/\//, (match) => match === 'wss://' ? 'https://' : 'http://');
+};
 
 /**
  * @desc    Create a new live session (Admin/Mentor only)
@@ -103,7 +109,7 @@ const generateToken = async (req, res) => {
     at.addGrant({
       roomJoin: true,
       room: roomName,
-      canPublish: isHost,         // Only hosts can publish video/audio/screen
+      canPublish: true,           // Allow everyone to publish (needed for student raise hand and speak feature)
       canSubscribe: true,         // Everyone can watch
       canPublishData: true,       // Data channels for future chat feature
     });
@@ -239,6 +245,18 @@ const endSession = async (req, res) => {
       },
     });
 
+    // Close the LiveKit room if we have the service client configured
+    if (LIVEKIT_URL && LIVEKIT_API_KEY && LIVEKIT_API_SECRET) {
+      try {
+        const httpUrl = getHttpLivekitUrl(LIVEKIT_URL);
+        const svc = new RoomServiceClient(httpUrl, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+        await svc.deleteRoom(session.roomName);
+        console.log(`Successfully deleted LiveKit room: ${session.roomName}`);
+      } catch (lkErr) {
+        console.error('Failed to close LiveKit room:', lkErr);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Session ended successfully.',
@@ -253,10 +271,59 @@ const endSession = async (req, res) => {
   }
 };
 
+const deleteSession = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sessionId = parseInt(id, 10);
+
+    if (isNaN(sessionId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid session ID.',
+      });
+    }
+
+    const session = await prisma.liveSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found.',
+      });
+    }
+
+    // Only the host or an admin can delete a session
+    if (session.hostId !== req.user.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete this session.',
+      });
+    }
+
+    await prisma.liveSession.delete({
+      where: { id: sessionId },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Session deleted successfully.',
+    });
+  } catch (error) {
+    console.error('Error deleting session:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete session.',
+    });
+  }
+};
+
 module.exports = {
   createSession,
   generateToken,
   getActiveSession,
   getAllSessions,
   endSession,
+  deleteSession,
 };
