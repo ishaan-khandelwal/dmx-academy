@@ -10,7 +10,6 @@ import {
   CheckCircle, AlertTriangle, AlertCircle, Play, Settings
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { contests } from "@/data/contestData";
 
 // Helper: time-ago formatter
 function timeAgo(dateStr) {
@@ -29,11 +28,13 @@ export default function AdminDashboard() {
   const { token, API_BASE, user } = useAuth();
   
   // Dashboard Live Stats
-  const [totalContestsCount, setTotalContestsCount] = useState(contests.length);
+  const [totalContestsCount, setTotalContestsCount] = useState(0);
   const [activeContestsCount, setActiveContestsCount] = useState(0);
   const [allContests, setAllContests] = useState([]);
   const [liveSubmissions, setLiveSubmissions] = useState([]);
   const [systemStats, setSystemStats] = useState(null);
+  const [participationReports, setParticipationReports] = useState([]);
+  const [activeLeftTab, setActiveLeftTab] = useState("submissions");
   
   // Console Action status triggers
   const [actionAlert, setActionAlert] = useState(null);
@@ -91,7 +92,7 @@ export default function AdminDashboard() {
       console.error("Failed to fetch backend contests:", err);
     }
 
-    // Merge with local storage dynamic contests & static contests
+    // Merge with local storage dynamic contests
     let localContests = [];
     if (typeof window !== "undefined") {
       try {
@@ -102,14 +103,10 @@ export default function AdminDashboard() {
 
     const combinedContests = [
       ...merged,
-      ...localContests.filter(dc => !merged.some(bc => String(bc.id) === String(dc.id))),
-      ...contests.filter(sc =>
-        !merged.some(bc => String(bc.id) === String(sc.id)) &&
-        !localContests.some(dc => String(dc.id) === String(sc.id))
-      )
+      ...localContests.filter(dc => !merged.some(bc => String(bc.id) === String(dc.id)))
     ].map(c => {
       if (c.isDbContest) return c;
-      // Compute status if static/local
+      // Compute status if local
       const start = new Date(c.startTime);
       const end = new Date(c.endTime);
       const now = new Date();
@@ -153,6 +150,19 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error("Failed to fetch live submissions:", err);
     }
+
+    // 4. Fetch participation reports from backend API
+    try {
+      const res = await fetch(`${API_BASE}/api/contests/reports/participations`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.participations) {
+          setParticipationReports(data.participations);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch participation reports:", err);
+    }
   };
 
   useEffect(() => {
@@ -186,12 +196,12 @@ export default function AdminDashboard() {
   };
 
   // Base dynamic stats calculations
-  const registeredUsersBase = 1482;
+  const registeredUsersBase = 0;
   const registeredUsersCount = systemStats?.totalUsers !== undefined
     ? registeredUsersBase + systemStats.totalUsers
     : registeredUsersBase;
 
-  const submissionsBase = 4821;
+  const submissionsBase = 0;
   const submissionsCount = systemStats?.totalSubmissions !== undefined
     ? submissionsBase + systemStats.totalSubmissions
     : submissionsBase;
@@ -216,7 +226,7 @@ export default function AdminDashboard() {
     {
       title: "Registered Users",
       value: registeredUsersCount.toLocaleString(),
-      change: "+12.4% weekly growth",
+      change: "Database users",
       icon: Users,
       color: "text-blue-400",
       bgColor: "bg-blue-500/10"
@@ -224,14 +234,14 @@ export default function AdminDashboard() {
     {
       title: "Submissions Queue",
       value: submissionsCount.toLocaleString(),
-      change: "98.7% success rate",
+      change: "Database submissions",
       icon: Terminal,
       color: "text-violet-400",
       bgColor: "bg-violet-500/10"
     }
   ];
 
-  // Map API submissions list (with fallback to default mock array if list is empty)
+  // Map API submissions list
   const getSubmissionsFeed = () => {
     if (liveSubmissions && liveSubmissions.length > 0) {
       return liveSubmissions.slice(0, 5).map(sub => {
@@ -253,14 +263,7 @@ export default function AdminDashboard() {
       });
     }
 
-    // Default static fallback if database submissions is empty
-    return [
-      { id: "sub-1", user: "quantum_coder", problem: "Two Sum", lang: "Python 3", verdict: "AC", score: 100, time: "2 mins ago" },
-      { id: "sub-2", user: "lex_dev", problem: "VDOM Reconciliation", lang: "JavaScript", verdict: "AC", score: 200, time: "5 mins ago" },
-      { id: "sub-3", user: "security_guru", problem: "Rate Limiter Design", lang: "Go", verdict: "TLE", score: 40, time: "11 mins ago" },
-      { id: "sub-4", user: "byte_knight", problem: "Two Sum", lang: "C++", verdict: "WA", score: 0, time: "15 mins ago" },
-      { id: "sub-5", user: "react_fanatic", problem: "VDOM Reconciliation", lang: "TypeScript", verdict: "AC", score: 200, time: "22 mins ago" }
-    ];
+    return [];
   };
 
   const submissionsFeed = getSubmissionsFeed();
@@ -535,63 +538,135 @@ export default function AdminDashboard() {
       {/* Split details layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left: Recent Submissions feed */}
+        {/* Left: Live Submissions Feed & Participation Reports Switcher */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-bold font-display" style={{ color: "var(--text-primary)" }}>
-              Live Submissions Feed
-            </h2>
-            <span className="inline-flex items-center space-x-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-              <span>Real-time</span>
-            </span>
+          <div className="flex items-center justify-between border-b pb-3 mb-4" style={{ borderColor: "var(--border-primary)" }}>
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setActiveLeftTab("submissions")}
+                className={`text-sm font-bold pb-2 relative transition-all cursor-pointer ${activeLeftTab === "submissions" ? "text-[var(--text-accent)]" : "text-[var(--text-muted)]"}`}
+              >
+                <span>Live Submissions Feed</span>
+                {activeLeftTab === "submissions" && (
+                  <motion.div layoutId="adminLeftTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--text-accent)]" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveLeftTab("reports")}
+                className={`text-sm font-bold pb-2 relative transition-all cursor-pointer ${activeLeftTab === "reports" ? "text-[var(--text-accent)]" : "text-[var(--text-muted)]"}`}
+              >
+                <span>Contest Participation Reports</span>
+                {activeLeftTab === "reports" && (
+                  <motion.div layoutId="adminLeftTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--text-accent)]" />
+                )}
+              </button>
+            </div>
+            {activeLeftTab === "submissions" && (
+              <span className="inline-flex items-center space-x-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                <span>Real-time</span>
+              </span>
+            )}
           </div>
 
           <div className="border rounded-3xl overflow-hidden shadow-sm" style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-500/5 font-bold text-[var(--text-muted)] border-b" style={{ borderColor: "var(--border-primary)" }}>
-                    <th className="px-6 py-4">Developer</th>
-                    <th className="px-6 py-4">Problem</th>
-                    <th className="px-6 py-4">Lang</th>
-                    <th className="px-6 py-4 text-center">Verdict</th>
-                    <th className="px-6 py-4 text-center">Points</th>
-                    <th className="px-6 py-4 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ divideColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
-                  {submissionsFeed.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-slate-500/5 transition-colors">
-                      <td className="px-6 py-4 font-bold text-[var(--text-primary)]">
-                        {sub.user}
-                      </td>
-                      <td className="px-6 py-4 font-semibold">
-                        {sub.problem}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-[10px]">
-                        {sub.lang}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md border ${
-                          sub.verdict === "AC" ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
-                          sub.verdict === "TLE" ? "text-amber-500 bg-amber-500/10 border-amber-500/20" :
-                          "text-rose-500 bg-rose-500/10 border-rose-500/20"
-                        }`}>
-                          {sub.verdict}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center font-extrabold" style={{ color: sub.score > 0 ? "var(--text-accent)" : "var(--text-muted)" }}>
-                        {sub.score}
-                      </td>
-                      <td className="px-6 py-4 text-right" style={{ color: "var(--text-muted)" }}>
-                        {sub.time}
-                      </td>
+            {activeLeftTab === "submissions" ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-500/5 font-bold text-[var(--text-muted)] border-b" style={{ borderColor: "var(--border-primary)" }}>
+                      <th className="px-6 py-4">Developer</th>
+                      <th className="px-6 py-4">Problem</th>
+                      <th className="px-6 py-4">Lang</th>
+                      <th className="px-6 py-4 text-center">Verdict</th>
+                      <th className="px-6 py-4 text-center">Points</th>
+                      <th className="px-6 py-4 text-right">Time</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y" style={{ divideColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
+                    {submissionsFeed.map((sub) => (
+                      <tr key={sub.id} className="hover:bg-slate-500/5 transition-colors">
+                        <td className="px-6 py-4 font-bold text-[var(--text-primary)]">
+                          {sub.user}
+                        </td>
+                        <td className="px-6 py-4 font-semibold">
+                          {sub.problem}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-[10px]">
+                          {sub.lang}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md border ${
+                            sub.verdict === "AC" ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
+                            sub.verdict === "TLE" ? "text-amber-500 bg-amber-500/10 border-amber-500/20" :
+                            "text-rose-500 bg-rose-500/10 border-rose-500/20"
+                          }`}>
+                            {sub.verdict}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center font-extrabold" style={{ color: sub.score > 0 ? "var(--text-accent)" : "var(--text-muted)" }}>
+                          {sub.score}
+                        </td>
+                        <td className="px-6 py-4 text-right" style={{ color: "var(--text-muted)" }}>
+                          {sub.time}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-500/5 font-bold text-[var(--text-muted)] border-b" style={{ borderColor: "var(--border-primary)" }}>
+                      <th className="px-6 py-4">Student</th>
+                      <th className="px-6 py-4">Contest</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 text-center">Score</th>
+                      <th className="px-6 py-4 text-center">Time Spent</th>
+                      <th className="px-6 py-4 text-right">Completion Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y" style={{ divideColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
+                    {participationReports.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                          No participation reports found.
+                        </td>
+                      </tr>
+                    ) : (
+                      participationReports.map((report) => (
+                        <tr key={report.id || `${report.userId}-${report.contestId}`} className="hover:bg-slate-500/5 transition-colors">
+                          <td className="px-6 py-4 font-bold text-[var(--text-primary)]">
+                            {report.user?.username || "N/A"}
+                          </td>
+                          <td className="px-6 py-4 font-semibold">
+                            {report.contest?.title || `Contest #${report.contestId}`}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md border ${
+                              report.completed ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" : "text-amber-500 bg-amber-500/10 border-amber-500/20"
+                            }`}>
+                              {report.completed ? "Completed" : "In Progress"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center font-extrabold text-[var(--text-accent)]">
+                            {report.score ?? 0} pts
+                          </td>
+                          <td className="px-6 py-4 text-center" style={{ color: "var(--text-muted)" }}>
+                            {report.timeSpent || "—"}
+                          </td>
+                          <td className="px-6 py-4 text-right" style={{ color: "var(--text-muted)" }}>
+                            {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : "—"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 

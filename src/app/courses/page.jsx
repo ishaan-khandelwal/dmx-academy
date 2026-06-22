@@ -9,7 +9,7 @@ import {
   Search, BookOpen, Clock, Layers, Server, Cpu, Database, Code, Sparkles, Globe, 
   ArrowRight, BookMarked, Filter, Compass 
 } from "lucide-react";
-import { coursesRegistry } from "@/data/courses";
+import { useAuth } from "@/context/AuthContext";
 
 // Lucide Icon mapping
 const IconMap = {
@@ -71,12 +71,7 @@ export default function CoursesCatalogPage() {
   }, []);
 
   // Filter courses based on category selection and search query
-  const sourceCourses = courses.length > 0
-    ? courses
-    : Object.entries(coursesRegistry).map(([id, info]) => {
-        const { allPhases, resourcesList, glossary, ...metadata } = info;
-        return { id, ...metadata };
-      });
+  const sourceCourses = courses;
 
   const filteredCourses = sourceCourses.filter(course => {
     const matchesCategory = selectedCategory === "All Courses" || course.category === selectedCategory;

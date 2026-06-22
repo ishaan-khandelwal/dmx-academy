@@ -10,7 +10,6 @@ import {
   Flame, Award, TrendingUp, HelpCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { contests as staticContests } from "@/data/contestData";
 import LiveBanner from "@/components/LiveBanner";
 
 // Helper: time-ago formatter
@@ -45,6 +44,7 @@ export default function StudentDashboard() {
   const [contests, setContests]         = useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
+  const [activeBottomTab, setActiveBottomTab] = useState("contests");
 
   // Fetch live data
   useEffect(() => {
@@ -127,11 +127,7 @@ export default function StudentDashboard() {
 
       const combinedContests = [
         ...backendContests,
-        ...localContests.filter(dc => !backendContests.some(bc => String(bc.id) === String(dc.id))),
-        ...staticContests.filter(sc =>
-          !backendContests.some(bc => String(bc.id) === String(sc.id)) &&
-          !localContests.some(dc => String(dc.id) === String(sc.id))
-        )
+        ...localContests.filter(dc => !backendContests.some(bc => String(bc.id) === String(dc.id)))
       ];
 
       // Resolve user participation for contests
@@ -488,97 +484,184 @@ export default function StudentDashboard() {
       {/* Bottom section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* Left: Active / Upcoming Contests */}
+        {/* Left: Active / Upcoming Contests & My Participation Reports */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-bold font-display" style={{ color: "var(--text-primary)" }}>
-              Live &amp; Upcoming Contests
-            </h2>
-            <button
-              onClick={() => router.push("/contest")}
-              className="text-[10px] font-bold text-[var(--text-accent)] flex items-center space-x-1 hover:underline"
-            >
-              <span>View All</span>
-              <ChevronRight size={12} />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {loading ? (
-              [0, 1, 2].map(i => (
-                <div key={i} className="p-5 rounded-3xl border animate-pulse"
-                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
-                  <div className="h-3 w-40 rounded bg-slate-500/20 mb-2" />
-                  <div className="h-2 w-24 rounded bg-slate-500/10" />
-                </div>
-              ))
-            ) : [...activeContests, ...upcomingContests].length === 0 ? (
-              <div className="p-8 rounded-3xl border text-center space-y-2"
-                style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
-                <Trophy size={32} className="mx-auto opacity-20" style={{ color: "var(--text-muted)" }} />
-                <p className="text-sm font-bold" style={{ color: "var(--text-secondary)" }}>
-                  No contests scheduled yet
-                </p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  Check back soon or ask an admin to create one.
-                </p>
-              </div>
-            ) : (
-              [...activeContests.slice(0, 2), ...upcomingContests.slice(0, 2)].map((contest) => {
-                const start = new Date(contest.startTime);
-                const end   = new Date(contest.endTime);
-                const isLive = start <= now && end >= now;
-                const minsLeft = isLive ? Math.max(0, Math.floor((end - now) / 60000)) : null;
-
-                return (
-                  <motion.div
-                    key={contest.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="p-5 rounded-3xl border shadow-sm flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all"
-                    style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}
-                    onClick={() => router.push(`/contest/${contest.id}`)}
-                  >
-                    <div className="space-y-1.5 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
-                          isLive
-                            ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                            : "text-indigo-400 bg-indigo-500/10 border-indigo-500/20"
-                        }`}>
-                          {isLive ? "● Live" : "Upcoming"}
-                        </span>
-                        {contest.category && (
-                          <span className="text-[9px] font-bold uppercase text-[var(--text-muted)] bg-slate-500/5 px-2 py-0.5 rounded border"
-                            style={{ borderColor: "var(--border-primary)" }}>
-                            {contest.category}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                        {contest.title}
-                      </p>
-                      <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
-                        {isLive
-                          ? `${minsLeft}m remaining`
-                          : `Starts ${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at ${start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
-                      </p>
-                    </div>
-                    <div className="shrink-0">
-                      {isLive ? (
-                        <span className="px-3 py-1.5 text-[10px] font-bold text-white rounded-xl"
-                          style={{ background: "var(--accent-gradient)" }}>
-                          Enter
-                        </span>
-                      ) : (
-                        <Clock size={16} style={{ color: "var(--text-muted)" }} />
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })
+          <div className="flex items-center justify-between border-b pb-3 mb-4" style={{ borderColor: "var(--border-primary)" }}>
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setActiveBottomTab("contests")}
+                className={`text-sm font-bold pb-2 relative transition-all cursor-pointer ${activeBottomTab === "contests" ? "text-[var(--text-accent)]" : "text-[var(--text-muted)]"}`}
+              >
+                <span>Live &amp; Upcoming Contests</span>
+                {activeBottomTab === "contests" && (
+                  <motion.div layoutId="studentBottomTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--text-accent)]" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveBottomTab("reports")}
+                className={`text-sm font-bold pb-2 relative transition-all cursor-pointer ${activeBottomTab === "reports" ? "text-[var(--text-accent)]" : "text-[var(--text-muted)]"}`}
+              >
+                <span>My Participation Reports</span>
+                {activeBottomTab === "reports" && (
+                  <motion.div layoutId="studentBottomTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--text-accent)]" />
+                )}
+              </button>
+            </div>
+            {activeBottomTab === "contests" && (
+              <button
+                onClick={() => router.push("/contest")}
+                className="text-[10px] font-bold text-[var(--text-accent)] flex items-center space-x-1 hover:underline cursor-pointer"
+              >
+                <span>View All</span>
+                <ChevronRight size={12} />
+              </button>
             )}
           </div>
+
+          {activeBottomTab === "contests" ? (
+            <div className="space-y-3">
+              {loading ? (
+                [0, 1, 2].map(i => (
+                  <div key={i} className="p-5 rounded-3xl border animate-pulse"
+                    style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
+                    <div className="h-3 w-40 rounded bg-slate-500/20 mb-2" />
+                    <div className="h-2 w-24 rounded bg-slate-500/10" />
+                  </div>
+                ))
+              ) : [...activeContests, ...upcomingContests].length === 0 ? (
+                <div className="p-8 rounded-3xl border text-center space-y-2"
+                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
+                  <Trophy size={32} className="mx-auto opacity-20" style={{ color: "var(--text-muted)" }} />
+                  <p className="text-sm font-bold" style={{ color: "var(--text-secondary)" }}>
+                    No contests scheduled yet
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Check back soon or ask an admin to create one.
+                  </p>
+                </div>
+              ) : (
+                [...activeContests.slice(0, 2), ...upcomingContests.slice(0, 2)].map((contest) => {
+                  const start = new Date(contest.startTime);
+                  const end   = new Date(contest.endTime);
+                  const isLive = start <= now && end >= now;
+                  const minsLeft = isLive ? Math.max(0, Math.floor((end - now) / 60000)) : null;
+
+                  return (
+                    <motion.div
+                      key={contest.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="p-5 rounded-3xl border shadow-sm flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all"
+                      style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}
+                      onClick={() => router.push(`/contest/${contest.id}`)}
+                    >
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                            isLive
+                              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                              : "text-indigo-400 bg-indigo-500/10 border-indigo-500/20"
+                          }`}>
+                            {isLive ? "● Live" : "Upcoming"}
+                          </span>
+                          {contest.category && (
+                            <span className="text-[9px] font-bold uppercase text-[var(--text-muted)] bg-slate-500/5 px-2 py-0.5 rounded border"
+                              style={{ borderColor: "var(--border-primary)" }}>
+                              {contest.category}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                          {contest.title}
+                        </p>
+                        <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                          {isLive
+                            ? `${minsLeft}m remaining`
+                            : `Starts ${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at ${start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                        </p>
+                      </div>
+                      <div className="shrink-0">
+                        {isLive ? (
+                          <span className="px-3 py-1.5 text-[10px] font-bold text-white rounded-xl"
+                            style={{ background: "var(--accent-gradient)" }}>
+                            Enter
+                          </span>
+                        ) : (
+                          <Clock size={16} style={{ color: "var(--text-muted)" }} />
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {loading ? (
+                [0, 1].map(i => (
+                  <div key={i} className="p-5 rounded-3xl border animate-pulse"
+                    style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
+                    <div className="h-3 w-40 rounded bg-slate-500/20 mb-2" />
+                    <div className="h-2 w-24 rounded bg-slate-500/10" />
+                  </div>
+                ))
+              ) : contests.filter(c => c.userParticipation).length === 0 ? (
+                <div className="p-8 rounded-3xl border text-center space-y-2"
+                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
+                  <Trophy size={32} className="mx-auto opacity-20" style={{ color: "var(--text-muted)" }} />
+                  <p className="text-sm font-bold" style={{ color: "var(--text-secondary)" }}>
+                    No contest attempts recorded
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Participate in an active contest to see your reports here.
+                  </p>
+                </div>
+              ) : (
+                contests.filter(c => c.userParticipation).map((contest) => {
+                  const isCompleted = contest.userParticipation?.completed;
+                  const score = contest.userParticipation?.score ?? 0;
+                  const timeSpent = contest.userParticipation?.timeSpent ?? "—";
+                  return (
+                    <motion.div
+                      key={contest.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="p-5 rounded-3xl border shadow-sm flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all"
+                      style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}
+                      onClick={() => router.push(`/contest/${contest.id}`)}
+                    >
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                            isCompleted
+                              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                              : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+                          }`}>
+                            {isCompleted ? "Completed ✓" : "In Progress"}
+                          </span>
+                          {contest.category && (
+                            <span className="text-[9px] font-bold uppercase text-[var(--text-muted)] bg-slate-500/5 px-2 py-0.5 rounded border"
+                              style={{ borderColor: "var(--border-primary)" }}>
+                              {contest.category}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                          {contest.title}
+                        </p>
+                        <p className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                          Score: <strong className="text-[var(--text-accent)]">{score} pts</strong> &bull; Time Spent: {timeSpent}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-xs font-bold text-[var(--text-accent)]">
+                        View Arena &rarr;
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Recent Submissions */}

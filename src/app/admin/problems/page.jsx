@@ -9,7 +9,6 @@ import {
   Clock, AlertCircle, ChevronRight
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { practiceProblems as staticProblems } from "@/data/practiceProblems";
 
 function getDifficultyStyle(difficulty) {
   const d = (difficulty || "").toUpperCase();
@@ -78,23 +77,7 @@ export default function AdminProblemsPage() {
       setError("Could not connect to the backend. Showing local/static data.");
     }
 
-    // Merge with static problems as fallback
-    const combinedProblems = [
-      ...backendProblems,
-      ...staticProblems.filter(
-        (sp) =>
-          !backendProblems.some(
-            (bp) =>
-              bp.slug === sp.id ||
-              bp.title?.toLowerCase() === sp.title?.toLowerCase()
-          )
-      ).map((p) => ({
-        ...p,
-        isStatic: true,
-        slug: p.id,
-        difficulty: (p.difficulty || "Easy").toUpperCase(),
-      })),
-    ];
+    const combinedProblems = backendProblems;
 
     setAllProblems(combinedProblems);
     setLoading(false);

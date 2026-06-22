@@ -9,7 +9,6 @@ import {
   ArrowUpRight, Edit3, Filter, X
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { contests as staticContests } from "@/data/contestData";
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -105,13 +104,6 @@ export default function AdminContestsPage() {
       ...localContests
         .filter((dc) => !merged.some((bc) => String(bc.id) === String(dc.id)))
         .map((c) => ({ ...c, status: getContestStatus(c), isLocalContest: true })),
-      ...staticContests
-        .filter(
-          (sc) =>
-            !merged.some((bc) => String(bc.id) === String(sc.id)) &&
-            !localContests.some((dc) => String(dc.id) === String(sc.id))
-        )
-        .map((c) => ({ ...c, status: getContestStatus(c), isStatic: true })),
     ];
 
     setAllContests(combinedContests);

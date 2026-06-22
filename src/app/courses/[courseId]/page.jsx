@@ -9,7 +9,6 @@ import {
   ExternalLink, FileText, CheckCircle2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { coursesRegistry } from "@/data/courses";
 
 // Import Web Development widgets
 import { 
@@ -51,14 +50,9 @@ export default function DynamicCoursePage() {
         const data = await res.json();
         if (data.success && data.course) {
           setCourse(data.course);
-        } else if (coursesRegistry[courseId]) {
-          setCourse(coursesRegistry[courseId]);
         }
       } catch (err) {
         console.error("Failed to load course details dynamically:", err);
-        if (coursesRegistry[courseId]) {
-          setCourse(coursesRegistry[courseId]);
-        }
       } finally {
         setLoading(false);
       }

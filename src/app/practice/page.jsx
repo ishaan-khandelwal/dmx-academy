@@ -8,7 +8,6 @@ import {
   Search, BookOpen, Clock, Code, Sparkles, ShieldAlert,
   Terminal, CheckCircle2, ChevronRight, Zap, RefreshCw
 } from "lucide-react";
-import { practiceProblems } from "@/data/practiceProblems";
 import { useAuth } from "@/context/AuthContext";
 
 const categories = [
@@ -89,17 +88,15 @@ export default function PracticeCatalogPage() {
         const data = await res.json();
         if (data.success && data.problems) {
           const mapped = data.problems.map(p => {
-            const matchedStatic = practiceProblems.find(sp => sp.id === p.slug);
             const matchedLocal = localProblems.find(lp => lp.id === p.slug);
-            const matchedSource = matchedLocal || matchedStatic;
             
             let diffStr = "Medium";
             if (p.difficulty === "EASY") diffStr = "Easy";
             else if (p.difficulty === "HARD") diffStr = "Hard";
 
-            if (matchedSource) {
+            if (matchedLocal) {
               return {
-                ...matchedSource,
+                ...matchedLocal,
                 dbId: p.id,
                 difficulty: diffStr
               };
@@ -120,24 +117,15 @@ export default function PracticeCatalogPage() {
 
           const combined = [
             ...mapped,
-            ...localProblems.filter(lp => !mapped.some(mp => mp.id === lp.id)),
-            ...practiceProblems.filter(sp => !mapped.some(mp => mp.id === sp.id) && !localProblems.some(lp => lp.id === sp.id))
+            ...localProblems.filter(lp => !mapped.some(mp => mp.id === lp.id))
           ];
           setAllProblems(combined);
         } else {
-          const combined = [
-            ...localProblems,
-            ...practiceProblems.filter(sp => !localProblems.some(lp => lp.id === sp.id))
-          ];
-          setAllProblems(combined);
+          setAllProblems(localProblems);
         }
       } catch (err) {
         console.error("Failed to fetch dynamic problems, falling back:", err);
-        const combined = [
-          ...localProblems,
-          ...practiceProblems.filter(sp => !localProblems.some(lp => lp.id === sp.id))
-        ];
-        setAllProblems(combined);
+        setAllProblems(localProblems);
       }
       setLoading(false);
     }

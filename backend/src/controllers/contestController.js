@@ -456,6 +456,32 @@ const getContestParticipants = async (req, res, next) => {
   }
 };
 
+const getAllParticipationReports = async (req, res, next) => {
+  try {
+    const participations = await prisma.contestParticipation.findMany({
+      include: {
+        user: {
+          select: { id: true, username: true, email: true, role: true }
+        },
+        contest: {
+          select: { id: true, title: true, category: true }
+        }
+      },
+      orderBy: [
+        { createdAt: 'desc' }
+      ]
+    });
+
+    res.status(200).json({
+      success: true,
+      count: participations.length,
+      participations
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createContest,
   addProblemToContest,
@@ -466,4 +492,6 @@ module.exports = {
   finishContestAttempt,
   getContestParticipation,
   getContestParticipants,
+  getAllParticipationReports,
 };
+

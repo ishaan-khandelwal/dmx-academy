@@ -7,7 +7,6 @@ import {
   Trophy, Clock, Sparkles, ChevronRight, Save,
   Plus, Trash2, Calendar, HelpCircle, ArrowLeft, X, RefreshCw
 } from "lucide-react";
-import { practiceProblems } from "@/data/practiceProblems";
 import { useAuth } from "@/context/AuthContext";
 
 export default function CreateContest() {
@@ -36,8 +35,6 @@ export default function CreateContest() {
       if (data.success && data.problems) {
         // Map database problems to match the UI format
         merged = data.problems.map(prob => {
-          // Find if there's a static problem matching this slug to borrow tags/time/icon etc.
-          const staticProb = practiceProblems.find(sp => sp.id === prob.slug);
           // Capitalize difficulty: EASY -> Easy, MEDIUM -> Medium, HARD -> Hard
           const formattedDiff = prob.difficulty.charAt(0) + prob.difficulty.slice(1).toLowerCase();
           return {
@@ -45,8 +42,7 @@ export default function CreateContest() {
             slug: prob.slug,
             title: prob.title,
             difficulty: formattedDiff,
-            category: staticProb ? staticProb.category : "Algorithms",
-            ...staticProb // Merge additional fields
+            category: "Algorithms"
           };
         });
       }
@@ -56,14 +52,11 @@ export default function CreateContest() {
 
     // Fallback if backend API is not responding or returned empty list
     if (merged.length === 0) {
-      merged = [...practiceProblems];
       if (typeof window !== "undefined") {
         const dynamicRaw = localStorage.getItem("synapse_dynamic_problems");
         if (dynamicRaw) {
           try {
-            const dynamicProbs = JSON.parse(dynamicRaw);
-            const dynamicFiltered = dynamicProbs.filter(dp => !practiceProblems.some(sp => sp.id === dp.id));
-            merged = [...dynamicFiltered, ...practiceProblems];
+            merged = JSON.parse(dynamicRaw);
           } catch (e) {
             console.error("Error reading dynamic problems:", e);
           }
@@ -101,6 +94,12 @@ export default function CreateContest() {
     e.preventDefault();
     if (!title || !slug) return;
 
+    let start = new Date();
+    if (startDate && startTime) {
+      start = new Date(`${startDate}T${startTime}`);
+    }
+    const end = new Date(start.getTime() + durationMins * 60000);
+
     // Build the problems array from selection
     const contestProblems = selectedProblemIds.map(id => {
       const prob = availableProblems.find(p => p.id === id);
@@ -109,11 +108,6 @@ export default function CreateContest() {
         points: Math.round(totalPoints / (selectedProblemIds.length || 1))
       };
     });
-
-    // Formulate dates/strings
-    const startStr = startDate && startTime
-      ? `Starts at ${startTime} on ${startDate}`
-      : status === "active" ? "Started just now" : "Starts soon";
 
     const timeLeftStr = status === "active"
       ? `${durationMins}m remaining`
@@ -128,7 +122,8 @@ export default function CreateContest() {
       status,
       category,
       timeLeftStr,
-      startTime: startStr,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
       problems: contestProblems,
       leaderboard: []
     };
@@ -149,13 +144,6 @@ export default function CreateContest() {
       existing.unshift(newContestObj);
       localStorage.setItem("synapse_dynamic_contests", JSON.stringify(existing));
     }
-
-    // Try posting to backend database
-    let start = new Date();
-    if (startDate && startTime) {
-      start = new Date(`${startDate}T${startTime}`);
-    }
-    const end = new Date(start.getTime() + durationMins * 60000);
 
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {

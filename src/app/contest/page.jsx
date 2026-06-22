@@ -9,7 +9,6 @@ import {
   Trophy, Search, Clock, Terminal, ChevronRight,
   UserCheck, AlertCircle, RefreshCw, Lock
 } from "lucide-react";
-import { contests } from "@/data/contestData";
 import { useAuth } from "@/context/AuthContext";
 
 // ─── Live timing helpers ───────────────────────────────────────────────────
@@ -78,17 +77,6 @@ function computeContestTiming(c) {
   return { status, timeLeftStr, durationMins };
 }
 
-const globalLeaderboardMock = [
-  { rank: 1, name: "quantum_coder", points: 2840, contests: 12, rankClass: "Grandmaster", color: "text-rose-500" },
-  { rank: 2, name: "lex_dev", points: 2710, contests: 11, rankClass: "Grandmaster", color: "text-rose-500" },
-  { rank: 3, name: "byte_knight", points: 2420, contests: 12, rankClass: "Master", color: "text-purple-500" },
-  { rank: 4, name: "react_fanatic", points: 2280, contests: 10, rankClass: "Master", color: "text-purple-500" },
-  { rank: 5, name: "pixel_architect", points: 2150, contests: 11, rankClass: "Diamond", color: "text-blue-500" },
-  { rank: 6, name: "security_guru", points: 1980, contests: 9, rankClass: "Diamond", color: "text-blue-500" },
-  { rank: 7, name: "node_wizard", points: 1850, contests: 8, rankClass: "Gold", color: "text-amber-500" },
-  { rank: 8, name: "tech_nomad", points: 1720, contests: 9, rankClass: "Gold", color: "text-amber-500" }
-];
-
 export default function ContestLobby() {
   const { API_BASE } = useAuth();
   const [activeTab, setActiveTab] = useState("all"); // all, active, upcoming, past, leaderboard
@@ -98,6 +86,11 @@ export default function ContestLobby() {
   const [registeredContests, setRegisteredContests] = useState([]);
   const [pastContestResults, setPastContestResults] = useState(null);
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
+  
+  // Leaderboard states
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+
   // Live tick — forces re-render every second so countdowns stay accurate
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -179,7 +172,7 @@ export default function ContestLobby() {
           };
         });
 
-        // Merge with static + localStorage fallback
+        // Merge with localStorage fallback
         const dynamicRaw = typeof window !== "undefined" ? localStorage.getItem("synapse_dynamic_contests") : null;
         let savedList = [];
         if (dynamicRaw) {
@@ -187,34 +180,28 @@ export default function ContestLobby() {
         }
         const combined = [
           ...mapped,
-          ...savedList.filter(dc => !mapped.some(dbc => String(dbc.id) === String(dc.id))),
-          ...contests.filter(sc => !mapped.some(dbc => String(dbc.id) === String(sc.id)) && !savedList.some(dc => String(dc.id) === String(sc.id)))
+          ...savedList.filter(dc => !mapped.some(dbc => String(dbc.id) === String(dc.id)))
         ];
         setAllContests(combined);
       } else {
-        // Fallback to static + localStorage
+        // Fallback to localStorage
         const dynamicRaw = typeof window !== "undefined" ? localStorage.getItem("synapse_dynamic_contests") : null;
-        let merged = [...contests];
+        let merged = [];
         if (dynamicRaw) {
           try {
-            const dynamicContests = JSON.parse(dynamicRaw);
-            const dynamicFiltered = dynamicContests.filter(dc => !contests.some(sc => sc.id === dc.id));
-            merged = [...dynamicFiltered, ...contests];
+            merged = JSON.parse(dynamicRaw);
           } catch { }
         }
-        // Normalize static/local contests with computed timings
         setAllContests(merged);
       }
     } catch (err) {
       console.error("Failed to fetch contests from backend API:", err);
-      // Fallback to static + localStorage
+      // Fallback to localStorage
       const dynamicRaw = typeof window !== "undefined" ? localStorage.getItem("synapse_dynamic_contests") : null;
-      let merged = [...contests];
+      let merged = [];
       if (dynamicRaw) {
         try {
-          const dynamicContests = JSON.parse(dynamicRaw);
-          const dynamicFiltered = dynamicContests.filter(dc => !contests.some(sc => sc.id === dc.id));
-          merged = [...dynamicFiltered, ...contests];
+          merged = JSON.parse(dynamicRaw);
         } catch { }
       }
       setAllContests(merged);
@@ -222,9 +209,79 @@ export default function ContestLobby() {
     setLoading(false);
   };
 
+  const fetchLeaderboard = async () => {
+    setLeaderboardLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/submissions`);
+      const data = await res.json();
+      if (data.success && data.submissions) {
+        const userMap = {};
+        data.submissions.forEach((sub) => {
+          if (sub.status === "ACCEPTED" && sub.user) {
+            const uId = sub.user.id;
+            if (!userMap[uId]) {
+              userMap[uId] = {
+                name: sub.user.username,
+                solvedProblems: new Set(),
+                points: 0,
+              };
+            }
+            userMap[uId].solvedProblems.add(sub.problemId);
+          }
+        });
+
+        const list = Object.values(userMap).map((user) => {
+          const solvedCount = user.solvedProblems.size;
+          const points = solvedCount * 10;
+          let rankClass = "Novice";
+          let color = "text-slate-400";
+          if (points >= 100) {
+            rankClass = "Grandmaster";
+            color = "text-rose-500";
+          } else if (points >= 50) {
+            rankClass = "Master";
+            color = "text-purple-500";
+          } else if (points >= 30) {
+            rankClass = "Diamond";
+            color = "text-blue-500";
+          } else if (points >= 10) {
+            rankClass = "Gold";
+            color = "text-amber-500";
+          }
+          return {
+            name: user.name,
+            points: points,
+            contests: solvedCount,
+            rankClass,
+            color,
+          };
+        });
+
+        // Sort descending by points
+        list.sort((a, b) => b.points - a.points);
+        // Assign ranks
+        const rankedList = list.map((item, idx) => ({
+          rank: idx + 1,
+          ...item,
+        }));
+
+        setLeaderboard(rankedList);
+      }
+    } catch (err) {
+      console.error("Failed to fetch global leaderboard submissions:", err);
+    }
+    setLeaderboardLoading(false);
+  };
+
   useEffect(() => {
     fetchContests();
   }, [API_BASE]);
+
+  useEffect(() => {
+    if (activeTab === "leaderboard") {
+      fetchLeaderboard();
+    }
+  }, [activeTab, API_BASE]);
 
   const handleRegister = (contestId) => {
     const nextRegs = [...registeredContests, contestId];
@@ -443,25 +500,40 @@ export default function ContestLobby() {
                       </tr>
                     </thead>
                     <tbody className="divide-y" style={{ divideColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
-                      {globalLeaderboardMock.map((player) => (
-                        <tr key={player.rank} className="hover:bg-slate-500/5 transition-colors">
-                          <td className="px-6 py-4 font-bold">
-                            {player.rank === 1 ? "🥇" : player.rank === 2 ? "🥈" : player.rank === 3 ? "🥉" : `#${player.rank}`}
-                          </td>
-                          <td className="px-6 py-4 font-semibold text-[var(--text-primary)]">
-                            {player.name}
-                          </td>
-                          <td className="px-6 py-4 text-center font-extrabold text-[var(--text-accent)]">
-                            {player.points}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {player.contests}
-                          </td>
-                          <td className="px-6 py-4 text-right font-bold uppercase tracking-wider text-[10px]">
-                            <span className={player.color}>{player.rankClass}</span>
+                      {leaderboardLoading ? (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                            <RefreshCw size={16} className="animate-spin inline-block mr-2" />
+                            Loading grand rankings...
                           </td>
                         </tr>
-                      ))}
+                      ) : leaderboard.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                            No rankings calculated yet. Solve problems to show up here!
+                          </td>
+                        </tr>
+                      ) : (
+                        leaderboard.map((player) => (
+                          <tr key={player.rank} className="hover:bg-slate-500/5 transition-colors">
+                            <td className="px-6 py-4 font-bold">
+                              {player.rank === 1 ? "🥇" : player.rank === 2 ? "🥈" : player.rank === 3 ? "🥉" : `#${player.rank}`}
+                            </td>
+                            <td className="px-6 py-4 font-semibold text-[var(--text-primary)]">
+                              {player.name}
+                            </td>
+                            <td className="px-6 py-4 text-center font-extrabold text-[var(--text-accent)]">
+                              {player.points}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {player.contests}
+                            </td>
+                            <td className="px-6 py-4 text-right font-bold uppercase tracking-wider text-[10px]">
+                              <span className={player.color}>{player.rankClass}</span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>

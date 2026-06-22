@@ -10,7 +10,6 @@ import {
   FileText, MessageCircle, ClipboardCheck, Palette, Trash2, CheckCircle, XCircle,
   Volume2
 } from "lucide-react";
-import { practiceProblems } from "@/data/practiceProblems";
 import { useAuth } from "@/context/AuthContext";
 import { wrapCodeForBackend } from "@/utils/codeWrapper";
 
@@ -74,8 +73,7 @@ export default function PracticeWorkspace() {
             const dbp = data.problem;
             setDbProblem(dbp);
 
-            const matchedStatic = practiceProblems.find(p => p.id === problemId);
-            const matchedSource = localProblem || matchedStatic;
+            const matchedSource = localProblem;
 
             let diffStr = "Medium";
             if (dbp.difficulty === "EASY") diffStr = "Easy";
@@ -142,8 +140,7 @@ export default function PracticeWorkspace() {
         console.error("Failed to load db problem details:", err);
       }
 
-      const matchedStatic = practiceProblems.find(p => p.id === problemId);
-      const matchedSource = localProblem || matchedStatic;
+      const matchedSource = localProblem;
       if (matchedSource) {
         setProblem(matchedSource);
       }

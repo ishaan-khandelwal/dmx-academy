@@ -9,6 +9,7 @@ const {
   finishContestAttempt,
   getContestParticipation,
   getContestParticipants,
+  getAllParticipationReports,
 } = require('../controllers/contestController');
 const { protect, restrictTo, fetchUserIfExists } = require('../middleware/authMiddleware');
 
@@ -16,6 +17,7 @@ const router = express.Router();
 
 // Public routes with optional user identification
 router.get('/', fetchUserIfExists, getAllContests);
+router.get('/reports/participations', protect, restrictTo('ADMIN', 'MENTOR'), getAllParticipationReports);
 router.get('/:id', fetchUserIfExists, getContestDetails);
 router.get('/:id/leaderboard', getContestLeaderboard);
 

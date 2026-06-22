@@ -10,7 +10,6 @@ import {
   FileText, MessageCircle, ClipboardCheck, Palette, Trash2,
   Trophy, Clock, Lock, Flag, Volume2
 } from "lucide-react";
-import { contests } from "@/data/contestData";
 import { useAuth } from "@/context/AuthContext";
 import { wrapCodeForBackend } from "@/utils/codeWrapper";
 
@@ -117,6 +116,7 @@ export default function ContestWorkspace() {
   const [userScore, setUserScore] = useState(0);
   const [solvedQuestions, setSolvedQuestions] = useState([]); // Array of question IDs solved
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
+  const [, setTick] = useState(0);
 
   // Layout resize state
   const [leftWidth, setLeftWidth] = useState(50); // percentage
@@ -290,14 +290,14 @@ export default function ContestWorkspace() {
         }
       }
 
-      // Fallback: check static contests data and localStorage
-      let found = contests.find(c => String(c.id) === contestId) || null;
-      if (!found && typeof window !== "undefined") {
+      // Fallback: check localStorage only
+      let found = null;
+      if (typeof window !== "undefined") {
         const dynamicRaw = localStorage.getItem("synapse_dynamic_contests");
         if (dynamicRaw) {
           try {
             const dynamicContests = JSON.parse(dynamicRaw);
-            found = dynamicContests.find(c => c.id === contestId) || null;
+            found = dynamicContests.find(c => String(c.id) === String(contestId)) || null;
           } catch (e) {
             console.error("Error reading dynamic contest detail:", e);
           }
@@ -399,6 +399,15 @@ export default function ContestWorkspace() {
 
     return () => clearInterval(timer);
   }, [contestStarted, contestEnded, secondsLeft, finishContest]);
+
+  // Sync clock tick for upcoming contests to enable the start button on time
+  useEffect(() => {
+    if (contestStarted || contestEnded) return;
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [contestStarted, contestEnded]);
 
   const activeQuestion = contest ? contest.problems[activeQuestionIdx] : null;
   const currentCodeKey = activeQuestion ? `${activeQuestion.id}_${selectedLanguage}` : "";
