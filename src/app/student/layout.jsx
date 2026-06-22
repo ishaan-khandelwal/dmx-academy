@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
   LayoutDashboard, Trophy, LogOut, 
-  Menu, X, ChevronLeft, ChevronRight, BookOpen, ArrowLeftRight, Code, Brain
+  Menu, X, ChevronLeft, ChevronRight, BookOpen, ArrowLeftRight, Code, Brain, History
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -109,6 +109,11 @@ export default function StudentLayout({ children }) {
       label: "AI Viva",
       href: "/student/viva",
       icon: Brain
+    },
+    {
+      label: "Viva History",
+      href: "/student/viva/history",
+      icon: History
     }
   ];
 

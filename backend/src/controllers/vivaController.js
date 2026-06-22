@@ -30,7 +30,7 @@ const startSession = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      data: result
+      ...result
     });
   } catch (error) {
     next(error);
@@ -42,19 +42,40 @@ const startSession = async (req, res, next) => {
  */
 const submitQuestionAnswer = async (req, res, next) => {
   try {
-    const { sessionId } = req.params;
-    const { questionId, answerText } = req.body;
+    const { sessionId, questionText, studentAnswer } = req.body;
 
-    if (!questionId || !answerText) {
-      return res.status(400).json({ success: false, message: "questionId and answerText are required" });
+    if (!sessionId || !questionText || !studentAnswer) {
+      return res.status(400).json({ success: false, message: "sessionId, questionText, and studentAnswer are required" });
     }
 
     const userId = req.user.id;
-    const result = await vivaService.submitAnswer(userId, parseInt(sessionId), parseInt(questionId), answerText);
+    const result = await vivaService.submitAnswer(userId, parseInt(sessionId), questionText, studentAnswer);
 
     res.status(200).json({
       success: true,
-      data: result
+      ...result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Complete a viva session.
+ */
+const completeSession = async (req, res, next) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, message: "sessionId is required" });
+    }
+
+    const userId = req.user.id;
+    const result = await vivaService.completeSession(userId, parseInt(sessionId));
+
+    res.status(200).json({
+      success: true,
+      session: result
     });
   } catch (error) {
     next(error);
@@ -102,6 +123,7 @@ module.exports = {
   getSubjects,
   startSession,
   submitQuestionAnswer,
+  completeSession,
   getSession,
   getHistory
 };

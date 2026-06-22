@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
 import {
   Brain, Play, CheckCircle2, XCircle, Clock, Award,
   ChevronRight, Activity, BookOpen, Send, Sparkles, MessageSquare,
@@ -149,7 +150,7 @@ export default function AIVivaPage() {
       }
 
       // Fetch history
-      const histRes = await fetch(`${API_BASE}/api/viva/sessions`, { headers }).catch(() => null);
+      const histRes = await fetch(`${API_BASE}/api/viva/history`, { headers }).catch(() => null);
       if (histRes && histRes.ok) {
         const histData = await histRes.json();
         setHistory(histData.sessions || []);
@@ -402,16 +403,16 @@ export default function AIVivaPage() {
     if (!selectedSubject) return;
     setLobbyError("");
     try {
-      const res = await fetch(`${API_BASE}/api/viva/sessions`, {
+      const res = await fetch(`${API_BASE}/api/viva/session/start`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ subject: selectedSubject })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setActiveSession(data.data.session);
-        setCurrentQuestion(data.data.nextQuestion);
-        setProgress(data.data.progress);
+        setActiveSession({ id: data.sessionId, subject: selectedSubject });
+        setCurrentQuestion(data.nextQuestion);
+        setProgress(data.progress);
         setLastEvaluation(null);
         setAnswerText("");
         answerTextRef.current = "";
@@ -447,27 +448,36 @@ export default function AIVivaPage() {
     setInterimText("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/viva/sessions/${activeSession.id}/answers`, {
+      const res = await fetch(`${API_BASE}/api/viva/session/answer`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ questionId: currentQuestion.id, answerText: textToSubmit })
+        body: JSON.stringify({ sessionId: activeSession.id, questionText: currentQuestion.questionText, studentAnswer: textToSubmit })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setLastEvaluation(data.data.answer);
+        setLastEvaluation(data.answer);
 
-        if (data.data.isCompleted) {
-          setSummaryData(data.data.session);
+        if (data.isCompleted) {
+          // Call completeSession explicitly
+          const completeRes = await fetch(`${API_BASE}/api/viva/session/complete`, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify({ sessionId: activeSession.id })
+          });
+          const completeData = await completeRes.json();
+
+          setSummaryData(completeData.session);
           setPhase("result");
           setTimeout(() => {
-            setView("summary");
-          }, 4000);
+            // Redirect to Result Dashboard
+            window.location.href = `/student/viva/result/${activeSession.id}`;
+          }, 3000);
         } else {
           // Store next question data — only apply it when user clicks "Next Question"
           pendingNextRef.current = {
-            session: data.data.session,
-            question: data.data.nextQuestion,
-            progress: data.data.progress,
+            session: { id: activeSession.id },
+            question: data.nextQuestion,
+            progress: data.progress,
           };
           setPhase("result");
         }
@@ -600,7 +610,8 @@ export default function AIVivaPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {history.map(session => (
-                  <div key={session.id} className="p-5 rounded-3xl border shadow-sm space-y-3"
+                  <Link key={session.id} href={`/student/viva/result/${session.id}`}
+                       className="p-5 rounded-3xl border shadow-sm space-y-3 block transition-all hover:shadow-md hover:scale-[1.01]"
                        style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
                     <div className="flex justify-between items-start">
                       <span className="text-xs font-bold px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-500">
@@ -608,21 +619,21 @@ export default function AIVivaPage() {
                       </span>
                       <span className="text-[10px] uppercase font-extrabold tracking-wider" 
                             style={{ color: session.status === "COMPLETED" ? "var(--text-accent)" : "var(--text-secondary)" }}>
-                        {session.status}
+                        {session.status?.replace("_", " ")}
                       </span>
                     </div>
                     <div className="flex items-end justify-between">
                       <div className="space-y-1">
                         <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Final Score</p>
                         <p className="text-xl font-black" style={{ color: "var(--text-primary)" }}>
-                          {session.status === "COMPLETED" ? `${session.score}%` : "--"}
+                          {session.status === "COMPLETED" ? `${session.totalScore ?? 0}%` : "--"}
                         </p>
                       </div>
                       <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                        {new Date(session.createdAt).toLocaleDateString()}
+                        {new Date(session.startedAt || session.createdAt).toLocaleDateString()}
                       </p>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -876,14 +887,14 @@ export default function AIVivaPage() {
             
             <div className="relative z-10 flex flex-col items-center space-y-4">
               <div className="w-20 h-20 rounded-full flex items-center justify-center text-white shadow-lg mb-2"
-                   style={{ background: summaryData.score >= 80 ? "linear-gradient(to right, #10b981, #34d399)" : summaryData.score >= 50 ? "linear-gradient(to right, #f59e0b, #fbbf24)" : "linear-gradient(to right, #f43f5e, #fb7185)" }}>
+                   style={{ background: (summaryData.totalScore ?? summaryData.score ?? 0) >= 80 ? "linear-gradient(to right, #10b981, #34d399)" : (summaryData.totalScore ?? summaryData.score ?? 0) >= 50 ? "linear-gradient(to right, #f59e0b, #fbbf24)" : "linear-gradient(to right, #f43f5e, #fb7185)" }}>
                 <Award size={40} />
               </div>
               <h2 className="text-3xl font-black font-display" style={{ color: "var(--text-primary)" }}>
                 Viva Completed
               </h2>
               <div className="text-sm font-bold uppercase tracking-widest text-indigo-500">
-                Final Score: {summaryData.score}%
+                Final Score: {summaryData.totalScore ?? summaryData.score ?? 0}%
               </div>
               <p className="text-sm max-w-md" style={{ color: "var(--text-secondary)" }}>
                 {summaryData.feedback}

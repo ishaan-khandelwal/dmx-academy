@@ -3,6 +3,7 @@ const {
   getSubjects,
   startSession,
   submitQuestionAnswer,
+  completeSession,
   getSession,
   getHistory
 } = require('../controllers/vivaController');
@@ -16,16 +17,19 @@ router.get('/subjects', getSubjects);
 // All session routes must be protected
 router.use(protect);
 
-// Get all past sessions for user
-router.get('/sessions', getHistory);
+// GET /api/viva/history
+router.get('/history', getHistory);
 
-// Start a new session
-router.post('/sessions', startSession);
+// GET /api/viva/history/:sessionId
+router.get('/history/:sessionId', getSession);
 
-// Get details of a specific session
-router.get('/sessions/:sessionId', getSession);
+// POST /api/viva/session/start
+router.post('/session/start', startSession);
 
-// Submit an answer
-router.post('/sessions/:sessionId/answers', submitQuestionAnswer);
+// POST /api/viva/session/answer
+router.post('/session/answer', submitQuestionAnswer);
+
+// POST /api/viva/session/complete
+router.post('/session/complete', completeSession);
 
 module.exports = router;

@@ -166,26 +166,30 @@ model VivaQuestion {
 }
 
 model VivaSession {
-  id          Int          @id @default(autoincrement())
-  userId      Int
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject     String
-  status      String       @default("STARTED") // STARTED, COMPLETED
-  score       Int          @default(0)
-  feedback    String?      @db.Text
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  vivaAnswers VivaAnswer[]
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject        String
+  totalQuestions Int          @default(0)
+  status         String       @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, ABORTED
+  totalScore     Int          @default(0)
+  feedback       String?      @db.Text
+  startedAt      DateTime     @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  vivaAnswers    VivaAnswer[]
 }
 
 model VivaAnswer {
-  id         Int          @id @default(autoincrement())
-  sessionId  Int
-  session    VivaSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  questionId Int
-  question   VivaQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  answerText String       @db.Text
-  score      Int          @default(0)
-  feedback   String?      @db.Text
-  createdAt  DateTime     @default(now())
+  id            Int           @id @default(autoincrement())
+  sessionId     Int
+  session       VivaSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId    Int?
+  question      VivaQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  questionText  String        @db.Text
+  studentAnswer String        @db.Text
+  score         Int           @default(0)
+  feedback      String?       @db.Text
+  createdAt     DateTime      @default(now())
 }
