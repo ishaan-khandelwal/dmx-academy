@@ -30,13 +30,95 @@ export default function AIVivaPage() {
   // Phase inside active view: "reading", "answering", "evaluating", "result"
   const [phase, setPhase] = useState("reading");
   const [timeLeft, setTimeLeft] = useState(0);
-  const [isListening, setIsListening] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [micError, setMicError] = useState("");
+  const [interimText, setInterimText] = useState("");
   const recognitionRef = useRef(null);
+  const micEnabledRef = useRef(false);
+  const phaseRef = useRef("reading");
+  const restartTimerRef = useRef(null);
+  const intentionalStopRef = useRef(false);
+  const startingRef = useRef(false);
+  const consecutiveErrorsRef = useRef(0);
 
   const [answerText, setAnswerText] = useState("");
+  const answerTextRef = useRef("");
+  const [submitError, setSubmitError] = useState("");
   const [evaluating, setEvaluating] = useState(false);
   const [lastEvaluation, setLastEvaluation] = useState(null); // { score, feedback }
   const [summaryData, setSummaryData] = useState(null); // Used when session is completed
+  const pendingNextRef = useRef(null); // holds { session, question, progress } until user clicks Next
+  const [forceNonContinuous, setForceNonContinuous] = useState(false);
+  const forceNonContinuousRef = useRef(false);
+
+  const barsRef = useRef([]);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const rafIdRef = useRef(null);
+
+  useEffect(() => {
+    let streamRef = null;
+    if (micEnabled) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        streamRef = stream;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioContextRef.current = audioCtx;
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        analyserRef.current = analyser;
+        
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        const updateLevel = () => {
+          analyser.getByteFrequencyData(dataArray);
+          if (barsRef.current) {
+            for (let i = 0; i < 5; i++) {
+              if (barsRef.current[i]) {
+                const val = dataArray[i * 2 + 2] || 0;
+                const height = 12 + (val / 255) * 24;
+                barsRef.current[i].style.height = `${height}px`;
+              }
+            }
+          }
+          rafIdRef.current = requestAnimationFrame(updateLevel);
+        };
+        updateLevel();
+      }).catch(err => {
+        console.error("Audio visualization error:", err);
+      });
+    } else {
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      if (streamRef) {
+        streamRef.getTracks().forEach(t => t.stop());
+      }
+      if (barsRef.current) {
+        for (let i = 0; i < 5; i++) {
+          if (barsRef.current[i]) barsRef.current[i].style.height = "12px";
+        }
+      }
+    }
+    
+    return () => {
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
+      }
+      if (streamRef) {
+        streamRef.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [micEnabled]);
+
+  useEffect(() => {
+    forceNonContinuousRef.current = forceNonContinuous;
+  }, [forceNonContinuous]);
   
   // Utility headers for API requests
   const getHeaders = () => ({
@@ -83,86 +165,234 @@ export default function AIVivaPage() {
   // Timer & Speech Recognition Logic
   // -------------------------------------------------------------
   useEffect(() => {
-    if (view === "active" && (phase === "reading" || phase === "answering") && timeLeft > 0) {
+    if (view === "active" && (phase === "reading" || (phase === "answering" && micEnabled)) && timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
     } else if (view === "active" && timeLeft === 0) {
       if (phase === "reading") {
         startAnsweringPhase();
-      } else if (phase === "answering" && answerText.trim().length > 0) {
-        // Auto submit if time runs out and they typed something
+      } else if (phase === "answering") {
         submitAnswer();
       }
     }
-  }, [timeLeft, phase, view, answerText]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, phase, view, answerText, interimText]);
 
   useEffect(() => {
-    // Cleanup speech recognition on unmount
-    return () => stopListening();
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    micEnabledRef.current = micEnabled;
+  }, [micEnabled]);
+
+  useEffect(() => {
+    answerTextRef.current = answerText;
+  }, [answerText]);
+
+  useEffect(() => {
+    return () => stopListening(false);
   }, []);
+
+  const setMicEnabledSync = (value) => {
+    micEnabledRef.current = value;
+    setMicEnabled(value);
+  };
+
+  const getSpeechRecognition = () => {
+    if (typeof window === "undefined") return null;
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  };
+
+  const clearRestartTimer = () => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  };
+
+  const stopRecognitionEngine = (intentional = true) => {
+    intentionalStopRef.current = intentional;
+    clearRestartTimer();
+    startingRef.current = false;
+
+    if (recognitionRef.current) {
+      const recognition = recognitionRef.current;
+      recognitionRef.current = null;
+      recognition.onend = null;
+      recognition.onresult = null;
+      recognition.onerror = null;
+      try {
+        recognition.stop();
+      } catch (e) {}
+    }
+  };
+
+  const scheduleRecognitionRestart = (delayMs = 300) => {
+    clearRestartTimer();
+    if (!micEnabledRef.current || phaseRef.current !== "answering" || intentionalStopRef.current) return;
+
+    restartTimerRef.current = setTimeout(() => {
+      restartTimerRef.current = null;
+      startRecognitionEngine();
+    }, delayMs);
+  };
+
+  const startRecognitionEngine = () => {
+    if (startingRef.current || recognitionRef.current) return;
+    if (!micEnabledRef.current || phaseRef.current !== "answering") return;
+
+    const SpeechRecognition = getSpeechRecognition();
+    if (!SpeechRecognition) {
+      setMicError("Browser not supported");
+      setMicEnabledSync(false);
+      return;
+    }
+
+    const startRecognitionProcess = () => {
+      startingRef.current = true;
+      intentionalStopRef.current = false;
+
+      const recognition = new SpeechRecognition();
+      // Fallback to non-continuous if network errors are detected
+      recognition.continuous = !forceNonContinuousRef.current;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        console.log("Speech result received");
+        consecutiveErrorsRef.current = 0;
+        setMicError("");
+
+        let newFinal = "";
+        let interim = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            newFinal += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        if (newFinal) {
+          const chunk = newFinal.endsWith(" ") ? newFinal : `${newFinal} `;
+          setAnswerText((prev) => {
+            const updated = prev + chunk;
+            answerTextRef.current = updated;
+            return updated;
+          });
+          setInterimText("");
+          console.log("Transcript updated");
+        }
+        
+        if (interim) {
+          setInterimText(interim);
+        } else if (newFinal) {
+          setInterimText("");
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.log("Recognition error:", event.error);
+        if (intentionalStopRef.current) return;
+
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          setMicError("Microphone permission denied");
+          setMicEnabledSync(false);
+          stopRecognitionEngine(true);
+          return;
+        }
+
+        // 'network' errors are common on HTTP (non-HTTPS) for continuous mode.
+        // Clear the ref so onend can trigger a restart, and force non-continuous fallback.
+        if (event.error === "network") {
+          console.warn("Speech recognition network error — falling back to non-continuous mode and restarting.");
+          if (!forceNonContinuousRef.current) {
+            setForceNonContinuous(true);
+          }
+          return;
+        }
+
+        console.warn("Speech recognition error:", event.error);
+      };
+
+      recognition.onend = () => {
+        console.log("Recognition ended");
+        startingRef.current = false;
+        if (recognitionRef.current === recognition) {
+          recognitionRef.current = null;
+        }
+
+        if (intentionalStopRef.current || !micEnabledRef.current || phaseRef.current !== "answering") {
+          return;
+        }
+
+        scheduleRecognitionRestart(300);
+      };
+
+      recognition.onstart = () => {
+        console.log("Speech started");
+        startingRef.current = false;
+      };
+
+      try {
+        recognitionRef.current = recognition;
+        recognition.start();
+      } catch (err) {
+        startingRef.current = false;
+        recognitionRef.current = null;
+        if (!intentionalStopRef.current && micEnabledRef.current && phaseRef.current === "answering") {
+          scheduleRecognitionRestart(500);
+        }
+      }
+    };
+
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' }).then((status) => {
+        if (status.state === 'denied') {
+          setMicError("Microphone permission denied");
+          setMicEnabledSync(false);
+        } else {
+          startRecognitionProcess();
+        }
+      }).catch(() => startRecognitionProcess());
+    } else {
+      startRecognitionProcess();
+    }
+  };
 
   const startAnsweringPhase = () => {
     setPhase("answering");
-    setTimeLeft(120); // 2 minutes to answer
-    startListening();
+    setTimeLeft(120);
+    setMicError("");
+    setInterimText("");
+    consecutiveErrorsRef.current = 0;
+    setMicEnabledSync(false);
   };
 
   const startListening = () => {
-    if (typeof window !== "undefined") {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        return; // Browser doesn't support it, fallback to typing
-      }
-      
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = "en-US";
-        
-        recognition.onstart = () => setIsListening(true);
-        
-        recognition.onresult = (event) => {
-          let finalTranscript = "";
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript + " ";
-            }
-          }
-          if (finalTranscript) {
-            setAnswerText((prev) => prev + finalTranscript);
-          }
-        };
-        
-        recognition.onerror = (event) => {
-          console.error("Speech recognition error", event.error);
-          setIsListening(false);
-        };
-        
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-        
-        recognition.start();
-        recognitionRef.current = recognition;
-      } catch (err) {
-        console.error("Mic start failed", err);
-      }
-    }
+    consecutiveErrorsRef.current = 0;
+    setMicError("");
+    setMicEnabledSync(true);
+    startRecognitionEngine();
   };
 
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-      setIsListening(false);
-    }
+  const stopListening = (disableMic = true) => {
+    stopRecognitionEngine(true);
+    setInterimText("");
+    if (disableMic) setMicEnabledSync(false);
   };
 
   const toggleListening = () => {
-    if (isListening) stopListening();
-    else startListening();
+    if (micEnabled) {
+      stopListening(true);
+    } else {
+      setMicError("");
+      startListening();
+    }
   };
 
   // -------------------------------------------------------------
@@ -184,6 +414,11 @@ export default function AIVivaPage() {
         setProgress(data.data.progress);
         setLastEvaluation(null);
         setAnswerText("");
+        answerTextRef.current = "";
+        setInterimText("");
+        setMicEnabledSync(false);
+        setMicError("");
+        setSubmitError("");
         
         setView("active");
         setPhase("reading");
@@ -197,53 +432,83 @@ export default function AIVivaPage() {
     }
   };
 
+  const getFullTranscript = () => (answerTextRef.current + interimText).trim();
+
   const submitAnswer = async () => {
-    if (!answerText.trim() || evaluating) return;
-    stopListening();
+    const textToSubmit = getFullTranscript() || "No answer provided.";
+    if (evaluating) return;
+
+    stopListening(true);
+    setSubmitError("");
     setEvaluating(true);
     setPhase("evaluating");
-    
+    setAnswerText(textToSubmit);
+    answerTextRef.current = textToSubmit;
+    setInterimText("");
+
     try {
       const res = await fetch(`${API_BASE}/api/viva/sessions/${activeSession.id}/answers`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ questionId: currentQuestion.id, answerText })
+        body: JSON.stringify({ questionId: currentQuestion.id, answerText: textToSubmit })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setLastEvaluation(data.data.answer);
-        
+
         if (data.data.isCompleted) {
-          // Finish session
-          setSummaryData(data.data.session); 
+          setSummaryData(data.data.session);
           setPhase("result");
           setTimeout(() => {
             setView("summary");
-          }, 4000); 
+          }, 4000);
         } else {
-          // Prepare next question
-          setActiveSession(data.data.session);
-          setCurrentQuestion(data.data.nextQuestion);
-          setProgress(data.data.progress);
+          // Store next question data — only apply it when user clicks "Next Question"
+          pendingNextRef.current = {
+            session: data.data.session,
+            question: data.data.nextQuestion,
+            progress: data.data.progress,
+          };
           setPhase("result");
         }
+      } else {
+        setSubmitError(data.message || "Failed to submit your answer. Please try again.");
+        setPhase("answering");
+        setMicEnabledSync(true);
+        startRecognitionEngine();
       }
     } catch (err) {
       console.error("Failed to submit answer:", err);
+      setSubmitError("Network error while submitting. Check your connection and try again.");
+      setPhase("answering");
+      setMicEnabledSync(true);
+      startRecognitionEngine();
     } finally {
       setEvaluating(false);
     }
   };
 
   const nextQuestion = () => {
+    stopListening(true);
     setLastEvaluation(null);
     setAnswerText("");
+    answerTextRef.current = "";
+    setInterimText("");
+    setSubmitError("");
+    setMicError("");
+    // Now apply the next question data that was stored after evaluation
+    if (pendingNextRef.current) {
+      setActiveSession(pendingNextRef.current.session);
+      setCurrentQuestion(pendingNextRef.current.question);
+      setProgress(pendingNextRef.current.progress);
+      pendingNextRef.current = null;
+    }
     setPhase("reading");
     setTimeLeft(15);
   };
 
   const exitToLobby = () => {
-    stopListening();
+    stopListening(false);
     setView("lobby");
     setSummaryData(null);
     setActiveSession(null);
@@ -291,7 +556,7 @@ export default function AIVivaPage() {
                 AI Viva System
               </h1>
               <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                Test your theoretical knowledge via an interactive voice session. You will be given a few seconds to read each question, after which your microphone will turn on so you can answer verbally.
+                Test your theoretical knowledge in a spoken viva session. Read each question, then answer verbally — your speech is transcribed live and evaluated by AI.
               </p>
               
               {lobbyError && (
@@ -442,30 +707,122 @@ export default function AIVivaPage() {
             {/* ANSWERING PHASE */}
             {(phase === "answering" || phase === "evaluating") && (
               <motion.div key="answering" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
-                <div className="relative">
-                  <textarea
-                    value={answerText}
-                    onChange={e => setAnswerText(e.target.value)}
-                    placeholder="Microphone is listening... You can also type your answer here."
-                    className="w-full p-5 pl-14 rounded-2xl min-h-[160px] text-sm border focus:ring-2 focus:ring-indigo-500 outline-none resize-y transition-all shadow-inner leading-relaxed"
-                    style={{ backgroundColor: "var(--bg-input)", borderColor: isListening ? "#6366f1" : "var(--border-primary)", color: "var(--text-primary)" }}
+
+                {/* Mic status banner */}
+                <div className={`flex items-center justify-between p-3 rounded-2xl border transition-colors ${
+                  micEnabled
+                    ? "bg-rose-500/10 border-rose-500/30"
+                    : "bg-slate-500/10 border-slate-500/20"
+                }`}>
+                  <div className="flex items-center space-x-3">
+                    <div className={`relative flex items-center justify-center w-10 h-10 rounded-full ${
+                      micEnabled ? "bg-rose-500 text-white" : "bg-slate-300 dark:bg-slate-700 text-slate-500"
+                    }`}>
+                      {micEnabled ? <Mic size={18} /> : <MicOff size={18} />}
+                      {micEnabled && (
+                        <span className="absolute inset-0 rounded-full bg-rose-500 animate-ping opacity-40" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                        {micEnabled
+                          ? "Microphone is on — speak your answer"
+                          : "Microphone is off"}
+                      </p>
+                      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        {micEnabled
+                          ? "Speak clearly — your words appear in the live transcript below"
+                          : "Turn the mic on to record your verbal answer"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleListening}
                     disabled={evaluating}
-                  />
-                  <div className="absolute top-5 left-5">
-                    <button onClick={toggleListening} disabled={evaluating} className={`p-2 rounded-full transition-colors ${isListening ? 'bg-indigo-500 text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'}`}>
-                      {isListening ? <Mic size={16} /> : <MicOff size={16} />}
-                    </button>
+                    className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                      micEnabled
+                        ? "bg-rose-500 text-white hover:bg-rose-600"
+                        : "bg-indigo-500 text-white hover:bg-indigo-600"
+                    }`}
+                  >
+                    {micEnabled ? "Turn Off Mic" : "Turn On Mic"}
+                  </button>
+                </div>
+
+                {micError && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 p-3 rounded-xl text-sm font-semibold flex items-center space-x-2">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{micError}</span>
+                  </div>
+                )}
+
+                {submitError && (
+                  <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 p-3 rounded-xl text-sm font-semibold flex items-center space-x-2">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{submitError}</span>
+                  </div>
+                )}
+
+                {/* Live transcript — voice only, read-only */}
+                <div
+                  className="relative rounded-2xl min-h-[200px] border overflow-hidden"
+                  style={{
+                    backgroundColor: "var(--bg-input)",
+                    borderColor: micEnabled ? "#f43f5e" : "var(--border-primary)",
+                  }}
+                >
+                  {micEnabled && (
+                    <div className="absolute top-4 right-4 flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 z-10">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                      <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">Live</span>
+                    </div>
+                  )}
+
+                  {/* Audio level bars */}
+                  {micEnabled && (
+                    <div className="flex items-end justify-center gap-1 h-12 px-6 pt-4">
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          ref={el => barsRef.current[i] = el}
+                          className="w-1.5 rounded-full bg-rose-500/70"
+                          style={{
+                            height: '12px',
+                            transition: 'height 0.05s ease'
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="p-6 pt-3 min-h-[140px]">
+                    {answerText || interimText ? (
+                      <p className="text-sm md:text-base leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                        {answerText}
+                        {interimText && (
+                          <span className="text-indigo-400/80 italic">{interimText}</span>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-sm italic" style={{ color: "var(--text-muted)" }}>
+                        {micEnabled
+                          ? "Listening..."
+                          : "Your spoken answer will appear here as live transcription."}
+                      </p>
+                    )}
                   </div>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
-                    {answerText.length} characters recorded
+                    {(answerText + interimText).length} characters captured
                   </span>
                   <button
+                    type="button"
                     onClick={submitAnswer}
-                    disabled={!answerText.trim() || evaluating}
-                    className="px-6 py-2.5 rounded-2xl font-bold text-sm text-white shadow-md transition-all cursor-pointer flex items-center space-x-2 disabled:opacity-50 hover:scale-102"
+                    disabled={evaluating}
+                    className="px-6 py-2.5 rounded-2xl font-bold text-sm text-white shadow-md transition-all cursor-pointer flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-102"
                     style={{ background: "var(--accent-gradient)" }}
                   >
                     {evaluating ? (
