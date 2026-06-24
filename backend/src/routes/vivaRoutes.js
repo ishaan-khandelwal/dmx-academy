@@ -7,29 +7,43 @@ const {
   getSession,
   getHistory
 } = require('../controllers/vivaController');
-const { protect } = require('../middleware/authMiddleware');
+
+const {
+  listQuestions,
+  listSubjects,
+  listTopics,
+  getQuestion,
+  createQuestion,
+  updateQuestion,
+  deleteQuestion
+} = require('../controllers/questionBankController');
+
+const { protect, restrictTo } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Get list of available subjects
+// ── Public / student-accessible ─────────────────────────────────────
+// Get list of available subjects (for lobby dropdown)
 router.get('/subjects', getSubjects);
 
-// All session routes must be protected
+// Question bank read — accessible to all authenticated users
+router.get('/questions/subjects', protect, listSubjects);
+router.get('/questions/topics', protect, listTopics);
+router.get('/questions', protect, listQuestions);
+router.get('/questions/:id', protect, getQuestion);
+
+// ── Mentor/Admin only — question bank write ──────────────────────────
+router.post('/questions', protect, restrictTo('ADMIN', 'MENTOR'), createQuestion);
+router.put('/questions/:id', protect, restrictTo('ADMIN', 'MENTOR'), updateQuestion);
+router.delete('/questions/:id', protect, restrictTo('ADMIN', 'MENTOR'), deleteQuestion);
+
+// ── Session routes (all protected) ───────────────────────────────────
 router.use(protect);
 
-// GET /api/viva/history
 router.get('/history', getHistory);
-
-// GET /api/viva/history/:sessionId
 router.get('/history/:sessionId', getSession);
-
-// POST /api/viva/session/start
 router.post('/session/start', startSession);
-
-// POST /api/viva/session/answer
 router.post('/session/answer', submitQuestionAnswer);
-
-// POST /api/viva/session/complete
 router.post('/session/complete', completeSession);
 
 module.exports = router;

@@ -20,12 +20,15 @@ export default function AIVivaPage() {
   const [subjects, setSubjects] = useState(["JavaScript", "Python", "DBMS", "Computer Networks"]);
   const [history, setHistory] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedDifficulty, setSelectedDifficulty] = useState(""); // "" = any
+  const [selectedNumQuestions, setSelectedNumQuestions] = useState(5);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [lobbyError, setLobbyError] = useState("");
 
   // Active Session Data
   const [activeSession, setActiveSession] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState([]); // track session question set
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   
   // Phase inside active view: "reading", "answering", "evaluating", "result"
@@ -406,13 +409,18 @@ export default function AIVivaPage() {
       const res = await fetch(`${API_BASE}/api/viva/session/start`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ subject: selectedSubject })
+        body: JSON.stringify({
+          subject: selectedSubject,
+          ...(selectedDifficulty && { difficulty: selectedDifficulty }),
+          numQuestions: selectedNumQuestions
+        })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setActiveSession({ id: data.sessionId, subject: selectedSubject });
         setCurrentQuestion(data.nextQuestion);
         setProgress(data.progress);
+        setSelectedQuestionIds(data.selectedQuestionIds || []);
         setLastEvaluation(null);
         setAnswerText("");
         answerTextRef.current = "";
@@ -423,7 +431,7 @@ export default function AIVivaPage() {
         
         setView("active");
         setPhase("reading");
-        setTimeLeft(15); // 15 seconds to read the question
+        setTimeLeft(15);
       } else {
         setLobbyError(data.message || "Failed to start session. Backend might be down.");
       }
@@ -451,7 +459,7 @@ export default function AIVivaPage() {
       const res = await fetch(`${API_BASE}/api/viva/session/answer`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ sessionId: activeSession.id, questionText: currentQuestion.questionText, studentAnswer: textToSubmit })
+        body: JSON.stringify({ sessionId: activeSession.id, questionText: currentQuestion.questionText, studentAnswer: textToSubmit, selectedQuestionIds })
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -523,6 +531,7 @@ export default function AIVivaPage() {
     setSummaryData(null);
     setActiveSession(null);
     setSelectedSubject("");
+    setSelectedQuestionIds([]);
     fetchLobbyData(); // refresh history
   };
 
@@ -576,15 +585,36 @@ export default function AIVivaPage() {
                 </div>
               )}
 
-              <div className="pt-4 flex flex-col sm:flex-row gap-4 items-center">
+              <div className="pt-4 flex flex-col sm:flex-row gap-3 flex-wrap items-center">
                 <select 
-                  className="w-full sm:w-64 p-3 rounded-2xl text-sm border font-semibold outline-none"
+                  className="w-full sm:w-52 p-3 rounded-2xl text-sm border font-semibold outline-none"
                   style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
                   value={selectedSubject}
                   onChange={(e) => setSelectedSubject(e.target.value)}
                 >
-                  <option value="" disabled>Select a Subject to begin</option>
+                  <option value="" disabled>Select Subject</option>
                   {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+
+                <select
+                  className="w-full sm:w-40 p-3 rounded-2xl text-sm border font-semibold outline-none"
+                  style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
+                  value={selectedDifficulty}
+                  onChange={(e) => setSelectedDifficulty(e.target.value)}
+                >
+                  <option value="">Any Difficulty</option>
+                  <option value="EASY">Easy</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HARD">Hard</option>
+                </select>
+
+                <select
+                  className="w-full sm:w-36 p-3 rounded-2xl text-sm border font-semibold outline-none"
+                  style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
+                  value={selectedNumQuestions}
+                  onChange={(e) => setSelectedNumQuestions(parseInt(e.target.value))}
+                >
+                  {[3, 5, 7, 10].map(n => <option key={n} value={n}>{n} Questions</option>)}
                 </select>
                 
                 <button

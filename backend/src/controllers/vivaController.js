@@ -20,18 +20,15 @@ const getSubjects = async (req, res, next) => {
  */
 const startSession = async (req, res, next) => {
   try {
-    const { subject } = req.body;
+    const { subject, difficulty, numQuestions } = req.body;
     if (!subject) {
       return res.status(400).json({ success: false, message: "Subject is required" });
     }
 
     const userId = req.user.id;
-    const result = await vivaService.startVivaSession(userId, subject);
+    const result = await vivaService.startVivaSession(userId, subject, { difficulty, numQuestions });
 
-    res.status(201).json({
-      success: true,
-      ...result
-    });
+    res.status(201).json({ success: true, ...result });
   } catch (error) {
     next(error);
   }
@@ -42,19 +39,22 @@ const startSession = async (req, res, next) => {
  */
 const submitQuestionAnswer = async (req, res, next) => {
   try {
-    const { sessionId, questionText, studentAnswer } = req.body;
+    const { sessionId, questionText, studentAnswer, selectedQuestionIds } = req.body;
 
     if (!sessionId || !questionText || !studentAnswer) {
       return res.status(400).json({ success: false, message: "sessionId, questionText, and studentAnswer are required" });
     }
 
     const userId = req.user.id;
-    const result = await vivaService.submitAnswer(userId, parseInt(sessionId), questionText, studentAnswer);
+    const result = await vivaService.submitAnswer(
+      userId,
+      parseInt(sessionId),
+      questionText,
+      studentAnswer,
+      selectedQuestionIds || []
+    );
 
-    res.status(200).json({
-      success: true,
-      ...result
-    });
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);
   }

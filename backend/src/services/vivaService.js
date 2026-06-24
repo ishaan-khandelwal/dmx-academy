@@ -103,26 +103,41 @@ const evaluateAnswer = (question, answerText) => {
 
 /**
  * Starts a new Viva Session.
+ * Supports optional difficulty filter and numQuestions cap.
  * DB columns: id, userId, subject, status, score, feedback, createdAt, updatedAt
  */
-const startVivaSession = async (userId, subject) => {
+const startVivaSession = async (userId, subject, { difficulty, numQuestions } = {}) => {
   await seedQuestionsIfNeeded();
 
-  const totalQuestions = await prisma.vivaQuestion.count({ where: { subject } });
-  if (totalQuestions === 0) {
-    throw new Error(`No questions available for subject: ${subject}`);
+  const filter = { subject };
+  if (difficulty && ['EASY', 'MEDIUM', 'HARD'].includes(difficulty)) {
+    filter.difficulty = difficulty;
   }
 
-  // Create session using only columns that exist in DB
-  const session = await prisma.vivaSession.create({
-    data: {
-      userId,
-      subject,
-      status: "IN_PROGRESS"
-    }
+  const allMatchingQuestions = await prisma.vivaQuestion.findMany({
+    where: filter,
+    orderBy: { createdAt: 'asc' }
   });
 
-  const firstQuestion = await prisma.vivaQuestion.findFirst({ where: { subject } });
+  if (allMatchingQuestions.length === 0) {
+    throw new Error(`No questions available for subject: ${subject}${difficulty ? ` (${difficulty})` : ''}`);
+  }
+
+  // Cap to requested number (default: all questions, max 10)
+  const cap = numQuestions ? Math.min(parseInt(numQuestions), allMatchingQuestions.length, 10) : Math.min(allMatchingQuestions.length, 10);
+  // Shuffle and pick cap questions
+  const shuffled = allMatchingQuestions.sort(() => Math.random() - 0.5).slice(0, cap);
+
+  const session = await prisma.vivaSession.create({
+    data: { userId, subject, status: "IN_PROGRESS" }
+  });
+
+  // Store selected question IDs in session metadata via a separate lookup approach:
+  // We tag questions for this session by storing the ordered list in a lightweight way.
+  // Since the DB has no session-question junction table, we piggyback on the session's
+  // feedback field temporarily until the session is completed.
+  // Instead, we return the question list to the frontend and track via answered questions.
+  const firstQuestion = shuffled[0];
 
   return {
     sessionId: session.id,
@@ -130,16 +145,19 @@ const startVivaSession = async (userId, subject) => {
       id: firstQuestion.id,
       questionText: firstQuestion.questionText
     },
-    progress: { current: 1, total: totalQuestions },
+    // Pass the selected question IDs so frontend can track progress correctly
+    selectedQuestionIds: shuffled.map(q => q.id),
+    progress: { current: 1, total: shuffled.length },
     isCompleted: false
   };
 };
 
 /**
  * Submits an answer for the active session, evaluates it, and gets next question.
+ * selectedQuestionIds: ordered array of question IDs chosen at session start (optional).
  * DB VivaAnswer columns: id, sessionId, questionId (required), answerText, score, feedback, createdAt
  */
-const submitAnswer = async (userId, sessionId, questionText, studentAnswer) => {
+const submitAnswer = async (userId, sessionId, questionText, studentAnswer, selectedQuestionIds) => {
   const session = await prisma.vivaSession.findUnique({
     where: { id: sessionId },
     include: { vivaAnswers: true }
@@ -149,7 +167,6 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer) => {
   if (session.userId !== userId) throw new Error("Unauthorized access to session");
   if (session.status === "COMPLETED" || session.status === "ABORTED") throw new Error("Session already finished");
 
-  // Find question by text to get its ID (required by DB)
   const question = await prisma.vivaQuestion.findFirst({ where: { questionText } });
   if (!question) throw new Error("Question not found");
 
@@ -158,12 +175,11 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer) => {
 
   const evaluation = evaluateAnswer(question, studentAnswer);
 
-  // Save answer using actual DB column names (answerText, not studentAnswer)
   await prisma.vivaAnswer.create({
     data: {
       sessionId,
       questionId: question.id,
-      answerText: studentAnswer,   // DB column is answerText
+      answerText: studentAnswer,
       score: evaluation.score,
       feedback: evaluation.feedback
     }
@@ -172,21 +188,30 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer) => {
   const allAnswers = await prisma.vivaAnswer.findMany({ where: { sessionId } });
   const answeredIds = allAnswers.map(a => a.questionId);
 
-  const nextQuestion = await prisma.vivaQuestion.findFirst({
-    where: {
-      subject: session.subject,
-      id: { notIn: answeredIds }
-    }
-  });
+  // Use selectedQuestionIds if provided (respects difficulty/numQuestions selection)
+  let nextQuestion = null;
+  let total;
 
-  const totalQCount = await prisma.vivaQuestion.count({ where: { subject: session.subject } });
+  if (selectedQuestionIds && selectedQuestionIds.length > 0) {
+    const remainingIds = selectedQuestionIds.filter(id => !answeredIds.includes(id));
+    total = selectedQuestionIds.length;
+    if (remainingIds.length > 0) {
+      nextQuestion = await prisma.vivaQuestion.findUnique({ where: { id: remainingIds[0] } });
+    }
+  } else {
+    // Fallback: use all questions for subject
+    total = await prisma.vivaQuestion.count({ where: { subject: session.subject } });
+    nextQuestion = await prisma.vivaQuestion.findFirst({
+      where: { subject: session.subject, id: { notIn: answeredIds } }
+    });
+  }
 
   return {
     answer: { score: evaluation.score, feedback: evaluation.feedback },
     nextQuestion: nextQuestion
       ? { id: nextQuestion.id, questionText: nextQuestion.questionText }
       : null,
-    progress: { current: allAnswers.length + (nextQuestion ? 1 : 0), total: totalQCount },
+    progress: { current: allAnswers.length + (nextQuestion ? 1 : 0), total },
     isCompleted: !nextQuestion
   };
 };
