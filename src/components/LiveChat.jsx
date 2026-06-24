@@ -316,8 +316,7 @@ export default function LiveChat({
         backgroundColor: "var(--bg-card)",
         borderColor: "var(--border-primary)",
         height: "100%",
-        minHeight: "400px",
-        maxHeight: "600px",
+        minHeight: "0",
       }}
       id="live-chat-panel"
     >

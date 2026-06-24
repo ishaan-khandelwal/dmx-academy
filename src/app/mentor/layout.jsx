@@ -396,8 +396,8 @@ export default function MentorLayout({ children }) {
         </header>
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
-          <div className="max-w-6xl mx-auto space-y-8">
+        <main className={`flex-1 relative ${pathname === "/admin/live" ? "overflow-hidden p-4 md:p-6 flex flex-col" : "overflow-y-auto p-6 md:p-8"}`}>
+          <div className={pathname === "/admin/live" ? "flex-1 flex flex-col min-h-0" : "max-w-6xl mx-auto space-y-8"}>
             {children}
           </div>
         </main>

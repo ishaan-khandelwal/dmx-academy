@@ -216,6 +216,42 @@ function BroadcastPanel({ session, onEndSession }) {
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [activeNotification, setActiveNotification] = useState(null);
 
+  const [connectionState, setConnectionState] = useState(room?.state || "disconnected");
+  const [isBrowserOffline, setIsBrowserOffline] = useState(false);
+
+  useEffect(() => {
+    if (!room) return;
+    
+    const handleStateChange = () => {
+      setConnectionState(room.state);
+    };
+
+    room.on("connectionStateChanged", handleStateChange);
+    
+    // Listen for reconnection events specifically
+    room.on("reconnecting", () => setConnectionState("reconnecting"));
+    room.on("reconnected", () => setConnectionState("connected"));
+    room.on("disconnected", () => setConnectionState("disconnected"));
+
+    const handleOffline = () => setIsBrowserOffline(true);
+    const handleOnline = () => setIsBrowserOffline(false);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+
+    // Initial check
+    setIsBrowserOffline(!window.navigator.onLine);
+
+    return () => {
+      room.off("connectionStateChanged", handleStateChange);
+      room.off("reconnecting", handleStateChange);
+      room.off("reconnected", handleStateChange);
+      room.off("disconnected", handleStateChange);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [room]);
+
+
   // Auto-dismiss the temporary raised hand notification after 4 seconds
   useEffect(() => {
     if (!activeNotification) return;
@@ -430,9 +466,9 @@ function BroadcastPanel({ session, onEndSession }) {
   }, [room, activeSpeaker]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 animate-fade-in h-full flex flex-col min-h-0 overflow-hidden">
       {/* Live indicator header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 text-red-500 text-xs font-extrabold uppercase tracking-wider">
             <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
@@ -448,13 +484,40 @@ function BroadcastPanel({ session, onEndSession }) {
         </div>
       </div>
 
+      {/* Network Error Notification Banner */}
+      {(isBrowserOffline || connectionState === "reconnecting" || connectionState === "disconnected") && (
+        <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold animate-pulse shrink-0">
+          <AlertTriangle size={16} className="shrink-0" />
+          <div className="flex-1">
+            <p className="font-extrabold text-xs">
+              {isBrowserOffline ? "Offline Mode: Internet Disconnected" : connectionState === "reconnecting" ? "Network Connection Dropped" : "Stream Disconnected"}
+            </p>
+            <p className="text-[10px] opacity-80 mt-0.5">
+              {isBrowserOffline 
+                ? "Your internet connection is offline. Please check your network cables or Wi-Fi." 
+                : connectionState === "reconnecting"
+                ? "We lost connection to the server. Attempting to reconnect automatically, please wait..."
+                : "You have been disconnected from the session. Please check your connection and reload the page."}
+            </p>
+          </div>
+          {connectionState === "disconnected" && (
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-extrabold text-[9px] uppercase transition-all shadow-md shrink-0 cursor-pointer"
+            >
+              Reload Page
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Video + Chat Side by Side */}
-      <div className="flex gap-4 flex-col lg:flex-row">
+      <div className="flex gap-4 flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
         {/* Video Area (2/3) */}
-        <div className="flex-1 lg:flex-[2] space-y-4">
+        <div className="flex-1 lg:flex-[2] flex flex-col gap-4 min-h-0 overflow-hidden">
           {/* Video Preview Area */}
-          <div className="relative rounded-2xl overflow-hidden border shadow-2xl"
-            style={{ backgroundColor: "#0a0a0f", borderColor: "var(--border-primary)", aspectRatio: "16/9" }}
+          <div className="relative rounded-2xl overflow-hidden border shadow-2xl flex-1 min-h-0 bg-black"
+            style={{ borderColor: "var(--border-primary)" }}
           >
             {localScreenTrack?.publication?.track ? (
               <VideoTrack
@@ -498,16 +561,36 @@ function BroadcastPanel({ session, onEndSession }) {
             )}
 
             {/* Connection status indicator */}
-            <div className="absolute top-4 left-4">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm text-[10px] font-bold text-emerald-400">
-                <Wifi size={10} />
-                Connected
+            <div className="absolute top-4 left-4 z-40">
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm text-[10px] font-bold ${
+                isBrowserOffline || connectionState === "reconnecting"
+                  ? "text-amber-400 animate-pulse"
+                  : connectionState === "disconnected"
+                  ? "text-red-400 animate-pulse"
+                  : "text-emerald-400"
+              }`}>
+                {isBrowserOffline || connectionState === "reconnecting" ? (
+                  <>
+                    <WifiOff size={10} />
+                    Reconnecting...
+                  </>
+                ) : connectionState === "disconnected" ? (
+                  <>
+                    <WifiOff size={10} />
+                    Disconnected
+                  </>
+                ) : (
+                  <>
+                    <Wifi size={10} />
+                    Connected
+                  </>
+                )}
               </div>
             </div>
           </div>
 
           {/* Control Bar */}
-          <div className="flex items-center justify-center gap-3 p-4 rounded-2xl border"
+          <div className="flex items-center justify-center gap-3 p-4 rounded-2xl border shrink-0"
             style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
           >
             <TrackToggle
@@ -536,9 +619,9 @@ function BroadcastPanel({ session, onEndSession }) {
         </div>
 
         {/* Sidebar (1/3) */}
-        <div className="lg:flex-1 lg:min-w-[300px] lg:max-w-[380px] flex flex-col gap-4">
+        <div className="lg:flex-1 lg:min-w-[300px] lg:max-w-[380px] flex flex-col gap-4 min-h-0 overflow-hidden">
           {/* Raised Hands Control Panel */}
-          <div className="rounded-2xl border p-4 space-y-3"
+          <div className="rounded-2xl border p-4 space-y-3 shrink-0"
             style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
           >
             <div className="flex items-center justify-between">
@@ -608,12 +691,15 @@ function BroadcastPanel({ session, onEndSession }) {
             )}
           </div>
 
-          <LiveChat 
-            blockedUsers={blockedUsers} 
-            setBlockedUsers={setBlockedUsers} 
-            hostUsername={session?.host?.username || user?.username} 
-            sessionId={session?.id}
-          />
+          <div className="flex-1 min-h-0">
+            <LiveChat 
+              blockedUsers={blockedUsers} 
+              setBlockedUsers={setBlockedUsers} 
+              hostUsername={session?.host?.username || user?.username} 
+              sessionId={session?.id}
+              className="h-full"
+            />
+          </div>
         </div>
       </div>
 
@@ -729,6 +815,21 @@ export default function AdminLivePage() {
   const handleThumbnailUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Check size limit: 2MB (2 * 1024 * 1024 bytes)
+    const MAX_SIZE = 2 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setError("Thumbnail image exceeds the 2MB size limit. Please choose a smaller file.");
+      e.target.value = ""; // Clear file input selection
+      setFormState((prev) => ({
+        ...prev,
+        thumbnailPreview: null,
+        thumbnailUrl: "",
+      }));
+      return;
+    }
+
+    setError(null);
 
     // Convert to base64 for storage (simple approach)
     const reader = new FileReader();
@@ -876,13 +977,18 @@ export default function AdminLivePage() {
 
           {/* Thumbnail Upload */}
           <div className="space-y-2">
-            <label className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-              Thumbnail Image
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                Thumbnail Image
+              </label>
+              <span className="text-[9px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md uppercase tracking-wider select-none">
+                16:9 Aspect Ratio • Max 2MB
+              </span>
+            </div>
             <div className="flex items-start gap-4">
               <label
                 htmlFor="thumbnail-upload"
-                className="flex flex-col items-center justify-center w-40 h-24 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-indigo-500/50 hover:bg-indigo-500/5"
+                className="flex flex-col items-center justify-center w-40 h-24 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-indigo-500/50 hover:bg-indigo-500/5 p-2 text-center"
                 style={{ borderColor: "var(--border-primary)" }}
               >
                 {formState.thumbnailPreview ? (
@@ -894,8 +1000,11 @@ export default function AdminLivePage() {
                 ) : (
                   <div className="text-center space-y-1">
                     <ImagePlus size={20} className="mx-auto" style={{ color: "var(--text-muted)" }} />
-                    <span className="text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
+                    <span className="text-[10px] font-bold block" style={{ color: "var(--text-muted)" }}>
                       Upload Image
+                    </span>
+                    <span className="text-[8px] font-medium block opacity-75" style={{ color: "var(--text-muted)" }}>
+                      16:9 • Max 2MB
                     </span>
                   </div>
                 )}
@@ -908,7 +1017,7 @@ export default function AdminLivePage() {
                 />
               </label>
               <p className="text-[10px] leading-relaxed pt-1" style={{ color: "var(--text-muted)" }}>
-                Optional thumbnail that students will see before joining. Recommended: 16:9 aspect ratio.
+                Optional thumbnail that students will see before joining. Recommended: 16:9 aspect ratio, max size: 2MB.
               </p>
             </div>
           </div>
@@ -1035,7 +1144,7 @@ export default function AdminLivePage() {
 
   // ─── Active Session (Broadcasting) ─────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {LIVEKIT_URL ? (
         <LiveKitRoom
           serverUrl={LIVEKIT_URL}
@@ -1043,7 +1152,7 @@ export default function AdminLivePage() {
           connect={true}
           video={true}
           audio={true}
-          style={{ height: "auto" }}
+          style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
         >
           <BroadcastPanel session={session} onEndSession={handleEndSession} />
         </LiveKitRoom>
