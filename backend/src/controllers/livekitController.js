@@ -399,6 +399,91 @@ const postChatMessage = async (req, res) => {
   }
 };
 
+// ─── Background Active Session Host Absence Monitor ──────────────────
+let hostLastSeenMap = {};
+
+const startLiveSessionMonitor = () => {
+  console.log('[MONITOR] Starting Active Live Session Monitor (15s interval)...');
+  setInterval(async () => {
+    try {
+      const activeSession = await prisma.liveSession.findFirst({
+        where: { isLive: true },
+        include: {
+          host: { select: { username: true } }
+        }
+      });
+      
+      if (!activeSession) {
+        hostLastSeenMap = {};
+        return;
+      }
+
+      if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+        return;
+      }
+
+      const httpUrl = getHttpLivekitUrl(LIVEKIT_URL);
+      const svc = new RoomServiceClient(httpUrl, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+      
+      let participants = [];
+      try {
+        participants = await svc.listParticipants(activeSession.roomName);
+      } catch (lkErr) {
+        participants = [];
+      }
+
+      const hostUsername = activeSession.host.username;
+      const isHostPresent = participants.some(p => p.identity === hostUsername);
+
+      if (isHostPresent) {
+        if (hostLastSeenMap[activeSession.id]) {
+          console.log(`[MONITOR] Host "${hostUsername}" returned to room "${activeSession.roomName}". Clearing countdown.`);
+          delete hostLastSeenMap[activeSession.id];
+        }
+      } else {
+        if (!hostLastSeenMap[activeSession.id]) {
+          hostLastSeenMap[activeSession.id] = Date.now();
+          console.log(`[MONITOR] Host "${hostUsername}" is absent from room "${activeSession.roomName}". Starting 15-minute auto-end countdown.`);
+        } else {
+          const absentDuration = Date.now() - hostLastSeenMap[activeSession.id];
+          const fifteenMinutes = 15 * 60 * 1000;
+          if (absentDuration >= fifteenMinutes) {
+            console.log(`[MONITOR] Host "${hostUsername}" absent for 15+ minutes. Automatically ending session ID: ${activeSession.id}`);
+            
+            await prisma.liveSession.update({
+              where: { id: activeSession.id },
+              data: {
+                isLive: false,
+                endedAt: new Date()
+              }
+            });
+
+            try {
+              await prisma.liveChatMessage.deleteMany({
+                where: { sessionId: activeSession.id }
+              });
+            } catch (dbErr) {
+              console.error('[MONITOR] Failed to clean up session chats during auto-end:', dbErr);
+            }
+
+            try {
+              await svc.deleteRoom(activeSession.roomName);
+            } catch (lkErr) {
+              console.error('[MONITOR] Failed to delete LiveKit room during auto-end:', lkErr);
+            }
+
+            delete hostLastSeenMap[activeSession.id];
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[MONITOR] Error in active session monitor:', err);
+    }
+  }, 15000);
+};
+
+startLiveSessionMonitor();
+
 module.exports = {
   createSession,
   generateToken,
