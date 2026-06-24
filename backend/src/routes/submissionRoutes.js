@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   submitSolution,
+  submitSolutionDirect,
   getAllSubmissions,
   getSingleSubmission,
   runCode,
@@ -13,6 +14,9 @@ const router = express.Router();
 // Publicly view submissions
 router.get('/', getAllSubmissions);
 router.get('/:id', getSingleSubmission);
+
+// Submit code directly (accepts code, language, problemId in body)
+router.post('/', protect, submissionLimiter, submitSolutionDirect);
 
 // Run code with custom input in real-time (protected)
 router.post('/run', protect, runCode);

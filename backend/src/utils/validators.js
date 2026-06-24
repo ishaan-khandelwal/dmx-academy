@@ -62,8 +62,11 @@ const contestProblemSchema = z.object({
 
 // Submission schemas
 const submissionSchema = z.object({
-  language: z.enum(['JAVASCRIPT', 'PYTHON', 'CPP']),
-  code: z.string().min(1, 'Code code is required'),
+  language: z.preprocess(
+    (val) => (typeof val === 'string' ? val.toUpperCase() : val),
+    z.enum(['JAVASCRIPT', 'PYTHON', 'CPP', 'JAVA'])
+  ),
+  code: z.string().min(1, 'Code is required'),
 });
 
 module.exports = {

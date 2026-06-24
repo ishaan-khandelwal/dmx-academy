@@ -161,8 +161,83 @@ const runCode = async (req, res, next) => {
   }
 };
 
+const submitSolutionDirect = async (req, res, next) => {
+  try {
+    const { problemId } = req.body;
+
+    if (!problemId) {
+      return res.status(400).json({
+        success: false,
+        message: 'problemId is required.',
+      });
+    }
+
+    // Validate submission input
+    const validatedData = submissionSchema.parse(req.body);
+    const { language, code } = validatedData;
+
+    const userId = req.user.id; // Resolved by protect middleware
+
+    // Resolve problem by integer ID or slug string
+    let problem;
+    const numericId = parseInt(problemId, 10);
+    if (!isNaN(numericId)) {
+      problem = await prisma.problem.findUnique({
+        where: { id: numericId },
+      });
+    }
+
+    if (!problem) {
+      problem = await prisma.problem.findUnique({
+        where: { slug: problemId },
+      });
+    }
+
+    if (!problem) {
+      return res.status(404).json({
+        success: false,
+        message: `Problem not found for identifier: ${problemId}`,
+      });
+    }
+
+    // Run execution through the queue and persist
+    const submission = await submitUserCode({
+      userId,
+      problemId: problem.id,
+      language,
+      code,
+      runAll: !!req.body.runAll,
+    });
+
+    // Check configuration and construct output verdict response mapping
+    const debugMode = process.env.DEBUG === 'true' || req.query.debug === 'true' || process.env.NODE_ENV !== 'production';
+    const result = submission.judgeResult || {
+      verdict: submission.status,
+      failedTestCase: null,
+      totalTestCases: 0,
+      passedTestCases: 0,
+      executionTimeMs: submission.executionTime || 0,
+      memoryKb: 0,
+      stderr: '',
+    };
+
+    res.status(201).json({
+      verdict: result.verdict,
+      failedTestCase: result.failedTestCase,
+      totalTestCases: result.totalTestCases,
+      passedTestCases: result.passedTestCases,
+      executionTimeMs: result.executionTimeMs,
+      memoryKb: result.memoryKb || 0,
+      ...(debugMode ? { stderr: result.stderr || '' } : {}),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   submitSolution,
+  submitSolutionDirect,
   getAllSubmissions,
   getSingleSubmission,
   runCode,

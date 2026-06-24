@@ -32,6 +32,10 @@ model Problem {
   outputFormat    String
   constraints     String
   explanation     String
+  timeout         Int              @default(2000)
+  memoryLimit     Int              @default(256)
+  comparator      String           @default("tokens")
+  epsilon         Float            @default(0.000001)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   contestProblems ContestProblem[]
@@ -90,17 +94,15 @@ model ContestProblem {
 }
 
 model ContestParticipation {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  contestId    Int
-  completed    Boolean  @default(false)
-  score        Int      @default(0)
-  timeSpent    String?
-  createdAt    DateTime @default(now())
-  username     String?
-  contestTitle String?
-  contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  contestId Int
+  completed Boolean  @default(false)
+  score     Int      @default(0)
+  timeSpent String?
+  createdAt DateTime @default(now())
+  contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, contestId])
 }
@@ -121,7 +123,6 @@ model LiveSession {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   host          User      @relation("SessionHost", fields: [hostId], references: [id])
-  chatMessages  LiveChatMessage[]
 }
 
 model VivaQuestion {
@@ -133,6 +134,7 @@ model VivaQuestion {
   difficulty     Difficulty   @default(EASY)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  topic          String       @default("")
   vivaAnswers    VivaAnswer[]
 }
 
@@ -177,6 +179,7 @@ enum Language {
   JAVASCRIPT
   PYTHON
   CPP
+  JAVA
 }
 
 enum SubmissionStatus {
@@ -185,14 +188,7 @@ enum SubmissionStatus {
   RUNTIME_ERROR
   COMPILATION_ERROR
   TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  INTERNAL_ERROR
   PENDING
-}
-
-model LiveChatMessage {
-  id             Int         @id @default(autoincrement())
-  sessionId      Int
-  senderUsername String
-  messageText    String
-  createdAt      DateTime    @default(now())
-  session        LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }

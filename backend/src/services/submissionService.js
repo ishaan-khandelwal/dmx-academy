@@ -1,5 +1,5 @@
 const prisma = require('../prisma');
-const { executeCode } = require('./executionService');
+const { judgeQueuedSubmission } = require('./judgeService');
 const { broadcastLiveSubmission, broadcastLeaderboardUpdate } = require('./socketService');
 
 /**
@@ -9,8 +9,9 @@ const { broadcastLiveSubmission, broadcastLeaderboardUpdate } = require('./socke
  * @param {number} data.problemId
  * @param {string} data.language
  * @param {string} data.code
+ * @param {boolean} data.runAll
  */
-const submitUserCode = async ({ userId, problemId, language, code }) => {
+const submitUserCode = async ({ userId, problemId, language, code, runAll = false }) => {
   // 1. Fetch problem and testcases
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
@@ -34,7 +35,7 @@ const submitUserCode = async ({ userId, problemId, language, code }) => {
     data: {
       userId,
       problemId,
-      language,
+      language: language.toUpperCase() === 'JAVA' ? 'JAVA' : language.toUpperCase() === 'PYTHON' ? 'PYTHON' : 'CPP',
       code,
       status: 'PENDING',
       executionTime: 0,
@@ -44,21 +45,24 @@ const submitUserCode = async ({ userId, problemId, language, code }) => {
   let finalSubmission;
 
   try {
-    // 3. Execute code
-    const result = await executeCode(language, code, problem.testCases);
+    // 3. Execute code in sandbox
+    const result = await judgeQueuedSubmission(language, code, problem, problem.testCases, { runAll });
 
     // 4. Update submission with execution status
     finalSubmission = await prisma.submission.update({
       where: { id: pendingSubmission.id },
       data: {
-        status: result.status,
-        executionTime: result.executionTime,
+        status: result.verdict,
+        executionTime: result.executionTimeMs,
       },
       include: {
         user: { select: { id: true, username: true } },
         problem: { select: { id: true, title: true, slug: true } }
       }
     });
+
+    // Attach raw verdict/results for controller mapping
+    finalSubmission.judgeResult = result;
 
   } catch (error) {
     // If execution crashes unexpectedly, mark submission as RUNTIME_ERROR

@@ -2,9 +2,10 @@ const prisma = require('./src/prisma');
 
 async function main() {
   const prob = await prisma.problem.findFirst({
-    where: { id: 16 }
+    where: { slug: 'two-sum-problem' },
+    include: { testCases: true }
   });
-  console.log("PROBLEM 16 DETAILS:");
+  console.log("TWO SUM PROBLEM DETAILS:");
   console.log(JSON.stringify(prob, null, 2));
 }
 
