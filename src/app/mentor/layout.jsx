@@ -6,7 +6,7 @@ import Link from "next/link";
 import { 
   LayoutDashboard, Trophy, LogOut, 
   Menu, X, ChevronLeft, ChevronRight, GraduationCap, ArrowLeftRight, BookOpen,
-  PlusCircle, Code, Radio, AlertTriangle
+  PlusCircle, Code, Radio, AlertTriangle, Brain
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -141,6 +141,11 @@ export default function MentorLayout({ children }) {
       label: "Create Problem",
       href: "/admin/problems/new",
       icon: Code
+    },
+    {
+      label: "Question Bank",
+      href: "/mentor/viva/questions",
+      icon: Brain
     },
     {
       label: "Go Live",
@@ -396,8 +401,8 @@ export default function MentorLayout({ children }) {
         </header>
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
-          <div className="max-w-6xl mx-auto space-y-8">
+        <main className={`flex-1 relative ${pathname === "/admin/live" ? "overflow-hidden p-4 md:p-6 flex flex-col" : "overflow-y-auto p-6 md:p-8"}`}>
+          <div className={pathname === "/admin/live" ? "flex-1 flex flex-col min-h-0" : "max-w-6xl mx-auto space-y-8"}>
             {children}
           </div>
         </main>

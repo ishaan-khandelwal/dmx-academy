@@ -101,7 +101,7 @@ function SessionTimer({ startTime }) {
 function ViewerCount() {
   const participants = useParticipants();
   return (
-    <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+    <div className="flex items-center gap-1.5 text-xs font-bold shrink-0" style={{ color: "var(--text-secondary)" }}>
       <Users size={12} />
       <span>{participants.length} watching</span>
     </div>
@@ -214,7 +214,7 @@ function DraggableVideo({ track, name, isLocal = false, defaultPosition = { x: 2
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
           className="absolute top-2.5 right-2.5 z-10 p-1 rounded-full bg-black/50 hover:bg-black/80 text-white/70 hover:text-white transition-colors cursor-pointer flex items-center justify-center border border-white/5 shadow-inner"
-          title="Hide Mentor Camera"
+          title={`Hide ${name === "Mentor" || name.includes("Mentor") ? "Mentor" : "Student"} Camera`}
         >
           <X size={10} />
         </button>
@@ -245,6 +245,11 @@ function VideoPlayer({
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isHostCameraHiddenLocal, setIsHostCameraHiddenLocal] = useState(false);
+  const [isStudentCameraHiddenLocal, setIsStudentCameraHiddenLocal] = useState(false);
+
+  useEffect(() => {
+    setIsStudentCameraHiddenLocal(false);
+  }, [activeSpeaker]);
   const containerRef = React.useRef(null);
 
   const [showControls, setShowControls] = useState(true);
@@ -465,31 +470,34 @@ function VideoPlayer({
   }, [room, activeSpeaker, user, setBlockedUsers]);
 
   const renderControls = () => (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3 min-w-0">
-        {/* Live Badge */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/90 text-white text-[10px] font-extrabold uppercase tracking-wider shrink-0">
-          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-          LIVE
+    <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between w-full">
+      <div className="flex items-center justify-between lg:justify-start gap-4 w-full lg:w-auto">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Live Badge */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/90 text-white text-[10px] font-extrabold uppercase tracking-wider shrink-0">
+            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+            LIVE
+          </div>
+
+          {/* Session Title & Taker */}
+          <div className="flex flex-col min-w-0">
+            <span className="text-[11px] font-black truncate max-w-[120px] sm:max-w-[200px]" style={{ color: "var(--text-primary)" }} title={session.title}>
+              {session.title}
+            </span>
+            <span className="text-[9px] font-bold truncate" style={{ color: "var(--text-muted)" }}>
+              by {session.host?.username || "Mentor"}
+            </span>
+          </div>
         </div>
 
-        {/* Session Title & Taker */}
-        <div className="flex flex-col min-w-0 mr-1.5">
-          <span className="text-[11px] font-black truncate max-w-[140px] sm:max-w-[220px]" style={{ color: "var(--text-primary)" }} title={session.title}>
-            {session.title}
-          </span>
-          <span className="text-[9px] font-bold truncate" style={{ color: "var(--text-muted)" }}>
-            by {session.host?.username || "Mentor"}
-          </span>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-px h-6 bg-[var(--border-primary)] hidden xs:block" />
+          <SessionTimer startTime={session.startedAt} />
+          <ViewerCount />
         </div>
-
-        <div className="w-px h-6 shrink-0 hidden sm:block" style={{ backgroundColor: "var(--border-primary)" }} />
-
-        <SessionTimer startTime={session.startedAt} />
-        <ViewerCount />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-start lg:justify-end gap-2 flex-wrap w-full lg:w-auto shrink-0">
         {/* Restore Mentor Camera Button */}
         {isHostCameraActive && isHostCameraHiddenLocal && (
           <button
@@ -499,6 +507,17 @@ function VideoPlayer({
           >
             <Camera size={12} />
             <span>Show Mentor Cam</span>
+          </button>
+        )}
+        {/* Restore Student Camera Button */}
+        {isStudentCameraActive && isStudentCameraHiddenLocal && (
+          <button
+            onClick={() => setIsStudentCameraHiddenLocal(false)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white text-[10px] font-bold uppercase transition-all cursor-pointer mr-1.5 shadow-md shadow-[var(--accent-glow)] border border-transparent"
+            title="Restore Student Camera Feed"
+          >
+            <Camera size={12} />
+            <span>Show Student Cam</span>
           </button>
         )}
         {/* Active Speaker Controls */}
@@ -619,11 +638,11 @@ function VideoPlayer({
   );
 
   return (
-    <div className={isFullscreen ? "relative h-full w-full overflow-hidden bg-black flex flex-col justify-between" : "space-y-3"}>
+    <div className={isFullscreen ? "relative h-full w-full overflow-hidden bg-black flex flex-col justify-between" : "space-y-3 flex flex-col min-h-0 flex-1"}>
       {/* Video Container */}
       <div
         ref={containerRef}
-        className={isFullscreen ? "h-full w-full border-none rounded-none bg-black min-h-0 flex-1 relative" : "relative rounded-2xl overflow-hidden border shadow-2xl bg-black"}
+        className={isFullscreen ? "h-full w-full border-none rounded-none bg-black min-h-0 flex-1 relative" : "relative rounded-2xl overflow-hidden border shadow-2xl bg-black flex-1 min-h-0"}
         style={isFullscreen ? {} : {
           borderColor: "var(--border-primary)",
           aspectRatio: "16/9",
@@ -661,12 +680,13 @@ function VideoPlayer({
         )}
 
         {/* Draggable Speaking Student Camera */}
-        {isStudentCameraActive && (
+        {isStudentCameraActive && !isStudentCameraHiddenLocal && (
           <DraggableVideo
             track={speakingStudentCameraTrack}
             name={activeSpeaker}
             isLocal={speakingStudentCameraTrack.participant?.isLocal}
             alignLeft={true}
+            onClose={() => setIsStudentCameraHiddenLocal(true)}
           />
         )}
 
@@ -735,7 +755,7 @@ function VideoPlayer({
 
       {/* Session Info */}
       {!isFullscreen && (
-        <div className="rounded-2xl border p-5 space-y-3"
+        <div className="rounded-2xl border p-5 space-y-3 shrink-0 overflow-y-auto max-h-48"
           style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
         >
         <div className="flex items-start justify-between gap-4">
@@ -1156,20 +1176,21 @@ export default function LiveViewerPage() {
     );
   }
 
-  // ─── Watching Live ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--bg-primary)" }}>
+    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: "var(--bg-primary)" }}>
       <Navbar />
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+      <div className="flex-1 flex flex-col pt-24 pb-6 px-4 md:px-8 max-w-7xl mx-auto w-full min-h-0 overflow-hidden">
         {/* Back Link */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-bold transition-colors hover:opacity-80"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          <ArrowLeft size={14} />
-          Back to Home
-        </Link>
+        <div className="shrink-0 mb-3">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-bold transition-colors hover:opacity-80"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <ArrowLeft size={14} />
+            Back to Home
+          </Link>
+        </div>
 
         {LIVEKIT_URL && livekitToken ? (
           <LiveKitRoom
@@ -1178,15 +1199,15 @@ export default function LiveViewerPage() {
             connect={true}
             audio={false}
             video={false}
-            style={{ height: "auto" }}
+            style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
           >
             <div 
               ref={workspaceRef} 
-              className={`flex flex-col lg:flex-row ${isFullscreen ? "h-screen w-screen bg-black" : "gap-4"}`}
+              className={`flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden ${isFullscreen ? "h-screen w-screen bg-black" : "gap-4"}`}
               style={isFullscreen ? { display: "flex", flexDirection: "row" } : {}}
             >
               {/* Video + Session Info (2/3) */}
-              <div className={isFullscreen ? "flex-[3] h-full relative" : "flex-1 lg:flex-[2]"}>
+              <div className={isFullscreen ? "flex-[3] h-full relative" : "flex-1 lg:flex-[2] flex flex-col gap-4 min-h-0 overflow-hidden"}>
                 <VideoPlayer 
                   session={session} 
                   isFullscreen={isFullscreen} 
@@ -1205,91 +1226,89 @@ export default function LiveViewerPage() {
                 />
               </div>
               {/* Chat Sidebar (1/3) */}
-              {(!isFullscreen || isSidebarOpen) && (
-                <div className={`flex flex-col gap-4 ${isFullscreen ? "w-[360px] h-full border-l p-4 backdrop-blur-md shadow-2xl shrink-0 live-chat-sidebar-fullscreen" : "lg:flex-1 lg:min-w-[280px] lg:max-w-[350px]"}`}>
-                  {/* Fullscreen Sidebar Header */}
-                  {isFullscreen && (
-                    <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-primary)]">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Live Chat & Stage</span>
-                      <button
-                        onClick={() => setIsSidebarOpen(false)}
-                        className="p-1 rounded-lg transition-colors cursor-pointer flex items-center justify-center border border-transparent hover:bg-[var(--bg-hover)]"
-                        style={{ color: "var(--text-primary)" }}
-                        title="Close Sidebar"
-                      >
-                        <X size={15} />
-                      </button>
+              <div className={`min-h-0 overflow-hidden gap-4 ${isFullscreen ? "w-[360px] h-full border-l p-4 backdrop-blur-md shadow-2xl shrink-0 live-chat-sidebar-fullscreen" : "lg:flex-1 lg:min-w-[280px] lg:max-w-[350px] h-full"} ${(!isFullscreen || isSidebarOpen) ? "flex flex-col" : "hidden"}`}>
+                {/* Fullscreen Sidebar Header */}
+                {isFullscreen && (
+                  <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-primary)]">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Live Chat & Stage</span>
+                    <button
+                      onClick={() => setIsSidebarOpen(false)}
+                      className="p-1 rounded-lg transition-colors cursor-pointer flex items-center justify-center border border-transparent hover:bg-[var(--bg-hover)]"
+                      style={{ color: "var(--text-primary)" }}
+                      title="Close Sidebar"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Raised Hands / Speaker Panel */}
+                <div className="rounded-2xl border p-4 space-y-3 shrink-0"
+                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
+                      <Hand size={14} className="text-amber-500" />
+                      Hand Raises {raisedHands.length > 0 && `(${raisedHands.length})`}
+                    </h3>
+                  </div>
+
+                  {raisedHands.length === 0 ? (
+                    <p className="text-[10px] font-semibold py-2 text-center" style={{ color: "var(--text-muted)" }}>
+                      No active requests to speak.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {raisedHands.map((username) => (
+                        <div
+                          key={username}
+                          className="flex items-center gap-2 p-2 rounded-xl border"
+                          style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                          <span className="text-xs font-bold font-mono truncate" style={{ color: "var(--text-primary)" }}>
+                            {username}
+                          </span>
+                          {username === user?.username && (
+                            <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md uppercase ml-auto tracking-wider">
+                              You
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
 
-                  {/* Raised Hands / Speaker Panel */}
-                  <div className="rounded-2xl border p-4 space-y-3"
-                    style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-black flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
-                        <Hand size={14} className="text-amber-500" />
-                        Hand Raises {raisedHands.length > 0 && `(${raisedHands.length})`}
-                      </h3>
+                  {activeSpeaker && (
+                    <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border-primary)" }}>
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] font-bold" style={{ color: "var(--text-muted)" }}>Speaking Student</p>
+                        <p className="text-xs font-black text-[var(--text-accent)]">{activeSpeaker}</p>
+                      </div>
+                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider select-none border"
+                        style={{
+                          backgroundColor: "var(--bg-badge)",
+                          color: "var(--text-accent)",
+                          borderColor: "var(--border-accent)"
+                        }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        On Stage
+                      </div>
                     </div>
-
-                    {raisedHands.length === 0 ? (
-                      <p className="text-[10px] font-semibold py-2 text-center" style={{ color: "var(--text-muted)" }}>
-                        No active requests to speak.
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                        {raisedHands.map((username) => (
-                          <div
-                            key={username}
-                            className="flex items-center gap-2 p-2 rounded-xl border"
-                            style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                            <span className="text-xs font-bold font-mono truncate" style={{ color: "var(--text-primary)" }}>
-                              {username}
-                            </span>
-                            {username === user?.username && (
-                              <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md uppercase ml-auto tracking-wider">
-                                You
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {activeSpeaker && (
-                      <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border-primary)" }}>
-                        <div className="space-y-0.5">
-                          <p className="text-[9px] font-bold" style={{ color: "var(--text-muted)" }}>Speaking Student</p>
-                          <p className="text-xs font-black text-[var(--text-accent)]">{activeSpeaker}</p>
-                        </div>
-                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider select-none border"
-                          style={{
-                            backgroundColor: "var(--bg-badge)",
-                            color: "var(--text-accent)",
-                            borderColor: "var(--border-accent)"
-                          }}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          On Stage
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex-1">
-                    <LiveChat 
-                      className="h-full" 
-                      blockedUsers={blockedUsers} 
-                      setBlockedUsers={setBlockedUsers} 
-                      hostUsername={session?.host?.username} 
-                      sessionId={session?.id}
-                    />
-                  </div>
+                  )}
                 </div>
-              )}
+
+                <div className="flex-1 min-h-0">
+                  <LiveChat 
+                    className="h-full" 
+                    blockedUsers={blockedUsers} 
+                    setBlockedUsers={setBlockedUsers} 
+                    hostUsername={session?.host?.username} 
+                    sessionId={session?.id}
+                  />
+                </div>
+              </div>
             </div>
           </LiveKitRoom>
         ) : (
