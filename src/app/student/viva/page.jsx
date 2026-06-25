@@ -887,9 +887,17 @@ export default function AIVivaPage() {
               <motion.div key="result" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 rounded-3xl border space-y-4 shadow-sm"
                           style={{ backgroundColor: lastEvaluation.score >= 5 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(244, 63, 94, 0.05)', borderColor: lastEvaluation.score >= 5 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)' }}>
                 <div className="flex justify-between items-center">
-                  <span className={`text-sm font-black uppercase tracking-wider ${lastEvaluation.score >= 5 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    Score: {lastEvaluation.score} / 10
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-sm font-black uppercase tracking-wider ${lastEvaluation.score >= 5 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      Score: {lastEvaluation.score} / 10
+                    </span>
+                    {lastEvaluation.usedAI && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center space-x-1">
+                        <Sparkles size={9} />
+                        <span>AI</span>
+                      </span>
+                    )}
+                  </div>
                   {summaryData ? (
                     <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-800 text-white animate-pulse">Session Complete</span>
                   ) : (
@@ -899,9 +907,50 @@ export default function AIVivaPage() {
                     </button>
                   )}
                 </div>
+
                 <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
                   {lastEvaluation.feedback}
                 </p>
+
+                {/* Strengths & Weaknesses */}
+                {(lastEvaluation.strengths?.length > 0 || lastEvaluation.weaknesses?.length > 0) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {lastEvaluation.strengths?.length > 0 && (
+                      <div className="p-3 rounded-2xl bg-emerald-500/5 border border-emerald-500/15 space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">Strengths</p>
+                        {lastEvaluation.strengths.map((s, i) => (
+                          <p key={i} className="text-[11px] flex items-start space-x-1.5" style={{ color: "var(--text-secondary)" }}>
+                            <CheckCircle2 size={10} className="text-emerald-500 shrink-0 mt-0.5" />
+                            <span>{s}</span>
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {lastEvaluation.weaknesses?.length > 0 && (
+                      <div className="p-3 rounded-2xl bg-rose-500/5 border border-rose-500/15 space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-rose-500">To Improve</p>
+                        {lastEvaluation.weaknesses.map((w, i) => (
+                          <p key={i} className="text-[11px] flex items-start space-x-1.5" style={{ color: "var(--text-secondary)" }}>
+                            <XCircle size={10} className="text-rose-500 shrink-0 mt-0.5" />
+                            <span>{w}</span>
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Follow-up */}
+                {lastEvaluation.followUp && !summaryData && (
+                  <div className="p-3 rounded-2xl border flex items-start space-x-2"
+                       style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}>
+                    <MessageSquare size={13} className="shrink-0 mt-0.5" style={{ color: "var(--text-accent)" }} />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider mb-0.5" style={{ color: "var(--text-accent)" }}>Follow-Up to Consider</p>
+                      <p className="text-xs italic" style={{ color: "var(--text-secondary)" }}>{lastEvaluation.followUp}</p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

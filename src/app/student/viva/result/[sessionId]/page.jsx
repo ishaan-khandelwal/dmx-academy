@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import {
   Brain, Award, CheckCircle2, XCircle, ArrowLeft,
-  Clock, BookOpen, BarChart2, Star, AlertCircle, TrendingUp, TrendingDown, Target
+  Clock, BookOpen, BarChart2, Star, AlertCircle, TrendingUp, TrendingDown, Target,
+  Sparkles, MessageSquare, ChevronDown, ChevronUp, Lightbulb
 } from "lucide-react";
 
 export default function VivaResultPage() {
@@ -175,6 +176,68 @@ export default function VivaResultPage() {
         )}
       </div>
 
+      {/* AI Session Summary */}
+      {session.aiSummary && (
+        <div className="p-6 rounded-3xl border space-y-4"
+             style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}>
+          <div className="flex items-center space-x-2">
+            <div className="p-1.5 rounded-lg" style={{ backgroundColor: "var(--bg-badge)", color: "var(--text-accent)" }}>
+              <Sparkles size={15} />
+            </div>
+            <h2 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>AI Session Summary</h2>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500">Powered by Local LLM</span>
+          </div>
+
+          {session.aiSummary.overallRemark && (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              {session.aiSummary.overallRemark}
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {session.aiSummary.strongTopics?.length > 0 && (
+              <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">Strong Topics</p>
+                <ul className="space-y-1">
+                  {session.aiSummary.strongTopics.map((t, i) => (
+                    <li key={i} className="flex items-start space-x-1.5">
+                      <CheckCircle2 size={11} className="text-emerald-500 shrink-0 mt-0.5" />
+                      <span className="text-xs" style={{ color: "var(--text-primary)" }}>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {session.aiSummary.weakTopics?.length > 0 && (
+              <div className="p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-rose-500">Needs Improvement</p>
+                <ul className="space-y-1">
+                  {session.aiSummary.weakTopics.map((t, i) => (
+                    <li key={i} className="flex items-start space-x-1.5">
+                      <XCircle size={11} className="text-rose-500 shrink-0 mt-0.5" />
+                      <span className="text-xs" style={{ color: "var(--text-primary)" }}>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {session.aiSummary.recommendedStudy?.length > 0 && (
+              <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-amber-500">Study Next</p>
+                <ul className="space-y-1">
+                  {session.aiSummary.recommendedStudy.map((t, i) => (
+                    <li key={i} className="flex items-start space-x-1.5">
+                      <Lightbulb size={11} className="text-amber-500 shrink-0 mt-0.5" />
+                      <span className="text-xs" style={{ color: "var(--text-primary)" }}>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Performance Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Strengths */}
@@ -301,6 +364,46 @@ export default function VivaResultPage() {
                         : "bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-400"
                     }`}>
                       <span className="font-bold">AI Feedback: </span>{a.feedback}
+                    </div>
+                  )}
+
+                  {/* Strengths & Weaknesses (AI) */}
+                  {(a.strengths?.length > 0 || a.weaknesses?.length > 0) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {a.strengths?.length > 0 && (
+                        <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15 space-y-1">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">Strengths</p>
+                          {a.strengths.map((s, i) => (
+                            <p key={i} className="text-[11px] flex items-start space-x-1" style={{ color: "var(--text-secondary)" }}>
+                              <CheckCircle2 size={10} className="text-emerald-500 shrink-0 mt-0.5" />
+                              <span>{s}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {a.weaknesses?.length > 0 && (
+                        <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/15 space-y-1">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-rose-500">Weaknesses</p>
+                          {a.weaknesses.map((w, i) => (
+                            <p key={i} className="text-[11px] flex items-start space-x-1" style={{ color: "var(--text-secondary)" }}>
+                              <XCircle size={10} className="text-rose-500 shrink-0 mt-0.5" />
+                              <span>{w}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Follow-up question */}
+                  {a.followUp && (
+                    <div className="p-3 rounded-xl border flex items-start space-x-2"
+                         style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}>
+                      <MessageSquare size={13} className="shrink-0 mt-0.5" style={{ color: "var(--text-accent)" }} />
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider mb-0.5" style={{ color: "var(--text-accent)" }}>Follow-Up</p>
+                        <p className="text-xs italic" style={{ color: "var(--text-secondary)" }}>{a.followUp}</p>
+                      </div>
                     </div>
                   )}
                 </div>

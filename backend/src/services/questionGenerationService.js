@@ -225,22 +225,40 @@ async function ruleBasedGenerator(text, subject, count) {
   return generated;
 }
 
+const { llmGenerator } = require('./llmGenerator');
+const { OllamaUnavailableError } = require('../lib/ai/llm.service');
+
 // ── Public API ────────────────────────────────────────────────────────
 
 /**
  * The single entry point for question generation.
- * To swap to a local LLM:
- *   const { llmGenerator } = require('./llmGenerator');
- *   return llmGenerator(text, subject, count);
+ * Uses local LLM via llmGenerator, falls back to rule-based on AI unavailability.
  */
 async function generateQuestions(text, subject, count = 10) {
   if (!text || text.trim().length < 50) {
     throw new Error('Extracted text is too short to generate questions.');
   }
-  const questions = await ruleBasedGenerator(text, subject, Math.min(count, 30));
+
+  let questions = [];
+  const maxCount = Math.min(count, 30);
+
+  try {
+    // Attempt LLM generation
+    questions = await llmGenerator(text, subject, maxCount);
+  } catch (err) {
+    if (err instanceof OllamaUnavailableError) {
+      console.warn('[AI] Ollama unavailable, using rule-based fallback for question generation:', err.message);
+      questions = await ruleBasedGenerator(text, subject, maxCount);
+    } else {
+      console.error('[AI] AI generation failed, using rule-based fallback:', err.message);
+      questions = await ruleBasedGenerator(text, subject, maxCount);
+    }
+  }
+
   if (questions.length === 0) {
     throw new Error('Could not generate questions from the provided content. Try a more detailed document.');
   }
+  
   return questions;
 }
 
