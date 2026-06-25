@@ -1,4 +1,6 @@
 const prisma = require('../prisma');
+const { evaluateAnswer: aiEvaluate } = require('../lib/ai/evaluation.service');
+const { generateSessionSummary }     = require('../lib/ai/summary.service');
 
 /**
  * Ensures there are default questions in the database for a few subjects.
@@ -173,15 +175,19 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer, sele
   const existingAnswer = session.vivaAnswers.find(a => a.questionId === question.id);
   if (existingAnswer) throw new Error("Question already answered");
 
-  const evaluation = evaluateAnswer(question, studentAnswer);
+  // ── AI Evaluation (with rule-based fallback) ──────────────────────
+  const evaluation = await aiEvaluate(question, studentAnswer, session.subject);
 
   await prisma.vivaAnswer.create({
     data: {
       sessionId,
-      questionId: question.id,
-      answerText: studentAnswer,
-      score: evaluation.score,
-      feedback: evaluation.feedback
+      questionId:  question.id,
+      answerText:  studentAnswer,
+      score:       evaluation.score,
+      feedback:    evaluation.feedback,
+      strengths:   evaluation.strengths?.length  ? JSON.stringify(evaluation.strengths)  : null,
+      weaknesses:  evaluation.weaknesses?.length ? JSON.stringify(evaluation.weaknesses) : null,
+      followUp:    evaluation.followUp || null
     }
   });
 
@@ -207,7 +213,14 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer, sele
   }
 
   return {
-    answer: { score: evaluation.score, feedback: evaluation.feedback },
+    answer: {
+      score:      evaluation.score,
+      feedback:   evaluation.feedback,
+      strengths:  evaluation.strengths  || [],
+      weaknesses: evaluation.weaknesses || [],
+      followUp:   evaluation.followUp   || null,
+      usedAI:     !evaluation.usedFallback
+    },
     nextQuestion: nextQuestion
       ? { id: nextQuestion.id, questionText: nextQuestion.questionText }
       : null,
@@ -223,7 +236,7 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer, sele
 const completeSession = async (userId, sessionId) => {
   const session = await prisma.vivaSession.findUnique({
     where: { id: sessionId },
-    include: { vivaAnswers: true }
+    include: { vivaAnswers: { include: { question: true } } }
   });
 
   if (!session) throw new Error("Session not found");
@@ -232,21 +245,34 @@ const completeSession = async (userId, sessionId) => {
 
   const totalQCount = await prisma.vivaQuestion.count({ where: { subject: session.subject } });
   const rawScore = session.vivaAnswers.reduce((sum, a) => sum + a.score, 0);
-  const maxScore = totalQCount * 10;
+  const maxScore = session.vivaAnswers.length * 10; // use answered count, not total
   const finalScorePercentage = maxScore > 0 ? Math.round((rawScore / maxScore) * 100) : 0;
 
-  let overallFeedback = "";
-  if (finalScorePercentage >= 80) overallFeedback = "Outstanding performance! You have a deep understanding of this subject.";
-  else if (finalScorePercentage >= 50) overallFeedback = "Good effort! You know the basics but could brush up on a few details.";
-  else overallFeedback = "You might need to review this subject again. Focus on the core concepts.";
+  // ── Generate AI session summary ───────────────────────────────────
+  const answersForSummary = session.vivaAnswers.map(a => ({
+    questionText: a.question?.questionText || '',
+    answerText:   a.answerText,
+    score:        a.score,
+    strengths:    tryParseJSON(a.strengths),
+    weaknesses:   tryParseJSON(a.weaknesses)
+  }));
 
-  // Update using only actual DB columns (score not totalScore, no completedAt/startedAt)
+  const summaryObj = await generateSessionSummary(session, answersForSummary);
+
+  let overallFeedback = summaryObj?.overallRemark || '';
+  if (!overallFeedback) {
+    if (finalScorePercentage >= 80) overallFeedback = "Outstanding performance! You have a deep understanding of this subject.";
+    else if (finalScorePercentage >= 50) overallFeedback = "Good effort! You know the basics but could brush up on a few details.";
+    else overallFeedback = "You might need to review this subject again. Focus on the core concepts.";
+  }
+
   const updatedSession = await prisma.vivaSession.update({
     where: { id: sessionId },
     data: {
-      status: "COMPLETED",
-      score: finalScorePercentage,
-      feedback: overallFeedback
+      status:    "COMPLETED",
+      score:     finalScorePercentage,
+      feedback:  overallFeedback,
+      aiSummary: summaryObj ? JSON.stringify(summaryObj) : null
     }
   });
 
@@ -295,31 +321,37 @@ const getSubjects = async () => {
 
 /**
  * Normalizes DB field names to what the frontend expects.
- * DB uses: score, createdAt, answerText
+ * DB uses: score, createdAt, answerText, strengths/weaknesses (JSON strings)
  * Frontend expects: totalScore, startedAt, completedAt, totalQuestions, studentAnswer
  */
 const normalizeSession = (session) => {
   const normalized = {
     ...session,
     totalScore: session.score ?? 0,
-    startedAt: session.createdAt,
+    startedAt:  session.createdAt,
     completedAt: session.status === "COMPLETED" ? session.updatedAt : null,
+    aiSummary:  tryParseJSON(session.aiSummary)
   };
 
-  // Normalize answers if included
   if (session.vivaAnswers) {
     normalized.vivaAnswers = session.vivaAnswers.map(a => ({
       ...a,
       studentAnswer: a.answerText,
-      questionText: a.question?.questionText ?? a.questionText ?? ""
+      questionText:  a.question?.questionText ?? '',
+      strengths:     tryParseJSON(a.strengths)  || [],
+      weaknesses:    tryParseJSON(a.weaknesses) || []
     }));
-    normalized.totalQuestions = session.vivaAnswers.length > 0
-      ? normalized.vivaAnswers.length
-      : undefined;
+    normalized.totalQuestions = normalized.vivaAnswers.length || undefined;
   }
 
   return normalized;
 };
+
+function tryParseJSON(val) {
+  if (!val) return null;
+  if (typeof val === 'object') return val;
+  try { return JSON.parse(val); } catch { return null; }
+}
 
 module.exports = {
   seedQuestionsIfNeeded,

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { 
   LayoutDashboard, Trophy, LogOut, 
   Menu, X, ChevronLeft, ChevronRight, GraduationCap, ArrowLeftRight, BookOpen,
-  PlusCircle, Code, Radio, AlertTriangle, Brain
+  PlusCircle, Code, Radio, AlertTriangle, Brain, FileText, Settings
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -146,6 +146,16 @@ export default function MentorLayout({ children }) {
       label: "Question Bank",
       href: "/mentor/viva/questions",
       icon: Brain
+    },
+    {
+      label: "Study Materials",
+      href: "/mentor/viva/materials",
+      icon: FileText
+    },
+    {
+      label: "AI Settings",
+      href: "/mentor/viva/ai-settings",
+      icon: Settings
     },
     {
       label: "Go Live",
