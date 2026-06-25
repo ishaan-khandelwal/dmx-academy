@@ -217,20 +217,22 @@ function DraggableVideo({ track, name, isLocal = false, defaultPosition = { x: 2
 
 // ─── Live Broadcasting Panel ─────────────────────────────────────────
 function BroadcastPanel({ session, onEndSession, authToken }) {
+  const { user } = useAuth();
   const room = useRoomContext();
   const [raisedHands, setRaisedHands] = useState([]);
   const [activeSpeaker, setActiveSpeaker] = useState(null);
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [activeNotification, setActiveNotification] = useState(null);
 
-  // Poll state
-  const [isPollDrawerOpen, setIsPollDrawerOpen] = useState(false);
+  // Active Tab for sidebar
+  const [activeTab, setActiveTab] = useState("chat");
   const [activePoll, setActivePoll] = useState(null);         // poll currently running
   const [pollAnswers, setPollAnswers] = useState(new Map()); // Map<username, {chosenIdx, timeMs}>
   const [pollResultData, setPollResultData] = useState(null); // fetched after poll ends
   const [leaderboard, setLeaderboard] = useState([]);
   const [totalPolls, setTotalPolls] = useState(0);
   const [showResultOverlay, setShowResultOverlay] = useState(false);
+  const [showPollCreatorSignal, setShowPollCreatorSignal] = useState(false);
 
   const [connectionState, setConnectionState] = useState(room?.state || "disconnected");
   const [isBrowserOffline, setIsBrowserOffline] = useState(false);
@@ -588,142 +590,10 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
         </div>
       )}
 
-      {/* Left tools | Center board | Right chat */}
+      {/* Center board | Right chat flex wrapper */}
       <div className="flex gap-4 flex-col xl:flex-row flex-1 min-h-0 overflow-hidden">
-        {/* Left Tools Rail — polls, leaderboard, hand raises */}
-        <div className="xl:w-[300px] xl:min-w-[280px] xl:max-w-[320px] flex flex-col gap-3 min-h-0 overflow-y-auto shrink-0 order-2 xl:order-1">
-
-          {/* ── Poll Drawer ───────────────────────────────────────── */}
-          {isPollDrawerOpen && (
-            <div className="rounded-[1.1rem] border overflow-hidden shrink-0 flex flex-col"
-              style={{ backgroundColor: "var(--bg-card)", borderColor: "rgba(148, 163, 184, 0.18)", maxHeight: "430px" }}>
-              <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
-                style={{ borderColor: "var(--border-primary)" }}>
-                <div className="flex items-center gap-2">
-                  <BarChart2 size={15} style={{ color: "var(--text-accent)" }} />
-                  <h3 className="text-xs font-black uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
-                    {activePoll ? "Poll in Progress" : "Create Poll"}
-                  </h3>
-                  {activePoll && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  )}
-                </div>
-                <button
-                  onClick={() => setIsPollDrawerOpen(false)}
-                  className="p-1 rounded-lg hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden min-h-0 pt-4">
-                <LivePollCreator
-                  sessionId={session?.id}
-                  authToken={authToken}
-                  room={room}
-                  activePoll={activePoll}
-                  onPollLaunched={handlePollLaunched}
-                  onPollEnded={handlePollEnded}
-                  incomingAnswers={pollAnswers}
-                />
-              </div>
-            </div>
-          )}
-
-          {showResultOverlay && pollResultData && (
-            <div className="rounded-2xl border shadow-xl overflow-hidden shrink-0"
-              style={{ borderColor: "var(--border-primary)" }}>
-              <PollResultsOverlay
-                pollData={pollResultData}
-                currentUsername={null}
-                onClose={() => setShowResultOverlay(false)}
-              />
-            </div>
-          )}
-
-          {leaderboard.length > 0 && (
-            <SessionLeaderboard
-              leaderboard={leaderboard}
-              totalPolls={totalPolls}
-              currentUsername={null}
-              compact={true}
-              title="Live Leaderboard"
-            />
-          )}
-
-          <div className="rounded-[1.1rem] border p-3.5 space-y-3 shrink-0"
-            style={{ backgroundColor: "var(--bg-card)", borderColor: "rgba(148, 163, 184, 0.18)" }}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
-                <Hand size={16} className="text-amber-500" />
-                Hand Raises {raisedHands.length > 0 && `(${raisedHands.length})`}
-              </h3>
-              {raisedHands.length > 0 && (
-                <button
-                  onClick={clearAllHands}
-                  className="text-[10px] font-bold text-red-400 hover:text-red-300 transition-colors"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
-
-            {raisedHands.length === 0 ? (
-              <p className="text-[11px] font-semibold py-2 text-center" style={{ color: "var(--text-muted)" }}>
-                No active requests to speak.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {raisedHands.map((username) => (
-                  <div
-                    key={username}
-                    className="flex items-center justify-between p-2 rounded-xl border"
-                    style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}
-                  >
-                    <span className="text-xs font-bold font-mono" style={{ color: "var(--text-primary)" }}>
-                      {username}
-                    </span>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => acceptSpeaker(username)}
-                        className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold transition-all cursor-pointer"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => rejectHand(username)}
-                        className="px-2 py-1 rounded border hover:bg-red-500/10 text-red-400 text-[10px] font-bold transition-all cursor-pointer"
-                        style={{ borderColor: "var(--border-primary)" }}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeSpeaker && (
-              <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border-primary)" }}>
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>Speaking Student</p>
-                  <p className="text-xs font-black text-[var(--text-accent)]">{activeSpeaker}</p>
-                </div>
-                <button
-                  onClick={revokeSpeaker}
-                  className="px-3 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold transition-all cursor-pointer shadow-md shadow-red-500/25 flex items-center gap-1"
-                >
-                  <XCircle size={11} />
-                  Mute Student
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Center — Live Classroom Board */}
-        <div className="flex-1 xl:flex-[2] flex flex-col gap-3 min-h-0 overflow-hidden order-1 xl:order-2">
+        <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden order-1">
           {/* Video Preview Area */}
           <div className="relative rounded-[1.35rem] overflow-hidden border flex-1 min-h-0 bg-black shadow-[0_18px_55px_rgba(15,23,42,0.18)]"
             style={{ borderColor: "rgba(148, 163, 184, 0.22)" }}
@@ -740,8 +610,10 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
                     <Radio size={40} className="text-indigo-400 animate-pulse" />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="text-lg font-black text-white">Broadcasting Studio</h3>
-                    <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-200">
+                      Broadcasting Studio
+                    </h3>
+                    <p className="text-[11px] text-slate-500 max-w-[280px] leading-relaxed">
                       Use the controls below to stream video, audio, or present your screen.
                     </p>
                   </div>
@@ -796,68 +668,105 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
                 )}
               </div>
             </div>
+
+            {/* Per-question results overlay after POLL_END */}
+            {showResultOverlay && pollResultData && (
+              <PollResultsOverlay
+                pollData={pollResultData}
+                currentUsername={user?.username}
+                onClose={() => setShowResultOverlay(false)}
+              />
+            )}
           </div>
 
-          {/* Control Bar */}
-          <div className="flex items-center justify-center gap-2.5 px-4 py-3 rounded-[1.1rem] border shrink-0"
-            style={{ backgroundColor: "color-mix(in srgb, var(--bg-card) 88%, transparent)", borderColor: "rgba(148, 163, 184, 0.18)" }}
+          {/* Broadcast Control Bar */}
+          <div className="flex items-center justify-between p-3.5 rounded-[1.35rem] border bg-slate-900/40 backdrop-blur-md shrink-0 shadow-lg"
+            style={{ borderColor: "rgba(148, 163, 184, 0.16)" }}
           >
-            <TrackToggle
-              source={Track.Source.Microphone}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all hover:scale-105 cursor-pointer bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] data-[lk-on=true]:!bg-[var(--accent-primary)] data-[lk-on=true]:hover:!bg-[var(--accent-secondary)] data-[lk-on=true]:!text-white data-[lk-on=true]:!border-transparent data-[lk-on=false]:!bg-red-600 data-[lk-on=false]:hover:!bg-red-700 data-[lk-on=false]:!text-white data-[lk-on=false]:!border-transparent shadow-sm"
-            >
-              Mic
-            </TrackToggle>
-            <TrackToggle
-              source={Track.Source.Camera}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all hover:scale-105 cursor-pointer bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] data-[lk-on=true]:!bg-[var(--accent-primary)] data-[lk-on=true]:hover:!bg-[var(--accent-secondary)] data-[lk-on=true]:!text-white data-[lk-on=true]:!border-transparent data-[lk-on=false]:!bg-red-600 data-[lk-on=false]:hover:!bg-red-700 data-[lk-on=false]:!text-white data-[lk-on=false]:!border-transparent shadow-sm"
-            >
-              Camera
-            </TrackToggle>
-            <TrackToggle
-              source={Track.Source.ScreenShare}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all hover:scale-105 cursor-pointer bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] data-[lk-on=true]:!bg-[var(--accent-primary)] data-[lk-on=true]:hover:!bg-[var(--accent-secondary)] data-[lk-on=true]:!text-white data-[lk-on=true]:!border-transparent shadow-sm"
-            >
-              Share Screen
-            </TrackToggle>
+            <div className="flex items-center gap-1 flex-wrap">
+              <TrackToggle
+                source={Track.Source.Microphone}
+                showIcon={true}
+                className="px-4 py-2.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer shadow-sm text-slate-200 hover:text-white bg-slate-800 border-slate-700/50 hover:bg-slate-750"
+              >
+                Mic
+              </TrackToggle>
+              <TrackToggle
+                source={Track.Source.Camera}
+                showIcon={true}
+                className="px-4 py-2.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer shadow-sm text-slate-200 hover:text-white bg-slate-800 border-slate-700/50 hover:bg-slate-750"
+              >
+                Camera
+              </TrackToggle>
+              <TrackToggle
+                source={Track.Source.ScreenShare}
+                showIcon={true}
+                className="px-4 py-2.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer shadow-sm text-slate-200 hover:text-white bg-slate-800 border-slate-700/50 hover:bg-slate-750"
+              >
+                Share Screen
+              </TrackToggle>
 
-            <div className="w-px h-8 bg-slate-500/20 mx-2" />
+              <div className="w-px h-8 bg-slate-500/20 mx-2" />
 
-            {/* Poll Drawer Toggle Button */}
-            <button
-              onClick={() => setIsPollDrawerOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all hover:scale-105 cursor-pointer shadow-sm ${
-                isPollDrawerOpen || activePoll
-                  ? "bg-[var(--accent-primary)] border-transparent text-white"
-                  : "bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)]"
-              } ${activePoll ? "animate-pulse" : ""}`}
-              id="poll-drawer-btn"
-            >
-              <BarChart2 size={14} />
-              {isPollDrawerOpen ? "Hide Polls" : "Show Polls"}
-            </button>
+              {/* Poll Tab Toggle Button */}
+              <button
+                onClick={() => {
+                  setActiveTab("polls");
+                  setShowPollCreatorSignal((v) => !v);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all hover:scale-105 cursor-pointer shadow-sm ${
+                  activeTab === "polls" || activePoll
+                    ? "bg-indigo-600 border-transparent text-white animate-pulse"
+                    : "bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)]"
+                }`}
+                id="poll-tab-btn"
+              >
+                <BarChart2 size={14} />
+                {activePoll ? "Active Poll" : "Create Poll"}
+              </button>
 
-            <div className="w-px h-8 bg-slate-500/20 mx-2" />
+              <div className="w-px h-8 bg-slate-500/20 mx-2" />
 
-            <button
-              onClick={onEndSession}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-extrabold uppercase tracking-wider transition-all hover:scale-105 shadow-lg shadow-red-500/20 cursor-pointer"
-            >
-              <StopCircle size={16} />
-              End Session
-            </button>
+              <button
+                onClick={onEndSession}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-extrabold uppercase tracking-wider transition-all hover:scale-105 shadow-lg shadow-red-500/20 cursor-pointer"
+              >
+                <StopCircle size={16} />
+                End Session
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Right — Live Chat */}
-        <div className="xl:w-[320px] xl:min-w-[300px] xl:max-w-[360px] flex flex-col min-h-0 overflow-hidden shrink-0 order-3">
+        <div className="xl:w-[320px] xl:min-w-[300px] xl:max-w-[360px] flex flex-col min-h-0 overflow-hidden shrink-0 order-2">
           <LiveChat
             persistent
             sessionId={session?.id}
             hostUsername={session?.host?.username || ""}
+            isHost={true}
             blockedUsers={blockedUsers}
             setBlockedUsers={setBlockedUsers}
             className="flex-1 min-h-0"
+            raisedHands={raisedHands}
+            activeSpeaker={activeSpeaker}
+            acceptSpeaker={acceptSpeaker}
+            rejectHand={rejectHand}
+            revokeSpeaker={revokeSpeaker}
+            activePoll={activePoll}
+            pollAnswers={pollAnswers}
+            pollResultData={pollResultData}
+            leaderboard={leaderboard}
+            totalPolls={totalPolls}
+            onPollLaunched={(poll) => {
+              setActivePoll(poll);
+              setPollAnswers(new Map());
+            }}
+            onPollEnded={handlePollEnded}
+            authToken={authToken}
+            controlledActiveTab={activeTab}
+            onTabChange={setActiveTab}
+            showPollCreatorExternal={showPollCreatorSignal}
           />
         </div>
       </div>

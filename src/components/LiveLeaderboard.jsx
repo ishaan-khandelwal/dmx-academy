@@ -19,22 +19,25 @@ function formatTime(ms) {
 
 function RankBadge({ rank }) {
   if (rank === 1) return (
-    <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center shrink-0 shadow-md shadow-amber-400/30">
-      <Crown size={13} className="text-white" />
+    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-md shadow-amber-400/30 relative"
+      style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)" }}>
+      <span className="text-[11px] font-black text-white leading-none">{rank}</span>
     </div>
   );
   if (rank === 2) return (
-    <div className="w-7 h-7 rounded-full bg-slate-400 flex items-center justify-center shrink-0">
-      <Medal size={13} className="text-white" />
+    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+      style={{ background: "linear-gradient(135deg, #94a3b8, #64748b)" }}>
+      <span className="text-[11px] font-black text-white leading-none">{rank}</span>
     </div>
   );
   if (rank === 3) return (
-    <div className="w-7 h-7 rounded-full bg-amber-700/80 flex items-center justify-center shrink-0">
-      <Medal size={13} className="text-white" />
+    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+      style={{ background: "linear-gradient(135deg, #c2764a, #92400e)" }}>
+      <span className="text-[11px] font-black text-white leading-none">{rank}</span>
     </div>
   );
   return (
-    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-black"
+    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-black"
       style={{ backgroundColor: "var(--bg-badge)", color: "var(--text-muted)" }}>
       {rank}
     </div>
@@ -46,11 +49,29 @@ export function PollResultsOverlay({ pollData, onClose, currentUsername }) {
   const { poll, voteCounts, totalVotes, studentResults } = pollData;
   const myResult = studentResults?.find(r => r.username === currentUsername);
 
+  const sortedResults = React.useMemo(() => {
+    if (!studentResults) return [];
+    return [...studentResults].sort((a, b) => {
+      // 1. Correct answers first
+      if (a.isCorrect && !b.isCorrect) return -1;
+      if (!a.isCorrect && b.isCorrect) return 1;
+
+      // 2. Skipped/unanswered at the very bottom
+      const aSkipped = a.chosenIdx === -1;
+      const bSkipped = b.chosenIdx === -1;
+      if (aSkipped && !bSkipped) return 1;
+      if (!aSkipped && bSkipped) return -1;
+
+      // 3. Compare response speed (faster timeMs first)
+      return (a.timeMs || 0) - (b.timeMs || 0);
+    });
+  }, [studentResults]);
+
   return (
     <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-lg p-4 animate-fade-in">
       <div className="w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden"
         style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}>
-        
+
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "var(--border-primary)" }}>
           <div className="flex items-center gap-2 mb-2">
@@ -77,49 +98,65 @@ export function PollResultsOverlay({ pollData, onClose, currentUsername }) {
             const myChoice = myResult?.chosenIdx === idx;
 
             return (
-              <div key={idx} className={`relative rounded-2xl border overflow-hidden transition-all ${
-                isCorrect
+              <div key={idx} className={`relative rounded-2xl border overflow-hidden transition-all ${isCorrect
                   ? "border-emerald-500/40 bg-emerald-500/8"
                   : myChoice && !isCorrect
-                  ? "border-red-500/30 bg-red-500/5"
-                  : "border-transparent"
-              }`}
+                    ? "border-red-500/30 bg-red-500/5"
+                    : "border-transparent"
+                }`}
                 style={!isCorrect && !myChoice ? { borderColor: "var(--border-primary)", backgroundColor: "var(--bg-primary)" } : {}}>
-                
+
                 {/* Progress fill */}
                 <div
                   className={`absolute inset-y-0 left-0 transition-all duration-700 rounded-2xl ${isCorrect ? "bg-emerald-500/15" : "bg-slate-500/8"}`}
                   style={{ width: `${pct}%` }}
                 />
-                
+
                 <div className="relative flex items-center gap-3 px-4 py-3">
                   <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-[11px] font-black shrink-0 ${OPTION_COLORS[idx].bg} ${OPTION_COLORS[idx].text}`}>
                     {OPTION_LABELS[idx]}
                   </span>
-                  <span className="flex-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {opt}
-                  </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isCorrect && <CheckCircle size={14} className="text-emerald-400" />}
-                    {myChoice && !isCorrect && <XCircle size={14} className="text-red-400" />}
-                    <span className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-                      {pct}% <span className="text-[10px]">({count})</span>
+
+                  {/* Option text + sub-label */}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold block" style={{ color: "var(--text-primary)" }}>
+                      {opt}
                     </span>
+                    {isCorrect && myChoice && (
+                      <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+                        <CheckCircle size={9} /> Correct Answer · Your Answer
+                      </span>
+                    )}
+                    {isCorrect && !myChoice && (
+                      <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+                        <CheckCircle size={9} /> Correct Answer
+                      </span>
+                    )}
+                    {myChoice && !isCorrect && (
+                      <span className="text-[10px] font-bold text-red-400 flex items-center gap-1 mt-0.5">
+                        <XCircle size={9} /> Your Answer (Wrong)
+                      </span>
+                    )}
                   </div>
+
+                  {/* Percentage */}
+                  <span className="text-xs font-bold shrink-0" style={{ color: "var(--text-muted)" }}>
+                    {pct}% <span className="text-[10px]">({count})</span>
+                  </span>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Top 3 quick results */}
-        {studentResults && studentResults.length > 0 && (
+        {/* All ranked results */}
+        {sortedResults && sortedResults.length > 0 && (
           <div className="px-6 pb-5">
             <p className="text-[10px] font-extrabold uppercase tracking-wider mb-2.5" style={{ color: "var(--text-muted)" }}>
-              Top Answerers
+              All Rankings
             </p>
-            <div className="space-y-1.5">
-              {studentResults.slice(0, 3).map((r, idx) => (
+            <div className="space-y-1.5 max-h-60 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+              {sortedResults.map((r, idx) => (
                 <div key={r.username} className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${r.username === currentUsername ? "border-[var(--border-accent)] bg-[var(--bg-badge)]" : ""}`}
                   style={r.username !== currentUsername ? { borderColor: "var(--border-primary)", backgroundColor: "var(--bg-primary)" } : {}}>
                   <RankBadge rank={idx + 1} />
@@ -192,8 +229,8 @@ export function SessionLeaderboard({ leaderboard, totalPolls, currentUsername, c
         <span className="w-14 text-right">Pts</span>
       </div>
 
-      {/* Rows */}
-      <div className={`divide-y overflow-y-auto ${compact ? "max-h-52" : "max-h-80"}`} style={{ divideColor: "var(--border-primary)" }}>
+      {/* Rows — show all participants */}
+      <div className="divide-y overflow-y-auto" style={{ divideColor: "var(--border-primary)", scrollbarWidth: "thin" }}>
         {leaderboard.map((entry) => {
           const isMe = entry.username === currentUsername;
           return (

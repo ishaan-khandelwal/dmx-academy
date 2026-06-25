@@ -33,6 +33,7 @@ import {
   Camera,
   XCircle,
   X,
+  Trophy,
 } from "lucide-react";
 import Link from "next/link";
 import LivePollPopup from "@/components/LivePollPopup";
@@ -242,25 +243,29 @@ function VideoPlayer({
   setIsHandRaised,
   raisedHands,
   setRaisedHands,
-  isToolsOpen,
-  setIsToolsOpen,
   onSessionEnded,
   blockedUsers,
   setBlockedUsers,
   authToken,
-  onLeaderboardUpdate,
+  activePoll,
+  setActivePoll,
+  pollResultData,
+  setPollResultData,
+  showPollResult,
+  setShowPollResult,
+  leaderboard,
+  setLeaderboard,
+  totalPolls,
+  setTotalPolls,
+  myPollAnswer,
+  setMyPollAnswer,
+  activeTab,
+  onShowPollsTab,
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isHostCameraHiddenLocal, setIsHostCameraHiddenLocal] = useState(false);
   const [isStudentCameraHiddenLocal, setIsStudentCameraHiddenLocal] = useState(false);
 
-  // Poll state
-  const [activePoll, setActivePoll] = useState(null);         // { id, question, options, timerSecs, startedAt }
-  const [pollResultData, setPollResultData] = useState(null); // per-question results after POLL_END
-  const [showPollResult, setShowPollResult] = useState(false);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [totalPolls, setTotalPolls] = useState(0);
-  const [myPollAnswer, setMyPollAnswer] = useState(null);     // { chosenIdx, timeMs } for this question
   const API_BASE_LIVE = getApiBase();
 
   const fetchLeaderboard = async (sessionId) => {
@@ -273,7 +278,6 @@ function VideoPlayer({
       if (data.success) {
         setLeaderboard(data.leaderboard);
         setTotalPolls(data.totalPolls);
-        if (onLeaderboardUpdate) onLeaderboardUpdate(data.leaderboard, data.totalPolls);
       }
     } catch (e) { console.warn("Leaderboard fetch failed:", e); }
   };
@@ -424,6 +428,7 @@ function VideoPlayer({
   };
 
   const toggleRaiseHand = () => {
+    if (blockedUsers?.includes(user?.username)) return;
     const newState = !isHandRaised;
     setIsHandRaised(newState);
     sendData({
@@ -662,11 +667,11 @@ function VideoPlayer({
           onClick={onToggleChatOpen}
           className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer"
           style={{
-            backgroundColor: isChatOpen ? "var(--bg-badge)" : "var(--bg-primary)",
-            borderColor: isChatOpen ? "var(--border-accent)" : "var(--border-primary)",
-            color: isChatOpen ? "var(--text-accent)" : "var(--text-primary)",
+            backgroundColor: isChatOpen && activeTab !== "polls" ? "var(--bg-badge)" : "var(--bg-primary)",
+            borderColor: isChatOpen && activeTab !== "polls" ? "var(--border-accent)" : "var(--border-primary)",
+            color: isChatOpen && activeTab !== "polls" ? "var(--text-accent)" : "var(--text-primary)",
           }}
-          title={isChatOpen ? "Hide Live Chat" : "Show Live Chat"}
+          title={isChatOpen && activeTab !== "polls" ? "Hide Live Chat" : "Show Live Chat"}
           id="chat-toggle-btn"
         >
           <MessageSquare size={12} />
@@ -676,20 +681,21 @@ function VideoPlayer({
           )}
         </button>
 
-        {/* Left tools toggle (fullscreen only) */}
-        {isFullscreen && (
-          <button
-            onClick={() => setIsToolsOpen(!isToolsOpen)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer"
-            style={{
-              backgroundColor: isToolsOpen ? "var(--bg-badge)" : "var(--bg-primary)",
-              borderColor: isToolsOpen ? "var(--border-accent)" : "var(--border-primary)",
-              color: isToolsOpen ? "var(--text-accent)" : "var(--text-primary)"
-            }}
-          >
-            {isToolsOpen ? "Hide Leaderboard" : "Show Leaderboard"}
-          </button>
-        )}
+        {/* Leaderboard / Polls Tab Button */}
+        <button
+          onClick={onShowPollsTab}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer"
+          style={{
+            backgroundColor: isChatOpen && activeTab === "polls" ? "var(--bg-badge)" : "var(--bg-primary)",
+            borderColor: isChatOpen && activeTab === "polls" ? "var(--border-accent)" : "var(--border-primary)",
+            color: isChatOpen && activeTab === "polls" ? "var(--text-accent)" : "var(--text-primary)"
+          }}
+          title="Show Leaderboard & Polls"
+          id="polls-tab-toggle-btn"
+        >
+          <Trophy size={12} />
+          <span>Leaderboard</span>
+        </button>
 
         {/* Mute Toggle */}
         <button
@@ -1007,13 +1013,19 @@ export default function LiveViewerPage() {
   const [activeSpeaker, setActiveSpeaker] = useState(null);
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState([]);
-  const [isToolsOpen, setIsToolsOpen] = useState(true);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState([]);
 
-  // Leaderboard state — updated from VideoPlayer via onLeaderboardUpdate callback
-  const [pageLeaderboard, setPageLeaderboard] = useState([]);
-  const [pageTotalPolls, setPageTotalPolls] = useState(0);
+  // Lifted poll states from VideoPlayer
+  const [activePoll, setActivePoll] = useState(null);         // { id, question, options, timerSecs, startedAt }
+  const [pollResultData, setPollResultData] = useState(null); // per-question results after POLL_END
+  const [showPollResult, setShowPollResult] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [totalPolls, setTotalPolls] = useState(0);
+  const [myPollAnswer, setMyPollAnswer] = useState(null);     // { chosenIdx, timeMs } for this question
+
+  // Active Tab for sidebar
+  const [activeTab, setActiveTab] = useState("chat");
 
   const toggleFullscreen = () => {
     if (!workspaceRef.current) return;
@@ -1021,13 +1033,11 @@ export default function LiveViewerPage() {
       workspaceRef.current.requestFullscreen?.()
         .then(() => {
           setIsFullscreen(true);
-          setIsToolsOpen(false);
         })
         .catch(err => console.error(err));
     } else {
       document.exitFullscreen?.();
       setIsFullscreen(false);
-      setIsToolsOpen(true);
     }
   };
 
@@ -1035,11 +1045,6 @@ export default function LiveViewerPage() {
     const handler = () => {
       const isCurrentlyFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isCurrentlyFullscreen);
-      if (isCurrentlyFullscreen) {
-        setIsToolsOpen(false);
-      } else {
-        setIsToolsOpen(true);
-      }
     };
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
@@ -1212,8 +1217,8 @@ export default function LiveViewerPage() {
           {/* Session Leaderboard — shown to everyone at end of session */}
           <div className="w-full max-w-2xl animate-fade-in">
             <EndSessionLeaderboard
-              leaderboard={pageLeaderboard}
-              totalPolls={pageTotalPolls}
+              leaderboard={leaderboard}
+              totalPolls={totalPolls}
               currentUsername={user?.username}
             />
           </div>
@@ -1348,90 +1353,8 @@ export default function LiveViewerPage() {
               className={`flex-1 flex flex-col xl:flex-row min-h-0 overflow-hidden ${isFullscreen ? "h-screen w-screen bg-black" : "gap-4"}`}
               style={isFullscreen ? { display: "flex", flexDirection: "row" } : {}}
             >
-              {/* Left Tools Rail — leaderboard, hand raises */}
-              <div className={`min-h-0 overflow-y-auto gap-3 shrink-0 xl:w-[300px] xl:min-w-[280px] xl:max-w-[320px] order-2 xl:order-1 ${isFullscreen ? "w-[300px] border-r p-4 backdrop-blur-md shadow-2xl live-tools-sidebar-fullscreen" : "flex flex-col"} ${(!isFullscreen || isToolsOpen) ? "flex flex-col" : "hidden"}`}>
-                {isFullscreen && (
-                  <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-primary)] shrink-0">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Session Tools</span>
-                    <button
-                      onClick={() => setIsToolsOpen(false)}
-                      className="p-1 rounded-lg transition-colors cursor-pointer flex items-center justify-center border border-transparent hover:bg-[var(--bg-hover)]"
-                      style={{ color: "var(--text-primary)" }}
-                      title="Hide Session Tools"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                )}
-
-                {pageLeaderboard.length > 0 && (
-                  <SessionLeaderboard
-                    leaderboard={pageLeaderboard}
-                    totalPolls={pageTotalPolls}
-                    currentUsername={user?.username}
-                    compact={true}
-                  />
-                )}
-
-                <div className="rounded-[1.1rem] border p-3.5 space-y-3 shrink-0"
-                  style={{ backgroundColor: "var(--bg-card)", borderColor: "rgba(148, 163, 184, 0.18)" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
-                      <Hand size={14} className="text-amber-500" />
-                      Hand Raises {raisedHands.length > 0 && `(${raisedHands.length})`}
-                    </h3>
-                  </div>
-
-                  {raisedHands.length === 0 ? (
-                    <p className="text-[10px] font-semibold py-2 text-center" style={{ color: "var(--text-muted)" }}>
-                      No active requests to speak.
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                      {raisedHands.map((username) => (
-                        <div
-                          key={username}
-                          className="flex items-center gap-2 p-2 rounded-xl border"
-                          style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                          <span className="text-xs font-bold font-mono truncate" style={{ color: "var(--text-primary)" }}>
-                            {username}
-                          </span>
-                          {username === user?.username && (
-                            <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md uppercase ml-auto tracking-wider">
-                              You
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {activeSpeaker && (
-                    <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border-primary)" }}>
-                      <div className="space-y-0.5">
-                        <p className="text-[9px] font-bold" style={{ color: "var(--text-muted)" }}>Speaking Student</p>
-                        <p className="text-xs font-black text-[var(--text-accent)]">{activeSpeaker}</p>
-                      </div>
-                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider select-none border"
-                        style={{
-                          backgroundColor: "var(--bg-badge)",
-                          color: "var(--text-accent)",
-                          borderColor: "var(--border-accent)"
-                        }}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        On Stage
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
               {/* Center — Live Classroom Board */}
-              <div className={isFullscreen ? "flex-[3] h-full relative min-w-0 order-2" : "flex-1 xl:flex-[2] flex flex-col gap-2.5 min-h-0 overflow-hidden order-1 xl:order-2"}>
+              <div className={isFullscreen ? "flex-[3] h-full relative min-w-0 order-1" : "flex-1 flex flex-col gap-2.5 min-h-0 overflow-hidden order-1"}>
                 <VideoPlayer 
                   session={session} 
                   isFullscreen={isFullscreen} 
@@ -1445,18 +1368,32 @@ export default function LiveViewerPage() {
                   setIsHandRaised={setIsHandRaised}
                   raisedHands={raisedHands}
                   setRaisedHands={setRaisedHands}
-                  isToolsOpen={isToolsOpen}
-                  setIsToolsOpen={setIsToolsOpen}
                   onSessionEnded={() => setSessionEnded(true)}
                   blockedUsers={blockedUsers}
                   setBlockedUsers={setBlockedUsers}
                   authToken={authToken}
-                  onLeaderboardUpdate={(lb, total) => { setPageLeaderboard(lb); setPageTotalPolls(total); }}
+                  activePoll={activePoll}
+                  setActivePoll={setActivePoll}
+                  pollResultData={pollResultData}
+                  setPollResultData={setPollResultData}
+                  showPollResult={showPollResult}
+                  setShowPollResult={setShowPollResult}
+                  leaderboard={leaderboard}
+                  setLeaderboard={setLeaderboard}
+                  totalPolls={totalPolls}
+                  setTotalPolls={setTotalPolls}
+                  myPollAnswer={myPollAnswer}
+                  setMyPollAnswer={setMyPollAnswer}
+                  activeTab={activeTab}
+                  onShowPollsTab={() => {
+                    setIsChatOpen(true);
+                    setActiveTab("polls");
+                  }}
                 />
               </div>
 
               {/* Right — Live Chat */}
-              <div className={`flex flex-col min-h-0 overflow-hidden shrink-0 order-3 xl:w-[320px] xl:min-w-[300px] xl:max-w-[360px] ${isFullscreen ? "w-[360px] h-full border-l backdrop-blur-md shadow-2xl live-chat-sidebar-fullscreen" : ""} ${!isChatOpen ? "hidden" : ""}`}>
+              <div className={`flex flex-col min-h-0 overflow-hidden shrink-0 order-2 xl:w-[320px] xl:min-w-[300px] xl:max-w-[360px] ${isFullscreen ? "w-[360px] h-full border-l backdrop-blur-md shadow-2xl live-chat-sidebar-fullscreen" : ""} ${!isChatOpen ? "hidden" : ""}`}>
                 <LiveChat
                   persistent
                   sessionId={session?.id}
@@ -1467,6 +1404,15 @@ export default function LiveViewerPage() {
                   isOpen={isChatOpen}
                   onClose={() => setIsChatOpen(false)}
                   onUnreadChange={setHasUnreadMessages}
+                  raisedHands={raisedHands}
+                  activeSpeaker={activeSpeaker}
+                  activePoll={activePoll}
+                  pollResultData={pollResultData}
+                  leaderboard={leaderboard}
+                  totalPolls={totalPolls}
+                  controlledActiveTab={activeTab}
+                  onTabChange={setActiveTab}
+                  authToken={authToken}
                 />
               </div>
             </div>
