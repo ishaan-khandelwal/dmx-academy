@@ -76,26 +76,7 @@ export default function StudentDashboard() {
         console.error("Failed to fetch backend submissions:", e);
       }
 
-      // Merge with local offline submissions
-      let localSubmissions = [];
-      if (typeof window !== "undefined") {
-        try {
-          const localRaw = localStorage.getItem("dmx_local_submissions");
-          if (localRaw) {
-            localSubmissions = JSON.parse(localRaw);
-          }
-        } catch (e) {
-          console.error("Failed to parse local submissions:", e);
-        }
-      }
-      
-      const filteredLocalSubmissions = localSubmissions.filter(ls =>
-        !backendSubmissions.some(bs =>
-          bs.problem?.slug === ls.problem?.slug &&
-          new Date(bs.createdAt).getTime() === new Date(ls.createdAt).getTime()
-        )
-      );
-      setSubmissions([...backendSubmissions, ...filteredLocalSubmissions]);
+      setSubmissions(backendSubmissions);
 
       let backendContests = [];
       try {
@@ -112,44 +93,7 @@ export default function StudentDashboard() {
         console.error("Failed to fetch backend contests:", e);
       }
 
-      const combinedContests = backendContests;
-
-      // Resolve user participation for contests
-      let solvedData = {};
-      let regData = [];
-      if (typeof window !== "undefined") {
-        try {
-          const solvedRaw = localStorage.getItem("contest_solved_data");
-          if (solvedRaw) solvedData = JSON.parse(solvedRaw);
-          const regRaw = localStorage.getItem("contest_registrations");
-          if (regRaw) regData = JSON.parse(regRaw);
-        } catch (e) {
-          console.error("Failed to load local contest progress:", e);
-        }
-      }
-
-      const finalContests = combinedContests.map(c => {
-        let participation = c.userParticipation || null;
-        if (!participation) {
-          if (solvedData[c.id]) {
-            participation = {
-              completed: true,
-              score: solvedData[c.id].score,
-              timeSpent: solvedData[c.id].time
-            };
-          } else if (regData.includes(c.id)) {
-            participation = {
-              completed: false
-            };
-          }
-        }
-        return {
-          ...c,
-          userParticipation: participation
-        };
-      });
-
-      setContests(finalContests);
+      setContests(backendContests);
       setLoading(false);
     }
 

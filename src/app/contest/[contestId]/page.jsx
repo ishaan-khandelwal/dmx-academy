@@ -14,30 +14,6 @@ import { useAuth } from "@/context/AuthContext";
 import { wrapCodeForBackend } from "@/utils/codeWrapper";
 import { getSocket } from "@/utils/socket";
 
-function saveLocalSubmission(sub) {
-  if (typeof window === "undefined") return;
-  const key = "dmx_local_submissions";
-  let existing = [];
-  try {
-    existing = JSON.parse(localStorage.getItem(key) || "[]");
-  } catch { }
-  
-  const newSub = {
-    id: `local-sub-${Date.now()}`,
-    problemId: sub.problemId,
-    dbProblemId: sub.dbProblemId || null,
-    problem: {
-      title: sub.title,
-      slug: sub.problemId,
-    },
-    status: sub.status || "ACCEPTED",
-    language: sub.language,
-    code: sub.code,
-    createdAt: new Date().toISOString(),
-  };
-  existing.unshift(newSub);
-  localStorage.setItem(key, JSON.stringify(existing));
-}
 
 const getRandom = () => Math.random();
 const getCurrentTime = () => Date.now();
@@ -984,14 +960,6 @@ export default function ContestWorkspace() {
           setUserScore(score => score + activeQuestion.points);
           return [...prev, activeQuestion.id];
         });
-        saveLocalSubmission({
-          problemId: activeQuestion.slug || activeQuestion.id,
-          dbProblemId: activeQuestion.id,
-          title: activeQuestion.title,
-          language: mappedLang,
-          code: currentCode,
-          status: verdict,
-        });
       }
     } catch (err) {
       setTestResults([{
@@ -1006,159 +974,6 @@ export default function ContestWorkspace() {
     } finally {
       setIsSubmitting(false);
     }
-    return;
-
-    setTimeout(() => {
-      const results = [];
-      const originalConsoleLog = console.log;
-
-      activeQuestion.testcases.forEach((tc, index) => {
-        let passed = false;
-        let output = "";
-        let error = "";
-        const runLogs = [];
-
-        console.log = (...args) => {
-          runLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
-        };
-
-        if (selectedLanguage === "javascript") {
-          try {
-            const funcNameMatch = currentCode.match(/function\s+(\w+)\s*\(/) || currentCode.match(/const\s+(\w+)\s*=\s*\(/);
-            const functionName = funcNameMatch ? funcNameMatch[1] : null;
-
-            if (!functionName) throw new Error("Could not find a valid function declaration in your code.");
-
-            const evaluator = new Function(`${currentCode}; return ${functionName};`);
-            const targetFunction = evaluator();
-
-            let parsedInputs;
-            if (activeQuestion.id === "rate-limiter" || activeQuestion.slug === "rate-limiter") {
-              const mockRedis = {
-                multi: () => {
-                  const tx = {
-                    zremrangebyscore: () => tx,
-                    zcard: () => tx,
-                    zadd: () => tx,
-                    expire: () => tx,
-                    exec: async () => [null, 2, null, null]
-                  };
-                  return tx;
-                }
-              };
-              parsedInputs = [mockRedis, "user_123", 5, 60];
-            } else {
-              try {
-                parsedInputs = JSON.parse(`[${testcaseInputs[index] || tc.input}]`);
-              } catch {
-                parsedInputs = [testcaseInputs[index] || tc.input];
-              }
-            }
-
-            const actual = targetFunction(...parsedInputs);
-            output = (actual !== undefined) ? JSON.stringify(actual) : "";
-
-            if (typeof tc.assertion === "function") {
-              passed = tc.assertion(currentCode, targetFunction);
-            } else {
-              const cleanExpected = (tc.expectedOutput || tc.expected || "").toString().trim().replace(/\r/g, "");
-              const cleanActual = (actual !== undefined ? actual : "").toString().trim().replace(/\r/g, "");
-              const cleanLogs = runLogs.join("\n").trim().replace(/\r/g, "");
-              passed = (cleanActual === cleanExpected) || (cleanLogs === cleanExpected);
-            }
-          } catch (e) {
-            error = e.message;
-            passed = false;
-          }
-        } else {
-          try {
-            runLogs.push("> Compiling code variables...");
-            runLogs.push(`> Simulating execution for ${selectedLanguage} interpreter...`);
-            passed = tc.assertion ? tc.assertion(currentCode, null) : true;
-            output = tc.expected || tc.expectedOutput;
-          } catch (e) {
-            error = e.message;
-            passed = false;
-          }
-        }
-
-        console.log = originalConsoleLog;
-
-        results.push({
-          name: tc.name || "Test Case",
-          input: testcaseInputs[index] || tc.input,
-          expected: tc.expected || tc.expectedOutput,
-          actual: output || runLogs.join("\n"),
-          passed,
-          error,
-          logs: runLogs
-        });
-      });
-
-      // Update UI with fresh results
-      setTestResults(results);
-      setIsSubmitting(false);
-
-      // Use fresh local results — NOT stale testResults state
-      const allPassed = results.length > 0 && results.every(r => r.passed);
-      const verdict = allPassed ? "ACCEPTED" : "WRONG_ANSWER";
-      if (allPassed) {
-        triggerConfettiParticles();
-        // Award points only once per question
-        setSolvedQuestions(prev => {
-          if (prev.includes(activeQuestion.id)) return prev;
-          setUserScore(score => score + activeQuestion.points);
-          return [...prev, activeQuestion.id];
-        });
-      }
-
-      // Prepare wrapped code for backend validation
-      const mappedLang = selectedLanguage.toUpperCase() === "JAVASCRIPT" ? "JAVASCRIPT" : selectedLanguage.toUpperCase() === "PYTHON" ? "PYTHON" : "CPP";
-      const wrappedCode = wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
-
-      const localSub = {
-        problemId: activeQuestion.slug || activeQuestion.id,
-        dbProblemId: activeQuestion.id,
-        title: activeQuestion.title,
-        language: mappedLang,
-        code: currentCode,
-        status: verdict,
-      };
-
-      // Save locally
-      saveLocalSubmission(localSub);
-
-      // Post submission to backend DB if it's a database contest (numeric ID)
-      const isNumeric = /^\d+$/.test(contestId);
-      if (isNumeric) {
-        try {
-          const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
-          const headers = {
-            "Content-Type": "application/json",
-            ...(hasRealToken
-              ? { Authorization: `Bearer ${token}` }
-              : { "x-bypass-auth": "true", "x-bypass-role": "USER" }),
-          };
-          fetch(`${API_BASE}/api/submissions/problem/${activeQuestion.id}`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              language: mappedLang,
-              code: wrappedCode,
-            }),
-            signal: AbortSignal.timeout(30000),
-          }).then(res => {
-            if (res.ok) {
-              console.log("Contest submission recorded in backend database");
-            }
-          }).catch(err => {
-            console.error("Failed to post contest submission to backend:", err);
-          });
-        } catch (err) {
-          console.error("Failed to send contest submission:", err);
-        }
-      }
-    }, 1200);
   };
 
   // Canvas Confetti generator

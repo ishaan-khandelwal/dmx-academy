@@ -88,6 +88,53 @@ if input_data:
     if len(res) == 2:
         print(json.dumps(res, separators=(",", ":")))`;
     }
+  } else if (problemSlug === "search-insert-position") {
+    if (lang === "javascript") {
+      return `${userCode}
+
+// Backend I/O Wrapper
+const fs = require('fs');
+const input = fs.readFileSync(0, 'utf-8').trim();
+if (input) {
+  let nums = [];
+  let target = 0;
+  const bracketMatch = input.match(/\\[([^\\]]+)\\]\\s*,?\\s*(-?\\d+)/);
+  if (bracketMatch) {
+    nums = bracketMatch[1].split(',').map((item) => Number(item.trim()));
+    target = Number(bracketMatch[2]);
+  } else {
+    const lines = input.split('\\n');
+    nums = lines[0].trim().split(/\\s+/).map(Number);
+    target = Number(lines[1]);
+  }
+  const solver = typeof solution === 'function' ? solution : (typeof searchInsert === 'function' ? searchInsert : solve);
+  const res = solver(nums, target);
+  if (res !== undefined) {
+    console.log(res);
+  }
+}`;
+    } else if (lang === "python") {
+      return `${userCode}
+
+# Backend I/O Wrapper
+import sys
+import json
+import re
+input_data = sys.stdin.read().strip()
+if input_data:
+    bracket_match = re.search(r"\\[([^\\]]+)\\]\\s*,?\\s*(-?\\d+)", input_data)
+    if bracket_match:
+        nums = [int(item.strip()) for item in bracket_match.group(1).split(",") if item.strip()]
+        target = int(bracket_match.group(2))
+    else:
+        lines = input_data.split('\\n')
+        nums = list(map(int, lines[0].strip().split()))
+        target = int(lines[1].strip())
+    solver = globals().get("solution") or globals().get("searchInsert") or globals().get("solve")
+    res = solver(nums, target)
+    if res is not None:
+        print(res)`;
+    }
   } else if (problemSlug === "vdom-diff") {
     if (lang === "javascript") {
       return `${userCode}

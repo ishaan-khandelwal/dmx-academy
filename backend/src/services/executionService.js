@@ -275,6 +275,27 @@ const executeCode = async (language, code, testCases) => {
  * @returns {Promise<Object>} Execution result: { status, executionTime, output, error }
  */
 const runCustomCode = async (language, code, input) => {
+  const engine = process.env.CODE_EXECUTION_ENGINE || 'local';
+  if (engine.toLowerCase() === 'judge0') {
+    const { executeTestcase } = require('./judge0');
+    const res = await executeTestcase(code, language, input, '', 3000);
+    return {
+      status: res.status === 'SUCCESS' ? 'SUCCESS' : res.status,
+      executionTime: res.executionTimeMs,
+      output: res.stdout,
+      error: res.stderr || res.error,
+    };
+  } else if (engine.toLowerCase() === 'piston') {
+    const { executePistonTestcase } = require('./piston');
+    const res = await executePistonTestcase(code, language, input, '', 3000);
+    return {
+      status: res.status === 'SUCCESS' ? 'SUCCESS' : res.status,
+      executionTime: res.executionTimeMs,
+      output: res.stdout,
+      error: res.stderr || res.error,
+    };
+  }
+
   const uniqueId = `${Date.now()}_custom_${Math.floor(Math.random() * 10000)}`;
   const tempDir = createTempDir(uniqueId);
 

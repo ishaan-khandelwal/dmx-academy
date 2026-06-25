@@ -346,16 +346,11 @@ const participateInContest = async (req, res, next) => {
       where: {
         userId_contestId: { userId, contestId }
       },
-      update: {
-        username: req.user.username,
-        contestTitle: contest.title,
-      },
+      update: {},
       create: {
         userId,
         contestId,
         completed: false,
-        username: req.user.username,
-        contestTitle: contest.title,
       },
       include: {
         user: {
@@ -406,8 +401,6 @@ const finishContestAttempt = async (req, res, next) => {
         completed: true,
         score: score || 0,
         timeSpent: timeSpent || '0m 0s',
-        username: req.user.username,
-        contestTitle: contest.title,
       },
       create: {
         userId,
@@ -415,8 +408,6 @@ const finishContestAttempt = async (req, res, next) => {
         completed: true,
         score: score || 0,
         timeSpent: timeSpent || '0m 0s',
-        username: req.user.username,
-        contestTitle: contest.title,
       },
       include: {
         user: {

@@ -46,16 +46,146 @@ class JudgeQueue {
 const concurrencyLimit = parseInt(process.env.JUDGE_CONCURRENCY || '4', 10);
 const judgeQueue = new JudgeQueue(concurrencyLimit);
 
+const runWithJudge0 = async (language, code, problemConfig, testCases, options = {}) => {
+  const { executeTestcase } = require('./judge0');
+  const results = [];
+  let maxExecutionTime = 0;
+  let failedTestCase = null;
+  let verdict = 'ACCEPTED';
+  let passedCount = 0;
+  const runAll = !!options.runAll;
+
+  for (let i = 0; i < testCases.length; i++) {
+    const tc = testCases[i];
+    const tcIndex = i + 1;
+    const runRes = await executeTestcase(code, language, tc.input, tc.expectedOutput, problemConfig.timeout);
+
+    const elapsed = runRes.executionTimeMs;
+    maxExecutionTime = Math.max(maxExecutionTime, elapsed);
+
+    const tcResult = {
+      index: tcIndex,
+      status: runRes.status,
+      executionTimeMs: elapsed,
+      stdout: runRes.stdout,
+      stderr: runRes.stderr,
+    };
+
+    if (runRes.status === 'COMPILATION_ERROR') {
+      return {
+        verdict: 'COMPILATION_ERROR',
+        stderr: runRes.stderr || 'Compilation failed',
+        passedTestCases: 0,
+        totalTestCases: testCases.length,
+        executionTimeMs: 0,
+        memoryKb: 0,
+      };
+    }
+
+    if (runRes.status === 'SUCCESS') {
+      results.push(tcResult);
+    } else {
+      verdict = runRes.status;
+      failedTestCase = tcIndex;
+      results.push(tcResult);
+      if (!runAll) {
+        break;
+      }
+    }
+  }
+
+  passedCount = results.filter(r => r.status === 'SUCCESS').length;
+
+  return {
+    verdict,
+    results,
+    failedTestCase,
+    passedTestCases: passedCount,
+    totalTestCases: testCases.length,
+    executionTimeMs: maxExecutionTime,
+    memoryKb: 0,
+  };
+};
+
+const runWithPiston = async (language, code, problemConfig, testCases, options = {}) => {
+  const { executePistonTestcase } = require('./piston');
+  const results = [];
+  let maxExecutionTime = 0;
+  let failedTestCase = null;
+  let verdict = 'ACCEPTED';
+  let passedCount = 0;
+  const runAll = !!options.runAll;
+
+  for (let i = 0; i < testCases.length; i++) {
+    const tc = testCases[i];
+    const tcIndex = i + 1;
+    const runRes = await executePistonTestcase(code, language, tc.input, tc.expectedOutput, problemConfig.timeout);
+
+    const elapsed = runRes.executionTimeMs;
+    maxExecutionTime = Math.max(maxExecutionTime, elapsed);
+
+    const tcResult = {
+      index: tcIndex,
+      status: runRes.status,
+      executionTimeMs: elapsed,
+      stdout: runRes.stdout,
+      stderr: runRes.stderr,
+    };
+
+    if (runRes.status === 'COMPILATION_ERROR') {
+      return {
+        verdict: 'COMPILATION_ERROR',
+        stderr: runRes.stderr || 'Compilation failed',
+        passedTestCases: 0,
+        totalTestCases: testCases.length,
+        executionTimeMs: 0,
+        memoryKb: 0,
+      };
+    }
+
+    if (runRes.status === 'SUCCESS') {
+      results.push(tcResult);
+    } else {
+      verdict = runRes.status;
+      failedTestCase = tcIndex;
+      results.push(tcResult);
+      if (!runAll) {
+        break;
+      }
+    }
+  }
+
+  passedCount = results.filter(r => r.status === 'SUCCESS').length;
+
+  return {
+    verdict,
+    results,
+    failedTestCase,
+    passedTestCases: passedCount,
+    totalTestCases: testCases.length,
+    executionTimeMs: maxExecutionTime,
+    memoryKb: 0,
+  };
+};
+
 /**
  * Pure queue-agnostic judging logic for a single submission.
  * Evaluates outputs and determines appropriate verdicts.
  */
 const judgeSubmission = async (language, code, problemConfig, testCases, options = {}) => {
   try {
-    // 1. Run the code in sandbox
-    const sandboxRes = await runInSandbox(language, code, problemConfig, testCases, {
-      runAll: options.runAll,
-    });
+    const engine = process.env.CODE_EXECUTION_ENGINE || 'local';
+    let sandboxRes;
+
+    if (engine.toLowerCase() === 'judge0') {
+      sandboxRes = await runWithJudge0(language, code, problemConfig, testCases, options);
+    } else if (engine.toLowerCase() === 'piston') {
+      sandboxRes = await runWithPiston(language, code, problemConfig, testCases, options);
+    } else {
+      sandboxRes = await runInSandbox(language, code, problemConfig, testCases, {
+        runAll: options.runAll,
+      });
+    }
 
     if (sandboxRes.verdict === 'COMPILATION_ERROR' || sandboxRes.verdict === 'INTERNAL_ERROR') {
       return {
