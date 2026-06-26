@@ -55,6 +55,42 @@ if input_data:
   console.log('   Passed:', pyResult.status === 'ACCEPTED' ? '✅ YES' : '❌ NO');
   console.log('----------------------------------------------------');
 
+  // Test Go Solution (Sum of A + B)
+  const goCode = `
+package main
+import (
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+)
+func main() {
+	inputBytes, _ := io.ReadAll(os.Stdin)
+	input := strings.TrimSpace(string(inputBytes))
+	if input != "" {
+		parts := strings.Fields(input)
+		if len(parts) >= 2 {
+			a, _ := strconv.Atoi(parts[0])
+			b, _ := strconv.Atoi(parts[1])
+			fmt.Println(a + b)
+		}
+	}
+}
+  `;
+  const goCases = [
+    { input: '3 4', expectedOutput: '7' },
+    { input: '-1 1', expectedOutput: '0' }
+  ];
+
+  console.log('2.5. Testing Go compilation & execution...');
+  const goResult = await executeCode('GO', goCode, goCases);
+  console.log('   Status:', goResult.status);
+  console.log('   Execution Time:', goResult.executionTime, 'ms');
+  console.log('   Error details:', goResult.error);
+  console.log('   Passed:', goResult.status === 'ACCEPTED' ? '✅ YES' : '❌ NO');
+  console.log('----------------------------------------------------');
+
   // Test C++ Solution (Sum of A + B)
   const cppCode = `
 #include <iostream>

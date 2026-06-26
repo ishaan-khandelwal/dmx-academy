@@ -84,6 +84,62 @@ if len(lines) >= 2:
   }
   console.log('----------------------------------------------------');
 
+  // --- GO CORRECT SOLUTION ---
+  const goCorrectCode = `
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+)
+
+func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return
+	}
+	line1 := scanner.Text()
+	if !scanner.Scan() {
+		return
+	}
+	line2 := scanner.Text()
+
+	var nums []int
+	for _, s := range strings.Fields(line1) {
+		val, _ := strconv.Atoi(s)
+		nums = append(nums, val)
+	}
+	target, _ := strconv.Atoi(strings.TrimSpace(line2))
+
+	seen := make(map[int]int)
+	for i, num := range nums {
+		comp := target - num
+		if idx, found := seen[comp]; found {
+			fmt.Printf("%d %d\\n", idx, i)
+			return
+		}
+		seen[num] = i
+	}
+}
+  `;
+
+  console.log('2.2. Evaluating Correct Go Solution...');
+  const goResult = await judgeQueuedSubmission('GO', goCorrectCode, problem, problem.testCases);
+  console.log('   Verdict:', goResult.verdict);
+  console.log('   Passed Testcases:', `${goResult.passedTestCases}/${goResult.totalTestCases}`);
+  console.log('   Execution Time:', goResult.executionTimeMs, 'ms');
+  console.log('   Passed:', goResult.verdict === 'ACCEPTED' ? '✅ YES' : '❌ NO');
+  if (goResult.stderr) {
+    console.log('   Error Details:\n', goResult.stderr);
+  }
+  if (goResult.results) {
+    console.log('   Results Details:', JSON.stringify(goResult.results, null, 2));
+  }
+  console.log('----------------------------------------------------');
+
   // --- JAVA CORRECT SOLUTION ---
   const javaCorrectCode = `
 import java.io.BufferedReader;

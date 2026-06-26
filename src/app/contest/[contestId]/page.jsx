@@ -81,7 +81,7 @@ function getAuthHeaders() {
 export default function ContestWorkspace() {
   const params = useParams();
   const contestId = params.contestId;
-  const { token, API_BASE } = useAuth();
+  const { user, token, API_BASE } = useAuth();
   const [contest, setContest] = useState(null);
   const [loadingContest, setLoadingContest] = useState(true);
 
@@ -94,6 +94,12 @@ export default function ContestWorkspace() {
   const [solvedQuestions, setSolvedQuestions] = useState([]); // Array of question IDs solved
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [, setTick] = useState(0);
+
+  // Anti-cheat: state variables
+  const [violationCount, setViolationCount] = useState(0);
+  const [showViolationOverlay, setShowViolationOverlay] = useState(false);
+  const [violationReason, setViolationReason] = useState("");
+  const fullscreenRequestedRef = useRef(false);
 
   // Layout resize state
   const [leftWidth, setLeftWidth] = useState(50); // percentage
@@ -118,6 +124,7 @@ export default function ContestWorkspace() {
   const [testResults, setTestResults] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionVerdict, setSubmissionVerdict] = useState(null); // null | { verdict, passed, executionTimeMs, passedTestCases, totalTestCases }
   const [finalScoreboard, setFinalScoreboard] = useState([]);
 
   // Voice Assistant states
@@ -134,6 +141,82 @@ export default function ContestWorkspace() {
   const lineNumbersRef = useRef(null);
   const highlightRef = useRef(null);
   const [lineCount, setLineCount] = useState(1);
+
+  // Terminate contest callback
+  const finishContest = useCallback(async () => {
+    if (!contest) return;
+    setContestEnded(true);
+
+    // Exit fullscreen when contest ends
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+
+    const elapsedSecs = startTimeStamp ? Math.floor((getCurrentTime() - startTimeStamp) / 1000) : 0;
+    const elapsedMins = Math.floor(elapsedSecs / 60);
+    const elapsedRemSecs = elapsedSecs % 60;
+    const timeStr = `${elapsedMins}m ${elapsedRemSecs}s`;
+    setFinalElapsedTime(timeStr);
+
+    const userEntry = {
+      rank: 1,
+      username: "You",
+      score: userScore,
+      time: timeStr,
+      isUser: true
+    };
+
+    const combinedLeaderboard = [...contest.leaderboard, userEntry];
+    
+    combinedLeaderboard.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const parseTimeToSecs = (str) => {
+        const parts = str.match(/(\d+)m\s+(\d+)s/);
+        if (parts) return parseInt(parts[1]) * 60 + parseInt(parts[2]);
+        return 9999;
+      };
+      return parseTimeToSecs(a.time) - parseTimeToSecs(b.time);
+    });
+
+    const finalBoard = combinedLeaderboard.map((item, idx) => ({
+      ...item,
+      rank: idx + 1
+    }));
+
+    setFinalScoreboard(finalBoard);
+
+    // Persist to localStorage
+    if (typeof window !== "undefined") {
+      const solvedList = localStorage.getItem("contest_solved_data");
+      let list = {};
+      if (solvedList) {
+        try { list = JSON.parse(solvedList); } catch { }
+      }
+      list[contestId] = {
+        score: userScore,
+        time: timeStr,
+        completed: true
+      };
+      localStorage.setItem("contest_solved_data", JSON.stringify(list));
+    }
+
+    // Persist completion to backend if this is a database contest
+    const isNumeric = /^\d+$/.test(contestId);
+    if (isNumeric) {
+      try {
+        await fetch(`${API_BASE}/api/contests/${contestId}/finish`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify({ score: userScore, timeSpent: timeStr })
+        });
+      } catch (err) {
+        console.error("Failed to persist contest finish to backend:", err);
+      }
+    }
+  }, [contest, contestId, startTimeStamp, userScore]);
 
   // Fetch contest metadata and linked problem definitions on mount / id change
   useEffect(() => {
@@ -171,8 +254,9 @@ export default function ContestWorkspace() {
                 explanation: dbProb.explanation,
                 testcases: dbProb.testCases || [],
                 editorTemplates: {
-                  javascript: `// Solve: ${dbProb.title}\nfunction solution() {\n  // Write your code here\n}`,
-                  python: `# Solve: ${dbProb.title}\ndef solution(nums, target):\n    # Write your code here\n    pass`
+                  javascript: `// Solve: ${dbProb.title}\nfunction solution() {\n    // Write your code here\n}`,
+                  python: `# Solve: ${dbProb.title}\ndef solution():\n    # Write your code here\n    pass`,
+                  go: `package main\n\nimport "fmt"\n\n// Solve: ${dbProb.title}\nfunc solution() {\n    // Write your code here\n    fmt.Println(0)\n}\n\nfunc main() {\n    solution()\n}`
                 },
                 defaultLanguage: "javascript"
               };
@@ -288,6 +372,126 @@ export default function ContestWorkspace() {
     fetchContestDetails();
   }, [contestId, API_BASE]);
 
+  // ── Anti-Cheat: silent fullscreen lock + shortcut/right-click blocking ──
+  useEffect(() => {
+    if (!contestStarted || contestEnded) return;
+
+    // Re-enter fullscreen state changes
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && !contestEnded) {
+        setViolationCount(prev => {
+          const next = prev + 1;
+          if (next >= 3) {
+            finishContest();
+          }
+          return next;
+        });
+        setViolationReason("Fullscreen mode exited. You must remain in fullscreen during the contest.");
+        setShowViolationOverlay(true);
+      }
+    };
+
+    // When tab becomes visible again (user switched away and came back) — lock and warn
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && !contestEnded) {
+        setViolationCount(prev => {
+          const next = prev + 1;
+          if (next >= 3) {
+            finishContest();
+          }
+          return next;
+        });
+        setViolationReason("Tab switched. Switching tabs or leaving the workspace is strictly prohibited.");
+        setShowViolationOverlay(true);
+      }
+    };
+
+    // When window loses focus (Alt+Tab or clicking outside) — lock and warn
+    const handleWindowBlur = () => {
+      if (!contestEnded) {
+        setViolationCount(prev => {
+          const next = prev + 1;
+          if (next >= 3) {
+            finishContest();
+          }
+          return next;
+        });
+        setViolationReason("Window focus lost. Do not switch applications or click outside the browser.");
+        setShowViolationOverlay(true);
+      }
+    };
+
+    // Block DevTools + AI shortcut keys silently (capture phase)
+    const handleGlobalKeyDown = (e) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+      const shift = e.shiftKey;
+      const key = e.key;
+
+      const blocked =
+        // DevTools
+        key === "F12" ||
+        (ctrl && shift && (key === "I" || key === "i")) ||
+        (ctrl && shift && (key === "J" || key === "j")) ||
+        (ctrl && shift && (key === "C" || key === "c")) ||
+        (ctrl && (key === "U" || key === "u")) ||
+        // Tab switching shortcuts
+        (ctrl && key === "Tab") ||
+        (ctrl && shift && key === "Tab") ||
+        (ctrl && (key === "T" || key === "t")) ||     // New tab
+        (ctrl && (key === "W" || key === "w")) ||     // Close tab
+        (ctrl && (key === "N" || key === "n")) ||     // New window
+        // AI tool shortcuts
+        (ctrl && (key === "K" || key === "k")) ||
+        (ctrl && shift && (key === "A" || key === "a")) ||
+        (ctrl && shift && (key === "L" || key === "l")) ||
+        (ctrl && shift && (key === "P" || key === "p")) ||
+        key === "F1";
+
+      if (blocked) {
+        e.preventDefault();
+        e.stopPropagation();
+        setViolationCount(prev => {
+          const next = prev + 1;
+          if (next >= 3) {
+            finishContest();
+          }
+          return next;
+        });
+        setViolationReason(`Forbidden keyboard shortcut/action detected (Key: ${key}).`);
+        setShowViolationOverlay(true);
+      }
+    };
+
+    // Silently block right-click (prevents Inspect Element)
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+      setViolationCount(prev => {
+        const next = prev + 1;
+        if (next >= 3) {
+          finishContest();
+        }
+        return next;
+      });
+      setViolationReason("Right-click context menu is disabled during the contest.");
+      setShowViolationOverlay(true);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    document.addEventListener("keydown", handleGlobalKeyDown, true);
+    document.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("keydown", handleGlobalKeyDown, true);
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contestStarted, contestEnded, finishContest]);
+
   // Real-time leaderboard WebSocket updates
   useEffect(() => {
     if (!contestId) return;
@@ -321,77 +525,6 @@ export default function ContestWorkspace() {
       };
     }
   }, [contestId]);
-
-  // Terminate contest callback
-  const finishContest = useCallback(async () => {
-    if (!contest) return;
-    setContestEnded(true);
-
-    const elapsedSecs = startTimeStamp ? Math.floor((getCurrentTime() - startTimeStamp) / 1000) : 0;
-    const elapsedMins = Math.floor(elapsedSecs / 60);
-    const elapsedRemSecs = elapsedSecs % 60;
-    const timeStr = `${elapsedMins}m ${elapsedRemSecs}s`;
-    setFinalElapsedTime(timeStr);
-
-    const userEntry = {
-      rank: 1,
-      username: "You",
-      score: userScore,
-      time: timeStr,
-      isUser: true
-    };
-
-    const combinedLeaderboard = [...contest.leaderboard, userEntry];
-    
-    combinedLeaderboard.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const parseTimeToSecs = (str) => {
-        const parts = str.match(/(\d+)m\s+(\d+)s/);
-        if (parts) return parseInt(parts[1]) * 60 + parseInt(parts[2]);
-        return 9999;
-      };
-      return parseTimeToSecs(a.time) - parseTimeToSecs(b.time);
-    });
-
-    const finalBoard = combinedLeaderboard.map((item, idx) => ({
-      ...item,
-      rank: idx + 1
-    }));
-
-    setFinalScoreboard(finalBoard);
-
-    // Persist to localStorage
-    if (typeof window !== "undefined") {
-      const solvedList = localStorage.getItem("contest_solved_data");
-      let list = {};
-      if (solvedList) {
-        try { list = JSON.parse(solvedList); } catch { }
-      }
-      list[contestId] = {
-        score: userScore,
-        time: timeStr,
-        completed: true
-      };
-      localStorage.setItem("contest_solved_data", JSON.stringify(list));
-    }
-
-    // Persist completion to backend if this is a database contest
-    const isNumeric = /^\d+$/.test(contestId);
-    if (isNumeric) {
-      try {
-        await fetch(`${API_BASE}/api/contests/${contestId}/finish`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders()
-          },
-          body: JSON.stringify({ score: userScore, timeSpent: timeStr })
-        });
-      } catch (err) {
-        console.error("Failed to persist contest finish to backend:", err);
-      }
-    }
-  }, [contest, contestId, startTimeStamp, userScore]);
 
   // Sync timer countdown clock
   useEffect(() => {
@@ -524,15 +657,31 @@ export default function ContestWorkspace() {
   }
 
   // Initialize workspace when contest starts
-  const startContest = async () => {
+  const startContest = () => {
     if (!contest) return;
-    
+
+    // \u2500\u2500 Fullscreen MUST be the very first call \u2014 before any setState \u2500\u2500
+    // Browser user-gesture context is consumed by the first async operation.
+    // Using .then() keeps this non-blocking while the rest of setup continues.
+    if (!document.fullscreenElement) {
+      document.documentElement
+        .requestFullscreen({ navigationUI: "hide" })
+        .then(() => { fullscreenRequestedRef.current = true; })
+        .catch(() => { /* denied in some browsers/environments */ });
+    } else {
+      fullscreenRequestedRef.current = true;
+    }
+
     setSecondsLeft(contest.durationMins * 60);
     setStartTimeStamp(getCurrentTime());
     
     const initialCodes = {};
     contest.problems.forEach(prob => {
       if (prob.editorTemplates) {
+        // Ensure Go template exists for all problems
+        if (!prob.editorTemplates.go) {
+          prob.editorTemplates.go = `package main\n\nimport "fmt"\n\n// Solve: ${prob.title}\nfunc solution() {\n    // Write your Go code here\n    fmt.Println(0)\n}\n\nfunc main() {\n    solution()\n}`;
+        }
         Object.keys(prob.editorTemplates).forEach(lang => {
           initialCodes[`${prob.id}_${lang}`] = prob.editorTemplates[lang];
         });
@@ -552,38 +701,146 @@ export default function ContestWorkspace() {
     // Register participation in backend (for numeric/database contests)
     const isNumeric = /^\d+$/.test(contestId);
     if (isNumeric) {
-      try {
-        await fetch(`${API_BASE}/api/contests/${contestId}/participate`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders()
-          }
-        });
-      } catch (err) {
-        console.error("Failed to register participation in backend:", err);
-      }
+      fetch(`${API_BASE}/api/contests/${contestId}/participate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders()
+        }
+      }).catch(err => console.error("Failed to register participation:", err));
     }
   };
 
-  // Safe tab indentation key handler
+  // Smart indentation + bracket auto-close key handler
   const handleEditorKeyDown = (e) => {
+    const ta = e.target;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const code = currentCode;
+
+    // ── Tab key: insert 4 spaces (or un-indent selected lines with Shift+Tab) ──
     if (e.key === "Tab") {
       e.preventDefault();
-      const start = e.target.selectionStart;
-      const end = e.target.selectionEnd;
-      const updatedCode = currentCode.substring(0, start) + "  " + currentCode.substring(end);
-      
-      setEditorCodes(prev => ({
-        ...prev,
-        [currentCodeKey]: updatedCode
-      }));
-      
+      if (e.shiftKey) {
+        // Un-indent selected lines (or current line if no selection)
+        const selStart = start !== end ? start : code.lastIndexOf("\n", start - 1) + 1;
+        const selEnd = start !== end ? end : start;
+        const before = code.substring(0, selStart);
+        const selected = code.substring(selStart, selEnd);
+        const after = code.substring(selEnd);
+        const unindented = start !== end
+          ? selected.replace(/^    /gm, "")
+          : (selected.startsWith("    ") ? selected.slice(4) : selected.replace(/^ {1,4}/, ""));
+        const diff = selected.length - unindented.length;
+        const updated = before + unindented + after;
+        setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.selectionStart = selStart;
+            editorRef.current.selectionEnd = selEnd - diff;
+          }
+        }, 0);
+      } else {
+        // Insert 4 spaces at cursor position
+        const updated = code.substring(0, start) + "    " + code.substring(end);
+        setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 4;
+          }
+        }, 0);
+      }
+      return;
+    }
+
+    // ── Enter key: smart auto-indent (4-space levels) ──
+    if (e.key === "Enter") {
+      e.preventDefault();
+      // Find the current line's leading whitespace
+      const lineStart = code.lastIndexOf("\n", start - 1) + 1;
+      const currentLine = code.substring(lineStart, start);
+      const leadingWhitespace = currentLine.match(/^(\s*)/)[1];
+
+      // Check if the character just before cursor opens a new block
+      const charBefore = code[start - 1];
+      const charAfter = code[start];
+      const opensBlock = charBefore === "{" || charBefore === ":" || charBefore === "(" || charBefore === "[";
+      const closingPair = { "{": "}", "(": ")", "[": "]" };
+      const matchingClose = closingPair[charBefore];
+
+      let newCode;
+      let newCursor;
+
+      if (opensBlock && matchingClose && charAfter === matchingClose) {
+        // Cursor between { } — add indented line + closing brace on its own line
+        const inner = "\n" + leadingWhitespace + "    ";
+        const outer = "\n" + leadingWhitespace;
+        newCode = code.substring(0, start) + inner + outer + code.substring(end);
+        newCursor = start + inner.length;
+      } else if (opensBlock) {
+        // Line ends with block opener — indent one level deeper (4 spaces)
+        const indent = "\n" + leadingWhitespace + "    ";
+        newCode = code.substring(0, start) + indent + code.substring(end);
+        newCursor = start + indent.length;
+      } else {
+        // Normal enter — keep same indentation
+        const indent = "\n" + leadingWhitespace;
+        newCode = code.substring(0, start) + indent + code.substring(end);
+        newCursor = start + indent.length;
+      }
+
+      setEditorCodes(prev => ({ ...prev, [currentCodeKey]: newCode }));
       setTimeout(() => {
         if (editorRef.current) {
-          editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 2;
+          editorRef.current.selectionStart = editorRef.current.selectionEnd = newCursor;
         }
       }, 0);
+      return;
+    }
+
+    // ── Auto-close brackets and quotes ──
+    const autoPairs = { "{": "}", "(": ")", "[": "]" };
+    if (autoPairs[e.key] && start === end) {
+      e.preventDefault();
+      const close = autoPairs[e.key];
+      const updated = code.substring(0, start) + e.key + close + code.substring(end);
+      setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 1;
+        }
+      }, 0);
+      return;
+    }
+
+    // ── Skip over existing closing bracket if typed ──
+    const closingChars = ["}", ")", "]"];
+    if (closingChars.includes(e.key) && code[start] === e.key && start === end) {
+      e.preventDefault();
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 1;
+        }
+      }, 0);
+      return;
+    }
+
+    // ── Backspace: remove auto-paired empty bracket pair ──
+    if (e.key === "Backspace" && start === end && start > 0) {
+      const pairOpeners = { "}": "{", ")": "(", "]": "[" };
+      const prevChar = code[start - 1];
+      const nextChar = code[start];
+      if (autoPairs[prevChar] && autoPairs[prevChar] === nextChar) {
+        e.preventDefault();
+        const updated = code.substring(0, start - 1) + code.substring(start + 1);
+        setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.selectionStart = editorRef.current.selectionEnd = start - 1;
+          }
+        }, 0);
+        return;
+      }
     }
   };
 
@@ -596,6 +853,54 @@ export default function ContestWorkspace() {
       highlightRef.current.scrollTop = e.target.scrollTop;
       highlightRef.current.scrollLeft = e.target.scrollLeft;
     }
+  };
+
+  // Paste handler: normalizes tabs and large indentation to 2-space style
+  const handleEditorPaste = (e) => {
+    e.preventDefault();
+    const raw = (e.clipboardData || window.clipboardData).getData("text");
+    if (!raw) return;
+
+    // Step 1: convert tab characters to 4 spaces so we can measure uniformly
+    let text = raw.replace(/\t/g, "    ");
+
+    // Step 2: detect the predominant indent unit used in pasted code
+    const indentSizes = text
+      .split("\n")
+      .map(line => { const m = line.match(/^( +)/); return m ? m[1].length : 0; })
+      .filter(n => n > 0);
+
+    const minIndent = indentSizes.length > 0 ? Math.min(...indentSizes) : 0;
+    // Common indent units: 2 or 8 → re-normalise to 4 spaces per level
+    const unitSize = [8, 2].find(u => minIndent > 0 && minIndent % u === 0) || 0;
+
+    if (unitSize && unitSize !== 4) {
+      text = text
+        .split("\n")
+        .map(line => {
+          const m = line.match(/^( *)/);
+          if (!m || m[1].length === 0) return line;
+          const levels = Math.round(m[1].length / unitSize);
+          return "    ".repeat(levels) + line.slice(m[1].length);
+        })
+        .join("\n");
+    }
+
+    // Step 3: insert at cursor position
+    const ta = editorRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const before = currentCode.substring(0, start);
+    const after  = currentCode.substring(end);
+    const updated = before + text + after;
+    setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+    const newCursor = start + text.length;
+    setTimeout(() => {
+      if (editorRef.current) {
+        editorRef.current.selectionStart = editorRef.current.selectionEnd = newCursor;
+      }
+    }, 0);
   };
 
   const changeQuestion = (idx) => {
@@ -916,7 +1221,8 @@ export default function ContestWorkspace() {
     setActiveConsoleTab("result");
     setTestResults([]);
 
-    const mappedLang = selectedLanguage.toUpperCase() === "JAVASCRIPT" ? "JAVASCRIPT" : selectedLanguage.toUpperCase() === "PYTHON" ? "PYTHON" : "CPP";
+    const langUpper = selectedLanguage.toUpperCase();
+    const mappedLang = langUpper === "JAVASCRIPT" ? "JAVASCRIPT" : langUpper === "PYTHON" ? "PYTHON" : langUpper === "GO" ? "GO" : "CPP";
     const wrappedCode = wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {
@@ -943,6 +1249,8 @@ export default function ContestWorkspace() {
 
       const verdict = data.submission.status;
       const isAccepted = verdict === "ACCEPTED";
+      const judgeResult = data.submission.judgeResult || {};
+
       setTestResults([{
         name: "Official Judge",
         input: "Hidden and sample test cases",
@@ -952,6 +1260,15 @@ export default function ContestWorkspace() {
         error: isAccepted ? "" : verdict.replace(/_/g, " "),
         logs: [`Execution time: ${data.submission.executionTime ?? 0} ms`],
       }]);
+
+      // Trigger LeetCode-style verdict animation overlay
+      setSubmissionVerdict({
+        verdict,
+        passed: isAccepted,
+        executionTimeMs: data.submission.executionTime ?? 0,
+        passedTestCases: judgeResult.passedTestCases ?? (isAccepted ? "All" : "-"),
+        totalTestCases: judgeResult.totalTestCases ?? "-",
+      });
 
       if (isAccepted) {
         triggerConfettiParticles();
@@ -1172,8 +1489,290 @@ export default function ContestWorkspace() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ backgroundColor: "var(--bg-primary)" }}>
-      
+
+      {/* ══════ Anti-Cheat Security Violation Overlay ══════ */}
+      <AnimatePresence>
+        {showViolationOverlay && !contestEnded && (
+          <motion.div
+            key="violation-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center"
+            style={{ backdropFilter: "blur(16px)", backgroundColor: "rgba(10, 10, 14, 0.85)" }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="w-full max-w-md p-8 rounded-3xl border border-rose-500/20 shadow-2xl flex flex-col items-center text-center space-y-6"
+              style={{
+                background: "linear-gradient(135deg, rgba(20, 20, 25, 0.95), rgba(15, 15, 20, 0.95))",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(239, 68, 68, 0.15)"
+              }}
+            >
+              {/* Warning Shield Icon */}
+              <div className="h-16 w-16 rounded-full flex items-center justify-center bg-rose-500/10 border border-rose-500/20 shadow-lg">
+                <Flag className="h-8 w-8 text-rose-500" />
+              </div>
+
+              {/* Threat Warning Title */}
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold tracking-tight text-white">Security Violation Detected</h3>
+                <p className="text-xs font-medium text-rose-400/95 uppercase tracking-wider">
+                  Warning {violationCount} of 3
+                </p>
+              </div>
+
+              {/* Description */}
+              <div className="p-4 w-full rounded-2xl bg-rose-500/5 border border-rose-500/10 text-left">
+                <p className="text-sm font-semibold text-rose-200">Reason for warning:</p>
+                <p className="text-xs text-rose-300/80 mt-1 leading-relaxed">{violationReason || "Tab switch or window blur detected."}</p>
+              </div>
+
+              <p className="text-[11px] text-[var(--text-secondary)] max-w-sm leading-normal">
+                {violationCount >= 3 
+                  ? "You have exceeded the maximum of 3 warnings. Your contest will now be submitted and closed." 
+                  : "You are strictly prohibited from switching tabs, losing focus, or exiting fullscreen. Re-enter fullscreen to continue."
+                }
+              </p>
+
+              {/* Action Button */}
+              {violationCount < 3 && (
+                <button
+                  onClick={() => {
+                    const el = document.documentElement;
+                    el.requestFullscreen?.({ navigationUI: "hide" })
+                      .then(() => {
+                        setShowViolationOverlay(false);
+                      })
+                      .catch(err => {
+                        console.error("Failed to re-enter fullscreen:", err);
+                      });
+                  }}
+                  className="w-full py-3.5 font-bold rounded-2xl text-xs text-white shadow-lg shadow-rose-950/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center space-x-2"
+                  style={{
+                    background: "linear-gradient(135deg, #f43f5e, #e11d48)"
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                  <span>Re-enter Fullscreen & Resume</span>
+                </button>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════ LeetCode-style Submitting/Pending Overlay ══════ */}
+      <AnimatePresence>
+        {isSubmitting && (
+          <motion.div
+            key="submitting-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[9997] flex items-center justify-center"
+            style={{ backdropFilter: "blur(12px)", backgroundColor: "rgba(0,0,0,0.7)" }}
+          >
+            <JudgingOverlayContent
+              selectedLanguage={selectedLanguage}
+              currentCode={currentCode}
+              user={user}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════ LeetCode-style Submission Verdict Overlay ══════ */}
+      <AnimatePresence>
+        {submissionVerdict && (
+          <motion.div
+            key="verdict-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[9998] flex items-center justify-center"
+            style={{ backdropFilter: "blur(12px)", backgroundColor: "rgba(0,0,0,0.7)" }}
+            onClick={() => setSubmissionVerdict(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="relative w-full max-w-sm mx-4 rounded-3xl overflow-hidden shadow-2xl border"
+              style={{
+                backgroundColor: "var(--bg-card)",
+                borderColor: submissionVerdict.passed ? "rgba(16,185,129,0.4)" : "rgba(239,68,68,0.4)",
+              }}
+            >
+              {/* Top accent bar */}
+              <div
+                className="h-1.5 w-full"
+                style={{
+                  background: submissionVerdict.passed
+                    ? "linear-gradient(90deg,#10b981,#34d399)"
+                    : "linear-gradient(90deg,#ef4444,#f87171)",
+                }}
+              />
+
+              <div className="p-8 space-y-6">
+                {/* Animated icon ring */}
+                <div className="flex flex-col items-center space-y-4">
+                  <motion.div
+                    initial={{ scale: 0, rotate: -20 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 18, delay: 0.15 }}
+                    className="relative"
+                  >
+                    {/* Outer glow ring */}
+                    <motion.div
+                      animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0.15, 0.5] }}
+                      transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        background: submissionVerdict.passed
+                          ? "radial-gradient(circle, rgba(16,185,129,0.4) 0%, transparent 70%)"
+                          : "radial-gradient(circle, rgba(239,68,68,0.35) 0%, transparent 70%)",
+                        transform: "scale(1.8)",
+                      }}
+                    />
+                    <div
+                      className="h-20 w-20 rounded-full flex items-center justify-center text-white shadow-xl"
+                      style={{
+                        background: submissionVerdict.passed
+                          ? "linear-gradient(135deg,#059669,#10b981)"
+                          : "linear-gradient(135deg,#dc2626,#ef4444)",
+                      }}
+                    >
+                      {submissionVerdict.passed ? (
+                        <motion.svg
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
+                          width="38" height="38" viewBox="0 0 24 24" fill="none"
+                          stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        >
+                          <motion.polyline
+                            points="20 6 9 17 4 12"
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.45, delay: 0.3, ease: "easeOut" }}
+                          />
+                        </motion.svg>
+                      ) : (
+                        <motion.svg
+                          width="36" height="36" viewBox="0 0 24 24" fill="none"
+                          stroke="white" strokeWidth="2.5" strokeLinecap="round"
+                        >
+                          <motion.line x1="18" y1="6" x2="6" y2="18"
+                            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.3, delay: 0.2 }} />
+                          <motion.line x1="6" y1="6" x2="18" y2="18"
+                            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.3, delay: 0.35 }} />
+                        </motion.svg>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Verdict label */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                    className="text-center space-y-1"
+                  >
+                    <h2
+                      className="text-2xl font-black tracking-tight"
+                      style={{ color: submissionVerdict.passed ? "#10b981" : "#ef4444" }}
+                    >
+                      {submissionVerdict.passed ? "Accepted" : submissionVerdict.verdict.replace(/_/g, " ")}
+                    </h2>
+                    <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                      {submissionVerdict.passed
+                        ? "Your solution passed all test cases 🎉"
+                        : "Your solution did not pass all test cases"}
+                    </p>
+                  </motion.div>
+                </div>
+
+                {/* Stats row */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="grid grid-cols-2 gap-3"
+                >
+                  <div
+                    className="rounded-2xl p-3.5 border text-center space-y-1"
+                    style={{ backgroundColor: "var(--bg-secondary)", borderColor: "var(--border-primary)" }}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Test Cases</div>
+                    <div className="text-lg font-extrabold" style={{ color: "var(--text-primary)" }}>
+                      {submissionVerdict.passedTestCases}
+                      <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                        {submissionVerdict.totalTestCases !== "-" ? `/${submissionVerdict.totalTestCases}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="rounded-2xl p-3.5 border text-center space-y-1"
+                    style={{ backgroundColor: "var(--bg-secondary)", borderColor: "var(--border-primary)" }}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Runtime</div>
+                    <div className="text-lg font-extrabold" style={{ color: "var(--text-primary)" }}>
+                      {submissionVerdict.executionTimeMs}
+                      <span className="text-xs font-medium ml-0.5" style={{ color: "var(--text-muted)" }}>ms</span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Action buttons */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.65 }}
+                  className="flex space-x-3 pt-1"
+                >
+                  <button
+                    onClick={() => setSubmissionVerdict(null)}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all hover:opacity-80 cursor-pointer"
+                    style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)", backgroundColor: "var(--bg-secondary)" }}
+                  >
+                    Close
+                  </button>
+                  {submissionVerdict.passed && (
+                    <button
+                      onClick={() => { setSubmissionVerdict(null); setActiveConsoleTab("result"); }}
+                      className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 cursor-pointer"
+                      style={{ background: "linear-gradient(135deg,#059669,#10b981)" }}
+                    >
+                      View Details
+                    </button>
+                  )}
+                  {!submissionVerdict.passed && (
+                    <button
+                      onClick={() => setSubmissionVerdict(null)}
+                      className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 cursor-pointer"
+                      style={{ background: "linear-gradient(135deg,#dc2626,#ef4444)" }}
+                    >
+                      Try Again
+                    </button>
+                  )}
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Lobby entrance start screen */}
+
       {!contestStarted ? (
         <div className="flex-1 flex flex-col justify-center items-center p-6 relative">
           <div className="absolute top-0 left-0 right-0 h-[300px] bg-gradient-to-b from-indigo-100/20 via-transparent to-transparent pointer-events-none" />
@@ -1204,10 +1803,12 @@ export default function ContestWorkspace() {
                 <span>Contest Duration: {contest.durationMins} minutes</span>
               </div>
               <ul className="list-disc pl-4 space-y-1.5 leading-relaxed text-[var(--text-secondary)]">
-                <li>Once you click <strong>{"Start Contest"}</strong>, the ticking countdown timer begins and cannot be paused.</li>
+                <li>Once you click <strong>{"Start in Fullscreen"}</strong>, the browser enters <strong>fullscreen mode</strong> and the countdown timer begins — it cannot be paused.</li>
                 <li>Your final rank is calculated based on total points earned and the speed of your submissions.</li>
                 <li>Editorial and reference solution tabs will be locked during the timed contest block.</li>
                 <li>When the timer hits <code>00:00</code>, your editor access will lock and submissions will close automatically.</li>
+                <li><strong className="text-indigo-400">Anti-cheat active:</strong> Fullscreen is locked for the duration. Tab switching, AI shortcuts (Ctrl+K, F12, etc.), and right-click are disabled.</li>
+                <li>Supported languages: <strong>JavaScript</strong>, <strong>Python</strong>, <strong>Go</strong>.</li>
               </ul>
             </div>
 
@@ -1221,15 +1822,21 @@ export default function ContestWorkspace() {
               <button
                 disabled={isUpcoming}
                 onClick={startContest}
-                className={`flex-grow py-3 font-bold rounded-xl text-xs text-white shadow-md ${
+                className={`flex-grow py-3 font-bold rounded-xl text-xs text-white shadow-md flex items-center justify-center space-x-2 ${
                   isUpcoming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
                 }`}
                 style={{
                   background: isUpcoming ? "gray" : "var(--accent-gradient)"
                 }}
               >
-                {isUpcoming ? `Starts at ${new Date(contest.startTime).toLocaleTimeString()}` : "Start Contest"}
+                {isUpcoming ? `Starts at ${new Date(contest.startTime).toLocaleTimeString()}` : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                    <span>Start in Fullscreen</span>
+                  </>
+                )}
               </button>
+
             </div>
           </motion.div>
         </div>
@@ -1409,6 +2016,7 @@ export default function ContestWorkspace() {
                     {activeQuestion && activeQuestion.editorTemplates.markdown && <option value="markdown">Markdown</option>}
                     {activeQuestion && activeQuestion.editorTemplates.javascript && <option value="javascript">JavaScript</option>}
                     {activeQuestion && activeQuestion.editorTemplates.python && <option value="python">Python</option>}
+                    {activeQuestion && activeQuestion.editorTemplates.go && <option value="go">Go</option>}
                   </select>
                 </div>
 
@@ -1511,6 +2119,7 @@ export default function ContestWorkspace() {
                     }}
                     onScroll={handleEditorScroll}
                     onKeyDown={handleEditorKeyDown}
+                    onPaste={handleEditorPaste}
                     spellCheck="false"
                     className="absolute top-0 left-0 w-full h-full bg-transparent text-transparent pt-4 px-4 pb-12 outline-none border-none resize-none font-mono whitespace-pre leading-6 overflow-y-auto overflow-x-auto"
                     style={{ fontSize: "13px", caretColor: "var(--text-primary)" }}
@@ -1545,20 +2154,44 @@ export default function ContestWorkspace() {
                   <div className="flex items-center space-x-3">
                     <button 
                       onClick={runCode}
-                      disabled={isRunning}
-                      className="flex items-center space-x-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-bold border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
+                      disabled={isRunning || isSubmitting}
+                      className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-bold border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <Play size={10} />
-                      <span>Run Testcases</span>
+                      {isRunning ? (
+                        <RefreshCw size={10} className="animate-spin" />
+                      ) : (
+                        <Play size={10} />
+                      )}
+                      <span>{isRunning ? "Running..." : "Run Testcases"}</span>
                     </button>
 
                     <button 
                       onClick={submitCode}
-                      disabled={isSubmitting}
-                      className="flex items-center space-x-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                      disabled={isSubmitting || isRunning}
+                      className="relative flex items-center space-x-1.5 px-3 py-1 text-white rounded text-[11px] font-bold transition-all cursor-pointer disabled:opacity-60 overflow-hidden"
+                      style={{
+                        background: isSubmitting
+                          ? "linear-gradient(135deg,#7c3aed,#4f46e5)"
+                          : "linear-gradient(135deg,#059669,#10b981)",
+                        minWidth: "110px",
+                      }}
                     >
-                      <Send size={10} />
-                      <span>Submit Solution</span>
+                      {/* Shimmer sweep while submitting */}
+                      {isSubmitting && (
+                        <span
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%)",
+                            animation: "shimmer-sweep 1.2s infinite",
+                          }}
+                        />
+                      )}
+                      {isSubmitting ? (
+                        <RefreshCw size={10} className="animate-spin relative z-10" />
+                      ) : (
+                        <Send size={10} className="relative z-10" />
+                      )}
+                      <span className="relative z-10">{isSubmitting ? "Judging..." : "Submit Solution"}</span>
                     </button>
                   </div>
                 </div>
@@ -1749,5 +2382,129 @@ export default function ContestWorkspace() {
         }
       `}</style>
     </div>
+  );
+}
+
+function JudgingOverlayContent({ selectedLanguage, currentCode, user }) {
+  const [statusText, setStatusText] = useState("preparing runtime environment");
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [currentTestCase, setCurrentTestCase] = useState(1);
+  const totalTestCases = 87;
+
+  useEffect(() => {
+    // 1. Initial preparing step
+    const prepareTimer = setTimeout(() => {
+      setStatusText("compiling code");
+      setProgressPercent(15);
+    }, 900);
+
+    // 2. Compiling step
+    const compileTimer = setTimeout(() => {
+      setStatusText(`running test cases: 1 / ${totalTestCases}`);
+      setProgressPercent(35);
+    }, 1800);
+
+    // 3. Fast ticking for test cases
+    let testCaseTimer;
+    const startTicking = setTimeout(() => {
+      let current = 1;
+      testCaseTimer = setInterval(() => {
+        if (current < 81) {
+          current += Math.floor(Math.random() * 4) + 1;
+          if (current > 81) current = 81;
+          setCurrentTestCase(current);
+          setStatusText(`running test cases: ${current} / ${totalTestCases}`);
+          // Interpolate progress percentage from 35% to 92%
+          const percentage = 35 + Math.round((current / totalTestCases) * 57);
+          setProgressPercent(percentage);
+        } else {
+          clearInterval(testCaseTimer);
+        }
+      }, 70);
+    }, 1800);
+
+    return () => {
+      clearTimeout(prepareTimer);
+      clearTimeout(compileTimer);
+      clearTimeout(startTicking);
+      if (testCaseTimer) clearInterval(testCaseTimer);
+    };
+  }, []);
+
+  const lines = currentCode.split("\n");
+
+  return (
+    <motion.div
+      initial={{ scale: 0.9, opacity: 0, y: 30 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      exit={{ scale: 0.9, opacity: 0, y: 15 }}
+      transition={{ type: "spring", stiffness: 350, damping: 26 }}
+      className="relative w-full max-w-2xl mx-4 rounded-3xl overflow-hidden shadow-2xl border bg-slate-900/90 text-white"
+      style={{
+        borderColor: "rgba(255,255,255,0.08)",
+        backdropFilter: "blur(20px)",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Top amber accent bar mimicking LeetCode submissions loading color */}
+      <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 animate-pulse" />
+
+      <div className="p-8 space-y-6">
+        {/* Header */}
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2 text-xl font-bold tracking-tight text-slate-100">
+            <RefreshCw size={20} className="animate-spin text-amber-500" />
+            <span>Pending...</span>
+          </div>
+          <p className="text-xs text-slate-400">
+            <span className="font-semibold text-slate-300">{user?.username || "You"}</span> submitted at a few seconds ago
+          </p>
+        </div>
+
+        {/* Status container */}
+        <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950/60 flex items-center space-x-3 shadow-inner">
+          {/* Animated dot */}
+          <div className="relative flex h-3.5 w-3.5 items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          </div>
+          <span className="text-xs font-mono text-slate-300 capitalize">{statusText}</span>
+        </div>
+
+        {/* Sleek Progress Bar */}
+        <div className="space-y-2">
+          <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden shadow-inner">
+            <div 
+              className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 transition-all duration-300 ease-out rounded-full"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+            <span>PREPARING</span>
+            <span>RUNNING CASES</span>
+            <span>COMPLETE</span>
+          </div>
+        </div>
+
+        {/* Code Preview */}
+        <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950/90 font-mono text-xs shadow-lg">
+          <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-800 bg-slate-900/40 text-slate-400 select-none">
+            <span>Code | {selectedLanguage === "javascript" ? "JavaScript" : selectedLanguage === "python" ? "Python3" : selectedLanguage.toUpperCase()}</span>
+          </div>
+          <div className="p-4 max-h-60 overflow-y-auto flex">
+            {/* Line numbers */}
+            <div className="text-right pr-4 select-none text-slate-600 border-r border-slate-800/60 min-w-[2.5rem]">
+              {lines.map((_, i) => (
+                <div key={i} className="leading-6 font-semibold">{i + 1}</div>
+              ))}
+            </div>
+            {/* Syntax Highlighted Code */}
+            <pre className="pl-4 flex-1 overflow-x-auto leading-6 text-slate-300 font-medium">
+              <code dangerouslySetInnerHTML={{ __html: highlightCode(currentCode, selectedLanguage) }} />
+            </pre>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }

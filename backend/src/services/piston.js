@@ -1,13 +1,13 @@
 /**
  * Piston API Integration Service (CommonJS)
  */
-const { normalizeOutput } = require('./judge0');
 
 const PISTON_LANGUAGES = {
   'CPP': { language: 'cpp', version: '*' },
   'JAVA': { language: 'java', version: '*' },
   'PYTHON': { language: 'python', version: '*' },
-  'JAVASCRIPT': { language: 'javascript', version: '*' }
+  'JAVASCRIPT': { language: 'javascript', version: '*' },
+  'GO': { language: 'go', version: '*' },
 };
 
 /**
@@ -38,6 +38,7 @@ async function executePistonTestcase(sourceCode, language, stdin, expectedOutput
   if (language.toUpperCase() === 'JAVA') fileName = 'Main.java';
   if (language.toUpperCase() === 'PYTHON') fileName = 'main.py';
   if (language.toUpperCase() === 'JAVASCRIPT') fileName = 'main.js';
+  if (language.toUpperCase() === 'GO') fileName = 'main.go';
 
   const payload = {
     language: langConfig.language,
@@ -53,12 +54,17 @@ async function executePistonTestcase(sourceCode, language, stdin, expectedOutput
   };
 
   try {
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (process.env.PISTON_API_KEY) {
+      headers['Authorization'] = process.env.PISTON_API_KEY;
+    }
+
     const startTime = Date.now();
     const res = await fetch(`${pistonUrl}/execute`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(payload)
     });
 
@@ -66,6 +72,14 @@ async function executePistonTestcase(sourceCode, language, stdin, expectedOutput
 
     if (!res.ok) {
       const text = await res.text();
+      if (res.status === 401) {
+        throw new Error(
+          `Piston API returned 401 Unauthorized (Whitelist Required). To resolve this, you must either:\n` +
+          `  1. Request a whitelist token on Discord from EngineerMan and set PISTON_API_KEY in your backend/.env file,\n` +
+          `  2. Host a local Piston instance on Docker and set PISTON_API_URL=http://localhost:2000/api/v2/piston in your backend/.env,\n` +
+          `  3. Or change your execution engine by setting CODE_EXECUTION_ENGINE=judge0 and configuring JUDGE0_API_URL in your backend/.env.`
+        );
+      }
       throw new Error(`Piston API responded with status ${res.status}: ${text}`);
     }
 

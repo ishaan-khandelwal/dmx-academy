@@ -39,6 +39,40 @@ const compileCpp = (srcFile, exeName, tempDir) => {
 };
 
 /**
+ * Compiles Go code to an executable
+ */
+const compileGo = (srcFile, exeName, tempDir) => {
+  return new Promise((resolve) => {
+    const goCmd = process.env.GO_PATH || 'go';
+    const child = spawn(goCmd, ['build', '-o', exeName, srcFile], { cwd: tempDir });
+
+    let stderr = '';
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    child.on('error', (err) => {
+      resolve({
+        success: false,
+        error: `Failed to invoke Go compiler. Please ensure Go is installed and in system PATH. Details: ${err.message}`,
+      });
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        resolve({
+          success: false,
+          error: stderr || `Go compilation failed with exit code ${code}`,
+        });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+};
+
+
+/**
  * Runs a command with arguments, pipes stdin, and enforces a timeout limit
  */
 const runProcess = (cmd, args, tempDir, input, timeoutMs) => {
@@ -208,6 +242,23 @@ const executeCode = async (language, code, testCases) => {
 
       runCmd = path.join(tempDir, exeName);
       runArgs = [];
+    } else if (language === 'GO') {
+      const srcFile = 'main.go';
+      const exeName = isWindows ? 'main.exe' : 'main';
+      writeTempFile(tempDir, srcFile, code);
+
+      // Compile Go source
+      const compileResult = await compileGo(srcFile, exeName, tempDir);
+      if (!compileResult.success) {
+        return {
+          status: 'COMPILATION_ERROR',
+          executionTime: 0,
+          error: compileResult.error,
+        };
+      }
+
+      runCmd = path.join(tempDir, exeName);
+      runArgs = [];
     } else {
       return {
         status: 'COMPILATION_ERROR',
@@ -320,6 +371,22 @@ const runCustomCode = async (language, code, input) => {
       writeTempFile(tempDir, srcFile, code);
 
       const compileResult = await compileCpp(srcFile, exeName, tempDir);
+      if (!compileResult.success) {
+        return {
+          status: 'COMPILATION_ERROR',
+          executionTime: 0,
+          error: compileResult.error,
+        };
+      }
+
+      runCmd = path.join(tempDir, exeName);
+      runArgs = [];
+    } else if (language === 'GO') {
+      const srcFile = 'solution.go';
+      const exeName = isWindows ? 'solution.exe' : 'solution';
+      writeTempFile(tempDir, srcFile, code);
+
+      const compileResult = await compileGo(srcFile, exeName, tempDir);
       if (!compileResult.success) {
         return {
           status: 'COMPILATION_ERROR',

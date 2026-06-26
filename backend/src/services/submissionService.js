@@ -35,7 +35,14 @@ const submitUserCode = async ({ userId, problemId, language, code, runAll = fals
     data: {
       userId,
       problemId,
-      language: language.toUpperCase() === 'JAVA' ? 'JAVA' : language.toUpperCase() === 'PYTHON' ? 'PYTHON' : language.toUpperCase() === 'JAVASCRIPT' ? 'JAVASCRIPT' : 'CPP',
+      language: (() => {
+        const lang = language.toUpperCase();
+        if (lang === 'JAVA') return 'JAVA';
+        if (lang === 'PYTHON') return 'PYTHON';
+        if (lang === 'JAVASCRIPT') return 'JAVASCRIPT';
+        if (lang === 'GO') return 'GO';
+        return 'CPP';
+      })(),
       code,
       status: 'PENDING',
       executionTime: 0,

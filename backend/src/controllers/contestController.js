@@ -174,7 +174,13 @@ const getContestDetails = async (req, res, next) => {
       contest.contestProblems.forEach(cp => {
         if (cp.problem && cp.problem.testCases) {
           if (!isAdmin) {
-            cp.problem.testCases = cp.problem.testCases.filter(tc => tc.isSample);
+            cp.problem.testCases = cp.problem.testCases.map(tc => {
+              const plainTc = { ...tc };
+              if (!plainTc.isSample) {
+                plainTc.expectedOutput = '';
+              }
+              return plainTc;
+            });
           }
         }
       });

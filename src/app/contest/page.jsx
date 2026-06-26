@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Link from "next/link";
@@ -79,6 +80,7 @@ function computeContestTiming(c) {
 
 export default function ContestLobby() {
   const { API_BASE } = useAuth();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("all"); // all, active, upcoming, past, leaderboard
   const [searchQuery, setSearchQuery] = useState("");
   const [allContests, setAllContests] = useState([]);
@@ -91,6 +93,19 @@ export default function ContestLobby() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
 
+  // Enter Arena: navigate to the contest workspace.
+  // We trigger fullscreen immediately using the click user gesture, which is
+  // preserved during client-side Next.js route transitions.
+  const handleEnterArena = (contestId) => {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen({ navigationUI: "hide" }).catch((err) => {
+        console.warn("Fullscreen request deferred or blocked in lobby:", err);
+      });
+    }
+    router.push(`/contest/${contestId}`);
+  };
+
   // Live tick — forces re-render every second so countdowns stay accurate
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -102,11 +117,13 @@ export default function ContestLobby() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedRegs = localStorage.getItem("contest_registrations");
-      if (savedRegs) {
-        try { setRegisteredContests(JSON.parse(savedRegs)); } catch { }
-      }
-      // Check if a student is logged in
-      setIsStudentLoggedIn(localStorage.getItem("synapse_student_session") === "true");
+      const isStudent = localStorage.getItem("synapse_student_session") === "true";
+      setTimeout(() => {
+        if (savedRegs) {
+          try { setRegisteredContests(JSON.parse(savedRegs)); } catch { }
+        }
+        setIsStudentLoggedIn(isStudent);
+      }, 0);
     }
   }, []);
 
@@ -248,13 +265,19 @@ export default function ContestLobby() {
   };
 
   useEffect(() => {
-    fetchContests();
+    setTimeout(() => {
+      fetchContests();
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [API_BASE]);
 
   useEffect(() => {
     if (activeTab === "leaderboard") {
-      fetchLeaderboard();
+      setTimeout(() => {
+        fetchLeaderboard();
+      }, 0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, API_BASE]);
 
   const handleRegister = (contestId) => {
@@ -650,14 +673,14 @@ export default function ContestLobby() {
                                     <span>Attempted</span>
                                   </button>
                                 ) : (
-                                  <Link
-                                    href={`/contest/${contest.id}`}
+                                  <button
+                                    onClick={() => handleEnterArena(contest.id)}
                                     className="px-4 py-2 text-xs font-bold text-white rounded-xl shadow-md transition-all cursor-pointer flex items-center space-x-1"
                                     style={{ background: "var(--accent-gradient)" }}
                                   >
                                     <span>Enter Arena</span>
                                     <ChevronRight size={13} />
-                                  </Link>
+                                  </button>
                                 )
                               )}
 

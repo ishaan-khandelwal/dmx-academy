@@ -73,7 +73,8 @@ import { wrapCodeForBackend } from "@/utils/codeWrapper";export default function
               defaultLanguage: "javascript",
               editorTemplates: {
                 javascript: `// JavaScript Starter Code\nfunction solve(input) {\n  // Write your code here\n}`,
-                python: `# Python Starter Code\ndef solve(input):\n    pass`
+                python: `# Python Starter Code\ndef solve(input):\n    pass`,
+                go: `// Go Starter Code\npackage main\n\nimport "fmt"\n\nfunc solve(input string) {\n  // Write your Go code here\n}`
               },
               testcases: dynamicTC,
               tabs: {
@@ -568,7 +569,8 @@ import { wrapCodeForBackend } from "@/utils/codeWrapper";export default function
     setTestResults([]);
     
     const code = editorCodes[selectedLanguage] || "";
-    const mappedLang = selectedLanguage.toUpperCase() === "JAVASCRIPT" ? "JAVASCRIPT" : selectedLanguage.toUpperCase() === "PYTHON" ? "PYTHON" : "CPP";
+    const langUpper = selectedLanguage.toUpperCase();
+    const mappedLang = langUpper === "JAVASCRIPT" ? "JAVASCRIPT" : langUpper === "PYTHON" ? "PYTHON" : langUpper === "GO" ? "GO" : "CPP";
     const wrappedCode = wrapCodeForBackend(problemId, selectedLanguage, code);
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {
@@ -978,6 +980,7 @@ import { wrapCodeForBackend } from "@/utils/codeWrapper";export default function
                 {problem.editorTemplates.markdown && <option value="markdown">Markdown</option>}
                 {problem.editorTemplates.javascript && <option value="javascript">JavaScript</option>}
                 {problem.editorTemplates.python && <option value="python">Python</option>}
+                {problem.editorTemplates.go && <option value="go">Go</option>}
               </select>
             </div>
 

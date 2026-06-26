@@ -1,3 +1,4 @@
+import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 
@@ -34,7 +35,7 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
         {/* Theme initialiser – runs before React hydration to prevent flash */}
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <Script id="theme-initializer" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex flex-col selection:bg-[var(--selection-bg)] selection:text-[var(--selection-text)]"
         style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}

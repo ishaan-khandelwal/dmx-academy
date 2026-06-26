@@ -31,6 +31,13 @@ const LANGUAGE_CONFIG = {
     sourceFile: 'main.js',
     needsCompile: false,
   },
+  go: {
+    image: 'golang:1.20-alpine',
+    compileCmd: (srcPath, outPath) => `go build -o ${outPath} ${srcPath}`,
+    runCmd: (outPath) => outPath,
+    sourceFile: 'main.go',
+    needsCompile: true,
+  },
 };
 
 module.exports = {

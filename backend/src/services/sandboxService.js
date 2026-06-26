@@ -223,6 +223,10 @@ const runInSandbox = async (language, code, problemConfig, testCases, options = 
         } else if (langKey === 'java') {
           const localCompileArgs = [path.join(tempDir, srcFile)];
           compileRes = await runProcess('javac', localCompileArgs, '', 15000);
+        } else if (langKey === 'go') {
+          const exeName = isWindows ? 'main.exe' : 'main';
+          const localCompileArgs = ['build', '-o', path.join(tempDir, exeName), path.join(tempDir, srcFile)];
+          compileRes = await runProcess('go', localCompileArgs, '', 15000);
         }
       }
 
@@ -290,6 +294,9 @@ const runInSandbox = async (language, code, problemConfig, testCases, options = 
         } else if (langKey === 'javascript') {
           localCmd = 'node';
           localArgs = [path.join(tempDir, srcFile)];
+        } else if (langKey === 'go') {
+          const exeName = isWindows ? 'main.exe' : 'main';
+          localCmd = path.join(tempDir, exeName);
         }
 
         runRes = await runProcess(localCmd, localArgs, tc.input, timeoutMs);
