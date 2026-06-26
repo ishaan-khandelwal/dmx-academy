@@ -140,7 +140,7 @@ function DraggableVideo({ track, name, isLocal = false, defaultPosition = { x: 2
   useEffect(() => {
     const handleMove = (clientX, clientY) => {
       if (!isDragging) return;
-      
+
       const parent = boxRef.current?.parentElement;
       let newX = clientX - dragStart.x;
       let newY = clientY - dragStart.y;
@@ -206,7 +206,7 @@ function DraggableVideo({ track, name, isLocal = false, defaultPosition = { x: 2
       onTouchStart={handleTouchStart}
     >
       <VideoTrack trackRef={track} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-      
+
       {/* Hide camera button */}
       {onClose && (
         <button
@@ -265,7 +265,7 @@ function VideoPlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [isHostCameraHiddenLocal, setIsHostCameraHiddenLocal] = useState(false);
   const [isStudentCameraHiddenLocal, setIsStudentCameraHiddenLocal] = useState(false);
-
+console.log(session)
   const API_BASE_LIVE = getApiBase();
 
   const fetchLeaderboard = async (sessionId) => {
@@ -396,13 +396,13 @@ function VideoPlayer({
   // Find host's screen share
   const hostScreenTrack = tracks.find(
     (t) => t.source === Track.Source.ScreenShare &&
-           t.participant?.identity?.toLowerCase().trim() === normalizedHostUsername
+      t.participant?.identity?.toLowerCase().trim() === normalizedHostUsername
   );
 
   // Find host's camera
   const hostCameraTrack = tracks.find(
     (t) => t.source === Track.Source.Camera &&
-           t.participant?.identity?.toLowerCase().trim() === normalizedHostUsername
+      t.participant?.identity?.toLowerCase().trim() === normalizedHostUsername
   );
 
   // Find speaking student's camera (either remote or local)
@@ -497,7 +497,7 @@ function VideoPlayer({
             room.localParticipant.setMicrophoneEnabled(false);
             room.localParticipant.setCameraEnabled(false);
           }
-          
+
           // If sync says I'm not active speaker, disable my feeds and hand raise
           if (data.activeSpeaker !== user?.username) {
             if (activeSpeaker === user?.username) {
@@ -552,8 +552,9 @@ function VideoPlayer({
           </div>
 
           {/* Session Title & Taker */}
-          <div className="flex flex-col min-w-0">
-            <span className="text-xs font-black truncate max-w-[140px] sm:max-w-[240px]" style={{ color: "var(--text-primary)" }} title={session.title}>
+          <div className="flex flex-col min-w-0" title={session?.description}>
+            
+            <span className="text-xs font-black truncate max-w-[140px] sm:max-w-[240px]"  style={{ color: "var(--text-primary)" }} >
               {session.title}
             </span>
             <span className="text-[9px] font-bold truncate" style={{ color: "var(--text-muted)" }}>
@@ -631,19 +632,18 @@ function VideoPlayer({
           <button
             onClick={toggleRaiseHand}
             disabled={blockedUsers?.includes(user?.username)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all mr-1 ${
-              blockedUsers?.includes(user?.username)
-                ? "bg-red-500/10 text-red-500 border border-red-500/20 cursor-not-allowed"
-                : isHandRaised
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all mr-1 ${blockedUsers?.includes(user?.username)
+              ? "bg-red-500/10 text-red-500 border border-red-500/20 cursor-not-allowed"
+              : isHandRaised
                 ? "bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-500/20 cursor-pointer"
                 : "cursor-pointer"
-            }`}
+              }`}
             style={
               blockedUsers?.includes(user?.username)
                 ? {}
                 : isHandRaised
-                ? {}
-                : {
+                  ? {}
+                  : {
                     backgroundColor: "var(--bg-primary)",
                     border: "1px solid var(--border-primary)",
                     color: "var(--text-primary)"
@@ -656,8 +656,8 @@ function VideoPlayer({
               {blockedUsers?.includes(user?.username)
                 ? "Blocked"
                 : isHandRaised
-                ? "Hand Raised"
-                : "Raise Hand"}
+                  ? "Hand Raised"
+                  : "Raise Hand"}
             </span>
           </button>
         )}
@@ -862,21 +862,20 @@ function VideoPlayer({
       </div>
 
       {/* Controls displayed below the shared screen in normal mode, or overlayed on hover in fullscreen */}
-      <div 
+      <div
         className={
-          isFullscreen 
-            ? `absolute bottom-6 left-6 right-6 z-50 p-3 border rounded-[1.1rem] transition-all duration-300 shadow-2xl live-control-bar-fullscreen backdrop-blur-md ${
-                showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
-              }`
+          isFullscreen
+            ? `absolute bottom-6 left-6 right-6 z-50 p-3 border rounded-[1.1rem] transition-all duration-300 shadow-2xl live-control-bar-fullscreen backdrop-blur-md ${showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
+            }`
             : "px-3.5 py-3 border rounded-[1.1rem]"
         }
         style={
-          isFullscreen 
-            ? {} 
+          isFullscreen
+            ? {}
             : {
-                backgroundColor: "color-mix(in srgb, var(--bg-card) 88%, transparent)",
-                borderColor: "rgba(148, 163, 184, 0.18)"
-              }
+              backgroundColor: "color-mix(in srgb, var(--bg-card) 88%, transparent)",
+              borderColor: "rgba(148, 163, 184, 0.18)"
+            }
         }
       >
         {renderControls()}
@@ -885,51 +884,15 @@ function VideoPlayer({
       {/* Play remote user audio streams */}
       <RoomAudioRenderer muted={isMuted} />
 
-      {/* Session Info */}
-      {!isFullscreen && (
-        <div className="shrink-0 overflow-hidden rounded-[1.1rem] px-4 py-3"
-          style={{ backgroundColor: "color-mix(in srgb, var(--bg-card) 72%, transparent)" }}
-        >
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-lg font-black truncate" style={{ color: "var(--text-primary)" }}>
-              {session.title}
-            </h1>
-            {session.description && (
-              <p className="text-xs leading-relaxed line-clamp-2" style={{ color: "var(--text-secondary)" }}>
-                {session.description}
-              </p>
-            )}
-          </div>
 
-          {session.host && (
-            <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl shrink-0"
-              style={{ backgroundColor: "var(--bg-primary)" }}
-            >
-              <div className="w-7 h-7 rounded-lg bg-indigo-500 text-white font-extrabold flex items-center justify-center text-[10px]">
-                {session.host.username?.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p className="text-[10px] font-extrabold" style={{ color: "var(--text-primary)" }}>
-                  {session.host.username}
-                </p>
-                <p className="text-[8px] font-bold uppercase" style={{ color: "var(--text-accent)" }}>
-                  {session.host.role}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      )}
 
       {/* Speaker Acceptance Modal popup */}
       {showAcceptedModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-          <div 
+          <div
             className="w-full max-w-md rounded-3xl p-6 border shadow-2xl text-center space-y-6"
-            style={{ 
-              backgroundColor: "var(--bg-card)", 
+            style={{
+              backgroundColor: "var(--bg-card)",
               borderColor: "var(--border-accent)",
               backgroundImage: "linear-gradient(to bottom right, var(--bg-card), rgba(99, 102, 241, 0.05))"
             }}
@@ -943,7 +906,7 @@ function VideoPlayer({
             >
               <Mic size={32} className="animate-pulse" />
             </div>
-            
+
             <div className="space-y-2">
               <h3 className="text-xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
                 Speak Request Approved!
@@ -971,8 +934,8 @@ function VideoPlayer({
                   setShowAcceptedModal(false);
                 }}
                 className="flex-1 py-3 px-4 rounded-xl border transition-all hover:scale-102 text-xs font-extrabold uppercase tracking-wider cursor-pointer"
-                style={{ 
-                  backgroundColor: "var(--bg-primary)", 
+                style={{
+                  backgroundColor: "var(--bg-primary)",
                   borderColor: "var(--border-primary)",
                   color: "var(--text-primary)"
                 }}
@@ -980,7 +943,7 @@ function VideoPlayer({
                 Turn on Mic & Cam
               </button>
             </div>
-            
+
             <button
               onClick={() => setShowAcceptedModal(false)}
               className="text-[10px] font-bold underline transition-colors hover:text-[var(--text-accent)]"
@@ -1174,10 +1137,10 @@ export default function LiveViewerPage() {
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--bg-primary)" }}>
         <Navbar />
         <div className="flex-1 flex flex-col items-center justify-start min-h-[70vh] p-4 gap-8 pt-12">
-          <div 
+          <div
             className="w-full max-w-lg rounded-3xl p-8 border shadow-2xl text-center space-y-6 animate-fade-in"
-            style={{ 
-              backgroundColor: "var(--bg-card)", 
+            style={{
+              backgroundColor: "var(--bg-card)",
               borderColor: "var(--border-primary)",
               backgroundImage: "linear-gradient(to bottom right, var(--bg-card), rgba(99, 102, 241, 0.02))"
             }}
@@ -1190,7 +1153,7 @@ export default function LiveViewerPage() {
             >
               <Radio size={40} style={{ color: "var(--text-accent)" }} />
             </div>
-            
+
             <div className="space-y-3">
               <h1 className="text-3xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
                 This Session Has Ended
@@ -1348,17 +1311,17 @@ export default function LiveViewerPage() {
             video={false}
             style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
           >
-            <div 
-              ref={workspaceRef} 
+            <div
+              ref={workspaceRef}
               className={`flex-1 flex flex-col xl:flex-row min-h-0 overflow-hidden ${isFullscreen ? "h-screen w-screen bg-black" : "gap-4"}`}
               style={isFullscreen ? { display: "flex", flexDirection: "row" } : {}}
             >
               {/* Center — Live Classroom Board */}
               <div className={isFullscreen ? "flex-[3] h-full relative min-w-0 order-1" : "flex-1 flex flex-col gap-2.5 min-h-0 overflow-hidden order-1"}>
-                <VideoPlayer 
-                  session={session} 
-                  isFullscreen={isFullscreen} 
-                  toggleFullscreen={toggleFullscreen} 
+                <VideoPlayer
+                  session={session}
+                  isFullscreen={isFullscreen}
+                  toggleFullscreen={toggleFullscreen}
                   isChatOpen={isChatOpen}
                   onToggleChatOpen={() => setIsChatOpen((prev) => !prev)}
                   hasUnreadMessages={hasUnreadMessages}
