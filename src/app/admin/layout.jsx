@@ -152,10 +152,12 @@ export default function AdminLayout({ children }) {
       icon: List
     }
   ];
+  const isLiveImmersive = pathname === "/admin/live" && activeSession;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-primary)" }}>
       {/* Sidebar - Desktop */}
+      {!isLiveImmersive && (
       <aside
         className={`hidden md:flex flex-col h-full border-r transition-all duration-300 relative z-30`}
         style={{
@@ -264,9 +266,10 @@ export default function AdminLayout({ children }) {
           )}
         </div>
       </aside>
+      )}
 
       {/* Sidebar - Mobile Menu Drawer */}
-      {isMobileMenuOpen && (
+      {!isLiveImmersive && isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden bg-slate-950/60 backdrop-blur-sm">
           <div
             className="w-72 h-full flex flex-col p-6 animate-slide-right shadow-2xl"
@@ -339,7 +342,8 @@ export default function AdminLayout({ children }) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
+        {/* Header — hidden during active live (back button lives on the live page) */}
+        {!isLiveImmersive && (
         <header
           className="flex items-center justify-between px-6 py-4 border-b relative z-20"
           style={{
@@ -388,10 +392,11 @@ export default function AdminLayout({ children }) {
             <ThemeToggle />
           </div>
         </header>
+        )}
 
         {/* Content Body */}
-        <main className={`flex-1 relative ${pathname === "/admin/live" ? "overflow-hidden p-4 md:p-6 flex flex-col" : "overflow-y-auto p-6 md:p-8"}`}>
-          <div className={pathname === "/admin/live" ? "flex-1 flex flex-col min-h-0" : "max-w-6xl mx-auto space-y-8"}>
+        <main className={`flex-1 relative ${isLiveImmersive ? "overflow-hidden p-4 flex flex-col" : "overflow-y-auto p-6 md:p-8"}`}>
+          <div className={isLiveImmersive ? "flex-1 flex flex-col min-h-0" : "max-w-6xl mx-auto space-y-8"}>
             {children}
           </div>
         </main>

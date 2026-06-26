@@ -1,3 +1,5 @@
+
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -32,12 +34,12 @@ model Problem {
   outputFormat    String
   constraints     String
   explanation     String
-  timeout         Int              @default(2000)
-  memoryLimit     Int              @default(256)
-  comparator      String           @default("tokens")
-  epsilon         Float            @default(0.000001)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  comparator      String           @default("tokens")
+  epsilon         Float            @default(0.000001)
+  memoryLimit     Int              @default(256)
+  timeout         Int              @default(2000)
   contestProblems ContestProblem[]
   submissions     Submission[]
   testCases       TestCase[]
@@ -123,12 +125,13 @@ model LiveSession {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   host          User      @relation("SessionHost", fields: [hostId], references: [id])
+  polls         LivePoll[]
+  chatMessages  LiveChatMessage[]
 }
 
 model VivaQuestion {
   id             Int          @id @default(autoincrement())
   subject        String
-  topic          String       @default("")
   questionText   String
   expectedAnswer String
   keywords       String
@@ -148,6 +151,7 @@ model VivaSession {
   aiSummary   String?      @db.Text
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  aiSummary   String?
   vivaAnswers VivaAnswer[]
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -188,6 +192,20 @@ enum StudyMaterialStatus {
   FAILED
 }
 
+model StudyMaterial {
+  id               Int                 @id @default(autoincrement())
+  title            String
+  fileName         String
+  filePath         String
+  subject          String
+  uploadedById     Int
+  uploadDate       DateTime            @default(now())
+  processingStatus StudyMaterialStatus @default(UPLOADED)
+  extractedText    String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime
+}
+
 enum Role {
   USER
   ADMIN
@@ -213,7 +231,56 @@ enum SubmissionStatus {
   RUNTIME_ERROR
   COMPILATION_ERROR
   TIME_LIMIT_EXCEEDED
+  PENDING
   MEMORY_LIMIT_EXCEEDED
   INTERNAL_ERROR
-  PENDING
+}
+
+enum StudyMaterialStatus {
+  UPLOADED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ─── Live Polling ─────────────────────────────────────────────────────────────
+
+model LivePoll {
+  id          Int              @id @default(autoincrement())
+  sessionId   Int
+  question    String
+  options     String[]
+  correctIdx  Int
+  timerSecs   Int              @default(30)
+  launchedAt  DateTime         @default(now())
+  endedAt     DateTime?
+  session     LiveSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  answers     LivePollAnswer[]
+}
+
+model LivePollAnswer {
+  id          Int      @id @default(autoincrement())
+  pollId      Int
+  username    String
+  chosenIdx   Int
+  timeMs      Int
+  isCorrect   Boolean
+  points      Int      @default(0)
+  answeredAt  DateTime @default(now())
+  poll        LivePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, username])
+}
+
+// ─── Live Chat Messages ───────────────────────────────────────────────────────
+
+model LiveChatMessage {
+  id              Int         @id @default(autoincrement())
+  sessionId       Int
+  senderUsername  String
+  messageText     String
+  createdAt       DateTime    @default(now())
+  session         LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }

@@ -245,14 +245,19 @@ const endSession = async (req, res) => {
       },
     });
 
-    // Delete all chat messages associated with this session after it has ended
+    // Delete all chat messages and polls associated with this session after it has ended
     try {
-      await prisma.liveChatMessage.deleteMany({
-        where: { sessionId: sessionId },
-      });
-      console.log(`Successfully deleted chat messages for ended session ID: ${sessionId}`);
+      await prisma.liveChatMessage.deleteMany({ where: { sessionId: sessionId } });
+      // Delete poll answers first (FK child), then polls
+      const sessionPolls = await prisma.livePoll.findMany({ where: { sessionId: sessionId }, select: { id: true } });
+      const pollIds = sessionPolls.map(p => p.id);
+      if (pollIds.length > 0) {
+        await prisma.livePollAnswer.deleteMany({ where: { pollId: { in: pollIds } } });
+        await prisma.livePoll.deleteMany({ where: { sessionId: sessionId } });
+      }
+      console.log(`Successfully deleted chat messages and polls for ended session ID: ${sessionId}`);
     } catch (dbErr) {
-      console.error('Failed to clean up session chat messages:', dbErr);
+      console.error('Failed to clean up session chat/poll data:', dbErr);
     }
 
     // Close the LiveKit room if we have the service client configured
@@ -399,7 +404,206 @@ const postChatMessage = async (req, res) => {
   }
 };
 
-// ─── Background Active Session Host Absence Monitor ──────────────────
+// ─── Poll Controllers ────────────────────────────────────────────────
+
+/**
+ * @desc    Create a new poll for a live session
+ * @route   POST /api/livekit/session/:id/poll
+ * @access  Protected (ADMIN, MENTOR)
+ */
+const createPoll = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id, 10);
+    const { question, options, correctIdx, timerSecs } = req.body;
+
+    if (isNaN(sessionId)) {
+      return res.status(400).json({ success: false, message: 'Invalid session ID.' });
+    }
+    if (!question || !question.trim()) {
+      return res.status(400).json({ success: false, message: 'Question text is required.' });
+    }
+    if (!Array.isArray(options) || options.length < 2 || options.length > 4) {
+      return res.status(400).json({ success: false, message: 'Options must be an array of 2–4 items.' });
+    }
+    if (typeof correctIdx !== 'number' || correctIdx < 0 || correctIdx >= options.length) {
+      return res.status(400).json({ success: false, message: 'Invalid correct option index.' });
+    }
+
+    const session = await prisma.liveSession.findUnique({ where: { id: sessionId } });
+    if (!session || !session.isLive) {
+      return res.status(400).json({ success: false, message: 'Session is not active.' });
+    }
+
+    const poll = await prisma.livePoll.create({
+      data: {
+        sessionId,
+        question: question.trim(),
+        options: options.map(o => o.trim()),
+        correctIdx,
+        timerSecs: timerSecs || 30,
+      },
+    });
+
+    return res.status(201).json({ success: true, poll });
+  } catch (error) {
+    console.error('Error creating poll:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create poll.' });
+  }
+};
+
+/**
+ * @desc    Save a student's answer to a poll
+ * @route   POST /api/livekit/poll/:pollId/answer
+ * @access  Protected
+ */
+const savePollAnswer = async (req, res) => {
+  try {
+    const pollId = parseInt(req.params.pollId, 10);
+    const { chosenIdx, timeMs } = req.body;
+
+    if (isNaN(pollId)) {
+      return res.status(400).json({ success: false, message: 'Invalid poll ID.' });
+    }
+    if (typeof chosenIdx !== 'number') {
+      return res.status(400).json({ success: false, message: 'chosenIdx is required.' });
+    }
+
+    const poll = await prisma.livePoll.findUnique({ where: { id: pollId } });
+    if (!poll) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+
+    const isCorrect = chosenIdx === poll.correctIdx;
+    // Scoring: 1000 pts for correct, minus time penalty (capped at 0)
+    // Time penalty: 1 pt per 100ms, max deduction 500 pts
+    const timePenalty = isCorrect ? Math.min(500, Math.floor((timeMs || 0) / 100)) : 0;
+    const points = isCorrect ? Math.max(500, 1000 - timePenalty) : 0;
+
+    // Upsert — prevents duplicate answers
+    const answer = await prisma.livePollAnswer.upsert({
+      where: { pollId_username: { pollId, username: req.user.username } },
+      update: { chosenIdx, timeMs: timeMs || 0, isCorrect, points },
+      create: { pollId, username: req.user.username, chosenIdx, timeMs: timeMs || 0, isCorrect, points },
+    });
+
+    return res.status(200).json({ success: true, answer });
+  } catch (error) {
+    console.error('Error saving poll answer:', error);
+    return res.status(500).json({ success: false, message: 'Failed to save answer.' });
+  }
+};
+
+/**
+ * @desc    Get the cumulative leaderboard for a session (from all poll answers in DB)
+ * @route   GET /api/livekit/session/:id/leaderboard
+ * @access  Protected
+ */
+const getSessionLeaderboard = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id, 10);
+    if (isNaN(sessionId)) {
+      return res.status(400).json({ success: false, message: 'Invalid session ID.' });
+    }
+
+    // Fetch all polls for the session
+    const polls = await prisma.livePoll.findMany({
+      where: { sessionId },
+      include: { answers: true },
+      orderBy: { launchedAt: 'asc' },
+    });
+
+    if (polls.length === 0) {
+      return res.status(200).json({ success: true, leaderboard: [], totalPolls: 0 });
+    }
+
+    // Aggregate per-user stats across all polls
+    const userStats = {};
+    for (const poll of polls) {
+      for (const answer of poll.answers) {
+        if (!userStats[answer.username]) {
+          userStats[answer.username] = { username: answer.username, totalPoints: 0, correctCount: 0, totalAnswered: 0, totalTimeMs: 0 };
+        }
+        userStats[answer.username].totalPoints += answer.points;
+        userStats[answer.username].totalAnswered += 1;
+        userStats[answer.username].totalTimeMs += answer.timeMs;
+        if (answer.isCorrect) userStats[answer.username].correctCount += 1;
+      }
+    }
+
+    // Sort: highest points first, then fastest total time as tiebreaker
+    const leaderboard = Object.values(userStats).sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      return a.totalTimeMs - b.totalTimeMs;
+    }).map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+
+    return res.status(200).json({ success: true, leaderboard, totalPolls: polls.length });
+  } catch (error) {
+    console.error('Error fetching session leaderboard:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch leaderboard.' });
+  }
+};
+
+/**
+ * @desc    Get per-question results for a specific poll (for the post-poll result overlay)
+ * @route   GET /api/livekit/poll/:pollId/results
+ * @access  Protected
+ */
+const getPollResults = async (req, res) => {
+  try {
+    const pollId = parseInt(req.params.pollId, 10);
+    if (isNaN(pollId)) {
+      return res.status(400).json({ success: false, message: 'Invalid poll ID.' });
+    }
+
+    const poll = await prisma.livePoll.findUnique({
+      where: { id: pollId },
+      include: { answers: { orderBy: { timeMs: 'asc' } } },
+    });
+
+    if (!poll) {
+      return res.status(404).json({ success: false, message: 'Poll not found.' });
+    }
+
+    // Compute vote counts per option
+    const voteCounts = new Array(poll.options.length).fill(0);
+    for (const answer of poll.answers) {
+      if (answer.chosenIdx >= 0 && answer.chosenIdx < poll.options.length) {
+        voteCounts[answer.chosenIdx]++;
+      }
+    }
+    const totalVotes = poll.answers.length;
+
+    // Per-student ranking for this question
+    const studentResults = poll.answers
+      .map((a, idx) => ({
+        username: a.username,
+        chosenIdx: a.chosenIdx,
+        isCorrect: a.isCorrect,
+        timeMs: a.timeMs,
+        points: a.points,
+        rank: idx + 1, // already ordered by timeMs asc above
+      }));
+
+    return res.status(200).json({
+      success: true,
+      poll: {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options,
+        correctIdx: poll.correctIdx,
+        timerSecs: poll.timerSecs,
+      },
+      voteCounts,
+      totalVotes,
+      studentResults,
+    });
+  } catch (error) {
+    console.error('Error fetching poll results:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch poll results.' });
+  }
+};
+
+
 let hostLastSeenMap = {};
 
 const startLiveSessionMonitor = () => {
@@ -459,11 +663,16 @@ const startLiveSessionMonitor = () => {
             });
 
             try {
-              await prisma.liveChatMessage.deleteMany({
-                where: { sessionId: activeSession.id }
-              });
+              await prisma.liveChatMessage.deleteMany({ where: { sessionId: activeSession.id } });
+              // Delete poll data
+              const sessionPolls = await prisma.livePoll.findMany({ where: { sessionId: activeSession.id }, select: { id: true } });
+              const pollIds = sessionPolls.map(p => p.id);
+              if (pollIds.length > 0) {
+                await prisma.livePollAnswer.deleteMany({ where: { pollId: { in: pollIds } } });
+                await prisma.livePoll.deleteMany({ where: { sessionId: activeSession.id } });
+              }
             } catch (dbErr) {
-              console.error('[MONITOR] Failed to clean up session chats during auto-end:', dbErr);
+              console.error('[MONITOR] Failed to clean up session chats/polls during auto-end:', dbErr);
             }
 
             try {
@@ -493,4 +702,8 @@ module.exports = {
   deleteSession,
   getSessionChat,
   postChatMessage,
+  createPoll,
+  savePollAnswer,
+  getSessionLeaderboard,
+  getPollResults,
 };

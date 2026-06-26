@@ -23,6 +23,7 @@ import {
   VolumeX,
   Maximize,
   Minimize,
+  MessageSquare,
   WifiOff,
   CalendarOff,
   ArrowLeft,
@@ -32,10 +33,12 @@ import {
   Camera,
   XCircle,
   X,
-  MessageSquare,
+  Trophy,
 } from "lucide-react";
 import Link from "next/link";
+import LivePollPopup from "@/components/LivePollPopup";
 import LiveChat from "@/components/LiveChat";
+import { SessionLeaderboard, PollResultsOverlay, EndSessionLeaderboard } from "@/components/LiveLeaderboard";
 
 import { getApiBase } from "@/utils/api";
 
@@ -231,21 +234,67 @@ function VideoPlayer({
   session,
   isFullscreen,
   toggleFullscreen,
+  isChatOpen,
+  onToggleChatOpen,
+  hasUnreadMessages,
   activeSpeaker,
   setActiveSpeaker,
   isHandRaised,
   setIsHandRaised,
   raisedHands,
   setRaisedHands,
-  isSidebarOpen,
-  setIsSidebarOpen,
   onSessionEnded,
   blockedUsers,
   setBlockedUsers,
+  authToken,
+  activePoll,
+  setActivePoll,
+  pollResultData,
+  setPollResultData,
+  showPollResult,
+  setShowPollResult,
+  leaderboard,
+  setLeaderboard,
+  totalPolls,
+  setTotalPolls,
+  myPollAnswer,
+  setMyPollAnswer,
+  activeTab,
+  onShowPollsTab,
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isHostCameraHiddenLocal, setIsHostCameraHiddenLocal] = useState(false);
   const [isStudentCameraHiddenLocal, setIsStudentCameraHiddenLocal] = useState(false);
+
+  const API_BASE_LIVE = getApiBase();
+
+  const fetchLeaderboard = async (sessionId) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`${API_BASE_LIVE}/api/livekit/session/${sessionId}/leaderboard`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLeaderboard(data.leaderboard);
+        setTotalPolls(data.totalPolls);
+      }
+    } catch (e) { console.warn("Leaderboard fetch failed:", e); }
+  };
+
+  const fetchPollResults = async (pollId) => {
+    try {
+      const res = await fetch(`${API_BASE_LIVE}/api/livekit/poll/${pollId}/results`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPollResultData(data);
+        setShowPollResult(true);
+        setTimeout(() => setShowPollResult(false), 12000);
+      }
+    } catch (e) { console.warn("Poll results fetch failed:", e); }
+  };
 
   useEffect(() => {
     setIsStudentCameraHiddenLocal(false);
@@ -284,6 +333,9 @@ function VideoPlayer({
 
   const participants = useParticipants();
   const [isConnectionReady, setIsConnectionReady] = useState(false);
+  const normalizedHostUsername = session?.host?.username?.toLowerCase().trim();
+
+  const isHost = user?.username?.toLowerCase().trim() === normalizedHostUsername;
 
   useEffect(() => {
     if (room && room.state === "connected") {
@@ -296,10 +348,10 @@ function VideoPlayer({
     }
   }, [room, room?.state]);
 
-  const isHost = user?.username === session?.host?.username;
-  const isMentorPresent = participants.some((p) => p.identity === session?.host?.username);
+  const isMentorPresent = participants.some(
+    (p) => p.identity?.toLowerCase().trim() === normalizedHostUsername
+  );
   const showAwayOverlay = isConnectionReady && !isHost && !isMentorPresent;
-
 
   useEffect(() => {
     if (!room) return;
@@ -343,12 +395,14 @@ function VideoPlayer({
 
   // Find host's screen share
   const hostScreenTrack = tracks.find(
-    (t) => t.source === Track.Source.ScreenShare && t.participant?.identity === session.host?.username
+    (t) => t.source === Track.Source.ScreenShare &&
+           t.participant?.identity?.toLowerCase().trim() === normalizedHostUsername
   );
 
   // Find host's camera
   const hostCameraTrack = tracks.find(
-    (t) => t.source === Track.Source.Camera && t.participant?.identity === session.host?.username
+    (t) => t.source === Track.Source.Camera &&
+           t.participant?.identity?.toLowerCase().trim() === normalizedHostUsername
   );
 
   // Find speaking student's camera (either remote or local)
@@ -374,6 +428,7 @@ function VideoPlayer({
   };
 
   const toggleRaiseHand = () => {
+    if (blockedUsers?.includes(user?.username)) return;
     const newState = !isHandRaised;
     setIsHandRaised(newState);
     sendData({
@@ -451,6 +506,23 @@ function VideoPlayer({
             room.localParticipant.setMicrophoneEnabled(false);
             room.localParticipant.setCameraEnabled(false);
           }
+        } else if (data.action === "POLL_START") {
+          // New poll launched by mentor
+          setActivePoll({
+            id: data.pollId,
+            question: data.question,
+            options: data.options,
+            timerSecs: data.timerSecs,
+            startedAt: data.startedAt,
+          });
+          setMyPollAnswer(null);
+          setShowPollResult(false);
+        } else if (data.action === "POLL_END") {
+          // Poll ended (timer expired or mentor ended early)
+          setActivePoll(null);
+          // Fetch results and leaderboard from backend (DB source of truth)
+          fetchPollResults(data.pollId);
+          fetchLeaderboard(session?.id);
         }
       } catch (e) {
         console.error("Error parsing room message:", e);
@@ -470,8 +542,8 @@ function VideoPlayer({
   }, [room, activeSpeaker, user, setBlockedUsers]);
 
   const renderControls = () => (
-    <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between w-full">
-      <div className="flex items-center justify-between lg:justify-start gap-4 w-full lg:w-auto">
+    <div className="flex flex-col lg:flex-row gap-2.5 lg:items-center lg:justify-between w-full">
+      <div className="flex items-center justify-between lg:justify-start gap-3 w-full lg:w-auto">
         <div className="flex items-center gap-3 min-w-0">
           {/* Live Badge */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/90 text-white text-[10px] font-extrabold uppercase tracking-wider shrink-0">
@@ -481,7 +553,7 @@ function VideoPlayer({
 
           {/* Session Title & Taker */}
           <div className="flex flex-col min-w-0">
-            <span className="text-[11px] font-black truncate max-w-[120px] sm:max-w-[200px]" style={{ color: "var(--text-primary)" }} title={session.title}>
+            <span className="text-xs font-black truncate max-w-[140px] sm:max-w-[240px]" style={{ color: "var(--text-primary)" }} title={session.title}>
               {session.title}
             </span>
             <span className="text-[9px] font-bold truncate" style={{ color: "var(--text-muted)" }}>
@@ -490,7 +562,7 @@ function VideoPlayer({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
           <div className="w-px h-6 bg-[var(--border-primary)] hidden xs:block" />
           <SessionTimer startTime={session.startedAt} />
           <ViewerCount />
@@ -559,7 +631,7 @@ function VideoPlayer({
           <button
             onClick={toggleRaiseHand}
             disabled={blockedUsers?.includes(user?.username)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all mr-2 ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all mr-1 ${
               blockedUsers?.includes(user?.username)
                 ? "bg-red-500/10 text-red-500 border border-red-500/20 cursor-not-allowed"
                 : isHandRaised
@@ -590,26 +662,45 @@ function VideoPlayer({
           </button>
         )}
 
-        {/* Sidebar/Chat Toggle (visible in fullscreen) */}
-        {isFullscreen && (
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-lg transition-all cursor-pointer"
-            style={{
-              backgroundColor: isSidebarOpen ? "var(--bg-badge)" : "var(--bg-primary)",
-              border: isSidebarOpen ? "1px solid var(--border-accent)" : "1px solid var(--border-primary)",
-              color: isSidebarOpen ? "var(--text-accent)" : "var(--text-primary)"
-            }}
-            title={isSidebarOpen ? "Close Chat & Hands" : "Open Chat & Hands"}
-          >
-            <MessageSquare size={16} />
-          </button>
-        )}
+        {/* Chat Toggle Button */}
+        <button
+          onClick={onToggleChatOpen}
+          className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer"
+          style={{
+            backgroundColor: isChatOpen && activeTab !== "polls" ? "var(--bg-badge)" : "var(--bg-primary)",
+            borderColor: isChatOpen && activeTab !== "polls" ? "var(--border-accent)" : "var(--border-primary)",
+            color: isChatOpen && activeTab !== "polls" ? "var(--text-accent)" : "var(--text-primary)",
+          }}
+          title={isChatOpen && activeTab !== "polls" ? "Hide Live Chat" : "Show Live Chat"}
+          id="chat-toggle-btn"
+        >
+          <MessageSquare size={12} />
+          <span>Live Chat</span>
+          {!isChatOpen && hasUnreadMessages && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+          )}
+        </button>
+
+        {/* Leaderboard / Polls Tab Button */}
+        <button
+          onClick={onShowPollsTab}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer"
+          style={{
+            backgroundColor: isChatOpen && activeTab === "polls" ? "var(--bg-badge)" : "var(--bg-primary)",
+            borderColor: isChatOpen && activeTab === "polls" ? "var(--border-accent)" : "var(--border-primary)",
+            color: isChatOpen && activeTab === "polls" ? "var(--text-accent)" : "var(--text-primary)"
+          }}
+          title="Show Leaderboard & Polls"
+          id="polls-tab-toggle-btn"
+        >
+          <Trophy size={12} />
+          <span>Leaderboard</span>
+        </button>
 
         {/* Mute Toggle */}
         <button
           onClick={() => setIsMuted(!isMuted)}
-          className="p-2 rounded-lg transition-all cursor-pointer"
+          className="p-2 rounded-xl transition-all cursor-pointer"
           style={{
             backgroundColor: "var(--bg-primary)",
             border: "1px solid var(--border-primary)",
@@ -623,7 +714,7 @@ function VideoPlayer({
         {/* Fullscreen Toggle */}
         <button
           onClick={toggleFullscreen}
-          className="p-2 rounded-lg transition-all cursor-pointer"
+          className="p-2 rounded-xl transition-all cursor-pointer"
           style={{
             backgroundColor: "var(--bg-primary)",
             border: "1px solid var(--border-primary)",
@@ -638,14 +729,13 @@ function VideoPlayer({
   );
 
   return (
-    <div className={isFullscreen ? "relative h-full w-full overflow-hidden bg-black flex flex-col justify-between" : "space-y-3 flex flex-col min-h-0 flex-1"}>
+    <div className={isFullscreen ? "relative h-full w-full overflow-hidden bg-black flex flex-col justify-between" : "space-y-2.5 flex flex-col min-h-0 flex-1"}>
       {/* Video Container */}
       <div
         ref={containerRef}
-        className={isFullscreen ? "h-full w-full border-none rounded-none bg-black min-h-0 flex-1 relative" : "relative rounded-2xl overflow-hidden border shadow-2xl bg-black flex-1 min-h-0"}
+        className={isFullscreen ? "h-full w-full border-none rounded-none bg-black min-h-0 flex-1 relative" : "relative rounded-[1.45rem] overflow-hidden border bg-black flex-1 min-h-0 shadow-[0_18px_55px_rgba(15,23,42,0.16)]"}
         style={isFullscreen ? {} : {
-          borderColor: "var(--border-primary)",
-          aspectRatio: "16/9",
+          borderColor: "rgba(148, 163, 184, 0.22)",
         }}
       >
         {hostScreenTrack?.publication?.track ? (
@@ -727,23 +817,65 @@ function VideoPlayer({
             </div>
           </div>
         )}
+
+        {/* Live Poll Popup — student answer overlay */}
+        {activePoll && (
+          <LivePollPopup
+            poll={activePoll}
+            sessionToken={authToken}
+            currentUsername={user?.username}
+            onAnswered={(answerData) => {
+              setMyPollAnswer(answerData);
+              // Broadcast answer via data channel so mentor can see live vote counts
+              if (room && room.state === "connected" && room.localParticipant) {
+                try {
+                  const encoder = new TextEncoder();
+                  room.localParticipant.publishData(
+                    encoder.encode(JSON.stringify({
+                      action: "POLL_ANSWER",
+                      pollId: activePoll.id,
+                      username: user?.username,
+                      chosenIdx: answerData.chosenIdx,
+                      timeMs: answerData.timeMs,
+                    })),
+                    { reliable: true, topic: "poll-events" }
+                  );
+                } catch (e) { console.warn("Failed to broadcast poll answer:", e); }
+              }
+              // Don't clear activePoll yet — wait for POLL_END from mentor
+              setActivePoll(prev => prev ? { ...prev, _answered: true } : null);
+            }}
+            onSkip={() => {
+              setActivePoll(prev => prev ? { ...prev, _answered: true } : null);
+            }}
+          />
+        )}
+
+        {/* Per-question results overlay after POLL_END */}
+        {showPollResult && pollResultData && !activePoll && (
+          <PollResultsOverlay
+            pollData={pollResultData}
+            currentUsername={user?.username}
+            onClose={() => setShowPollResult(false)}
+          />
+        )}
       </div>
 
       {/* Controls displayed below the shared screen in normal mode, or overlayed on hover in fullscreen */}
       <div 
         className={
           isFullscreen 
-            ? `absolute bottom-6 left-6 right-6 z-50 p-3.5 border rounded-2xl transition-all duration-300 shadow-2xl live-control-bar-fullscreen backdrop-blur-md ${
+            ? `absolute bottom-6 left-6 right-6 z-50 p-3 border rounded-[1.1rem] transition-all duration-300 shadow-2xl live-control-bar-fullscreen backdrop-blur-md ${
                 showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
               }`
-            : "p-3.5 border rounded-2xl"
+            : "px-3.5 py-3 border rounded-[1.1rem]"
         }
         style={
           isFullscreen 
             ? {} 
             : {
-                backgroundColor: "var(--bg-card)",
-                borderColor: "var(--border-primary)"
+                backgroundColor: "color-mix(in srgb, var(--bg-card) 88%, transparent)",
+                borderColor: "rgba(148, 163, 184, 0.18)"
               }
         }
       >
@@ -755,24 +887,24 @@ function VideoPlayer({
 
       {/* Session Info */}
       {!isFullscreen && (
-        <div className="rounded-2xl border p-5 space-y-3 shrink-0 overflow-y-auto max-h-48"
-          style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
+        <div className="shrink-0 overflow-hidden rounded-[1.1rem] px-4 py-3"
+          style={{ backgroundColor: "color-mix(in srgb, var(--bg-card) 72%, transparent)" }}
         >
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1.5">
-            <h1 className="text-xl font-black" style={{ color: "var(--text-primary)" }}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-lg font-black truncate" style={{ color: "var(--text-primary)" }}>
               {session.title}
             </h1>
             {session.description && (
-              <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-xs leading-relaxed line-clamp-2" style={{ color: "var(--text-secondary)" }}>
                 {session.description}
               </p>
             )}
           </div>
 
           {session.host && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border shrink-0"
-              style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}
+            <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl shrink-0"
+              style={{ backgroundColor: "var(--bg-primary)" }}
             >
               <div className="w-7 h-7 rounded-lg bg-indigo-500 text-white font-extrabold flex items-center justify-center text-[10px]">
                 {session.host.username?.charAt(0).toUpperCase()}
@@ -873,15 +1005,27 @@ export default function LiveViewerPage() {
   const [error, setError] = useState(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const workspaceRef = React.useRef(null);
 
   // States for raise hand (lifted up for student sidebar visibility)
   const [activeSpeaker, setActiveSpeaker] = useState(null);
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState([]);
+
+  // Lifted poll states from VideoPlayer
+  const [activePoll, setActivePoll] = useState(null);         // { id, question, options, timerSecs, startedAt }
+  const [pollResultData, setPollResultData] = useState(null); // per-question results after POLL_END
+  const [showPollResult, setShowPollResult] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [totalPolls, setTotalPolls] = useState(0);
+  const [myPollAnswer, setMyPollAnswer] = useState(null);     // { chosenIdx, timeMs } for this question
+
+  // Active Tab for sidebar
+  const [activeTab, setActiveTab] = useState("chat");
 
   const toggleFullscreen = () => {
     if (!workspaceRef.current) return;
@@ -889,13 +1033,11 @@ export default function LiveViewerPage() {
       workspaceRef.current.requestFullscreen?.()
         .then(() => {
           setIsFullscreen(true);
-          setIsSidebarOpen(false); // Closed by default in fullscreen mode
         })
         .catch(err => console.error(err));
     } else {
       document.exitFullscreen?.();
       setIsFullscreen(false);
-      setIsSidebarOpen(true); // Re-open by default when exiting fullscreen
     }
   };
 
@@ -903,11 +1045,6 @@ export default function LiveViewerPage() {
     const handler = () => {
       const isCurrentlyFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isCurrentlyFullscreen);
-      if (isCurrentlyFullscreen) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
     };
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
@@ -1036,7 +1173,7 @@ export default function LiveViewerPage() {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--bg-primary)" }}>
         <Navbar />
-        <div className="flex-1 flex items-center justify-center min-h-[70vh] p-4">
+        <div className="flex-1 flex flex-col items-center justify-start min-h-[70vh] p-4 gap-8 pt-12">
           <div 
             className="w-full max-w-lg rounded-3xl p-8 border shadow-2xl text-center space-y-6 animate-fade-in"
             style={{ 
@@ -1075,6 +1212,15 @@ export default function LiveViewerPage() {
                 Back to Homepage
               </Link>
             </div>
+          </div>
+
+          {/* Session Leaderboard — shown to everyone at end of session */}
+          <div className="w-full max-w-2xl animate-fade-in">
+            <EndSessionLeaderboard
+              leaderboard={leaderboard}
+              totalPolls={totalPolls}
+              currentUsername={user?.username}
+            />
           </div>
         </div>
       </div>
@@ -1178,20 +1324,21 @@ export default function LiveViewerPage() {
 
   return (
     <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: "var(--bg-primary)" }}>
-      <Navbar />
-      <div className="flex-1 flex flex-col pt-24 pb-6 px-4 md:px-8 max-w-7xl mx-auto w-full min-h-0 overflow-hidden">
-        {/* Back Link */}
-        <div className="shrink-0 mb-3">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-bold transition-colors hover:opacity-80"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            <ArrowLeft size={14} />
-            Back to Home
-          </Link>
-        </div>
-
+      <div className="shrink-0 px-4 md:px-5 pt-4 max-w-[1440px] mx-auto w-full">
+        <Link
+          href="/student/dashboard"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all hover:scale-[1.02]"
+          style={{
+            backgroundColor: "var(--bg-card)",
+            borderColor: "var(--border-primary)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <ArrowLeft size={14} />
+          Back to Student Portal
+        </Link>
+      </div>
+      <div className="flex-1 flex flex-col p-4 md:pt-3 md:pb-5 md:px-5 max-w-[1440px] mx-auto w-full min-h-0 overflow-hidden">
         {LIVEKIT_URL && livekitToken ? (
           <LiveKitRoom
             serverUrl={LIVEKIT_URL}
@@ -1203,111 +1350,70 @@ export default function LiveViewerPage() {
           >
             <div 
               ref={workspaceRef} 
-              className={`flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden ${isFullscreen ? "h-screen w-screen bg-black" : "gap-4"}`}
+              className={`flex-1 flex flex-col xl:flex-row min-h-0 overflow-hidden ${isFullscreen ? "h-screen w-screen bg-black" : "gap-4"}`}
               style={isFullscreen ? { display: "flex", flexDirection: "row" } : {}}
             >
-              {/* Video + Session Info (2/3) */}
-              <div className={isFullscreen ? "flex-[3] h-full relative" : "flex-1 lg:flex-[2] flex flex-col gap-4 min-h-0 overflow-hidden"}>
+              {/* Center — Live Classroom Board */}
+              <div className={isFullscreen ? "flex-[3] h-full relative min-w-0 order-1" : "flex-1 flex flex-col gap-2.5 min-h-0 overflow-hidden order-1"}>
                 <VideoPlayer 
                   session={session} 
                   isFullscreen={isFullscreen} 
                   toggleFullscreen={toggleFullscreen} 
+                  isChatOpen={isChatOpen}
+                  onToggleChatOpen={() => setIsChatOpen((prev) => !prev)}
+                  hasUnreadMessages={hasUnreadMessages}
                   activeSpeaker={activeSpeaker}
                   setActiveSpeaker={setActiveSpeaker}
                   isHandRaised={isHandRaised}
                   setIsHandRaised={setIsHandRaised}
                   raisedHands={raisedHands}
                   setRaisedHands={setRaisedHands}
-                  isSidebarOpen={isSidebarOpen}
-                  setIsSidebarOpen={setIsSidebarOpen}
                   onSessionEnded={() => setSessionEnded(true)}
                   blockedUsers={blockedUsers}
                   setBlockedUsers={setBlockedUsers}
+                  authToken={authToken}
+                  activePoll={activePoll}
+                  setActivePoll={setActivePoll}
+                  pollResultData={pollResultData}
+                  setPollResultData={setPollResultData}
+                  showPollResult={showPollResult}
+                  setShowPollResult={setShowPollResult}
+                  leaderboard={leaderboard}
+                  setLeaderboard={setLeaderboard}
+                  totalPolls={totalPolls}
+                  setTotalPolls={setTotalPolls}
+                  myPollAnswer={myPollAnswer}
+                  setMyPollAnswer={setMyPollAnswer}
+                  activeTab={activeTab}
+                  onShowPollsTab={() => {
+                    setIsChatOpen(true);
+                    setActiveTab("polls");
+                  }}
                 />
               </div>
-              {/* Chat Sidebar (1/3) */}
-              <div className={`min-h-0 overflow-hidden gap-4 ${isFullscreen ? "w-[360px] h-full border-l p-4 backdrop-blur-md shadow-2xl shrink-0 live-chat-sidebar-fullscreen" : "lg:flex-1 lg:min-w-[280px] lg:max-w-[350px] h-full"} ${(!isFullscreen || isSidebarOpen) ? "flex flex-col" : "hidden"}`}>
-                {/* Fullscreen Sidebar Header */}
-                {isFullscreen && (
-                  <div className="flex items-center justify-between pb-2.5 border-b border-[var(--border-primary)]">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>Live Chat & Stage</span>
-                    <button
-                      onClick={() => setIsSidebarOpen(false)}
-                      className="p-1 rounded-lg transition-colors cursor-pointer flex items-center justify-center border border-transparent hover:bg-[var(--bg-hover)]"
-                      style={{ color: "var(--text-primary)" }}
-                      title="Close Sidebar"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                )}
 
-                {/* Raised Hands / Speaker Panel */}
-                <div className="rounded-2xl border p-4 space-y-3 shrink-0"
-                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
-                      <Hand size={14} className="text-amber-500" />
-                      Hand Raises {raisedHands.length > 0 && `(${raisedHands.length})`}
-                    </h3>
-                  </div>
-
-                  {raisedHands.length === 0 ? (
-                    <p className="text-[10px] font-semibold py-2 text-center" style={{ color: "var(--text-muted)" }}>
-                      No active requests to speak.
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                      {raisedHands.map((username) => (
-                        <div
-                          key={username}
-                          className="flex items-center gap-2 p-2 rounded-xl border"
-                          style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                          <span className="text-xs font-bold font-mono truncate" style={{ color: "var(--text-primary)" }}>
-                            {username}
-                          </span>
-                          {username === user?.username && (
-                            <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md uppercase ml-auto tracking-wider">
-                              You
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {activeSpeaker && (
-                    <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: "var(--border-primary)" }}>
-                      <div className="space-y-0.5">
-                        <p className="text-[9px] font-bold" style={{ color: "var(--text-muted)" }}>Speaking Student</p>
-                        <p className="text-xs font-black text-[var(--text-accent)]">{activeSpeaker}</p>
-                      </div>
-                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider select-none border"
-                        style={{
-                          backgroundColor: "var(--bg-badge)",
-                          color: "var(--text-accent)",
-                          borderColor: "var(--border-accent)"
-                        }}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        On Stage
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1 min-h-0">
-                  <LiveChat 
-                    className="h-full" 
-                    blockedUsers={blockedUsers} 
-                    setBlockedUsers={setBlockedUsers} 
-                    hostUsername={session?.host?.username} 
-                    sessionId={session?.id}
-                  />
-                </div>
+              {/* Right — Live Chat */}
+              <div className={`flex flex-col min-h-0 overflow-hidden shrink-0 order-2 xl:w-[320px] xl:min-w-[300px] xl:max-w-[360px] ${isFullscreen ? "w-[360px] h-full border-l backdrop-blur-md shadow-2xl live-chat-sidebar-fullscreen" : ""} ${!isChatOpen ? "hidden" : ""}`}>
+                <LiveChat
+                  persistent
+                  sessionId={session?.id}
+                  hostUsername={session?.host?.username || ""}
+                  blockedUsers={blockedUsers}
+                  setBlockedUsers={setBlockedUsers}
+                  className={`flex-1 min-h-0 ${isFullscreen ? "rounded-none border-0" : ""}`}
+                  isOpen={isChatOpen}
+                  onClose={() => setIsChatOpen(false)}
+                  onUnreadChange={setHasUnreadMessages}
+                  raisedHands={raisedHands}
+                  activeSpeaker={activeSpeaker}
+                  activePoll={activePoll}
+                  pollResultData={pollResultData}
+                  leaderboard={leaderboard}
+                  totalPolls={totalPolls}
+                  controlledActiveTab={activeTab}
+                  onTabChange={setActiveTab}
+                  authToken={authToken}
+                />
               </div>
             </div>
           </LiveKitRoom>
