@@ -42,7 +42,7 @@ const getIcon = (category) => {
 };
 
 export default function PracticeCatalogPage() {
-  const { API_BASE } = useAuth();
+  const { user, token, API_BASE } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [selectedDifficulty, setSelectedDifficulty] = useState("All Difficulties");
@@ -53,21 +53,34 @@ export default function PracticeCatalogPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    // Load completed tasks from localStorage if any
-    if (typeof window !== "undefined") {
-      const solved = localStorage.getItem("solved_problems");
-      if (solved) {
-        try {
-          const parsed = JSON.parse(solved);
-          setTimeout(() => {
-            setCompletedProblems(parsed);
-          }, 0);
-        } catch {
-          // ignore parsing errors
+  }, []);
+
+  useEffect(() => {
+    async function loadCompletedProblems() {
+      if (!user) return;
+      const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(hasRealToken
+          ? { Authorization: `Bearer ${token}` }
+          : { "x-bypass-auth": "true", "x-bypass-role": user?.role === "ADMIN" ? "ADMIN" : "USER" }),
+      };
+      try {
+        const res = await fetch(`${API_BASE}/api/submissions?userId=${user.id}&status=ACCEPTED`, {
+          headers,
+          signal: AbortSignal.timeout(30000)
+        });
+        const data = await res.json();
+        if (data.success && data.submissions) {
+          const solvedSlugs = Array.from(new Set(data.submissions.map(sub => sub.problem?.slug).filter(Boolean)));
+          setCompletedProblems(solvedSlugs);
         }
+      } catch (err) {
+        console.error("Failed to load completed problems from DB:", err);
       }
     }
-  }, []);
+    loadCompletedProblems();
+  }, [user, token, API_BASE]);
 
   useEffect(() => {
     async function loadProblems() {

@@ -14,30 +14,6 @@ import { useAuth } from "@/context/AuthContext";
 import { wrapCodeForBackend } from "@/utils/codeWrapper";
 import { getSocket } from "@/utils/socket";
 
-function saveLocalSubmission(sub) {
-  if (typeof window === "undefined") return;
-  const key = "dmx_local_submissions";
-  let existing = [];
-  try {
-    existing = JSON.parse(localStorage.getItem(key) || "[]");
-  } catch { }
-  
-  const newSub = {
-    id: `local-sub-${Date.now()}`,
-    problemId: sub.problemId,
-    dbProblemId: sub.dbProblemId || null,
-    problem: {
-      title: sub.title,
-      slug: sub.problemId,
-    },
-    status: sub.status || "ACCEPTED",
-    language: sub.language,
-    code: sub.code,
-    createdAt: new Date().toISOString(),
-  };
-  existing.unshift(newSub);
-  localStorage.setItem(key, JSON.stringify(existing));
-}
 
 const getRandom = () => Math.random();
 const getCurrentTime = () => Date.now();
@@ -105,7 +81,7 @@ function getAuthHeaders() {
 export default function ContestWorkspace() {
   const params = useParams();
   const contestId = params.contestId;
-  const { token, API_BASE } = useAuth();
+  const { user, token, API_BASE } = useAuth();
   const [contest, setContest] = useState(null);
   const [loadingContest, setLoadingContest] = useState(true);
 
@@ -142,6 +118,7 @@ export default function ContestWorkspace() {
   const [testResults, setTestResults] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionVerdict, setSubmissionVerdict] = useState(null); // null | { verdict, passed, executionTimeMs, passedTestCases, totalTestCases }
   const [finalScoreboard, setFinalScoreboard] = useState([]);
 
   // Voice Assistant states
@@ -590,24 +567,131 @@ export default function ContestWorkspace() {
     }
   };
 
-  // Safe tab indentation key handler
+  // Smart indentation + bracket auto-close key handler
   const handleEditorKeyDown = (e) => {
+    const ta = e.target;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const code = currentCode;
+
+    // ── Tab key: insert 2 spaces (or un-indent selected lines with Shift+Tab) ──
     if (e.key === "Tab") {
       e.preventDefault();
-      const start = e.target.selectionStart;
-      const end = e.target.selectionEnd;
-      const updatedCode = currentCode.substring(0, start) + "  " + currentCode.substring(end);
-      
-      setEditorCodes(prev => ({
-        ...prev,
-        [currentCodeKey]: updatedCode
-      }));
-      
+      if (e.shiftKey && start !== end) {
+        // Un-indent selected lines
+        const before = code.substring(0, start);
+        const selected = code.substring(start, end);
+        const after = code.substring(end);
+        const unindented = selected.replace(/^  /gm, "");
+        const diff = selected.length - unindented.length;
+        const updated = before + unindented + after;
+        setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.selectionStart = start;
+            editorRef.current.selectionEnd = end - diff;
+          }
+        }, 0);
+      } else {
+        const updated = code.substring(0, start) + "  " + code.substring(end);
+        setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 2;
+          }
+        }, 0);
+      }
+      return;
+    }
+
+    // ── Enter key: smart auto-indent ──
+    if (e.key === "Enter") {
+      e.preventDefault();
+      // Find the current line's leading whitespace
+      const lineStart = code.lastIndexOf("\n", start - 1) + 1;
+      const currentLine = code.substring(lineStart, start);
+      const leadingWhitespace = currentLine.match(/^(\s*)/)[1];
+
+      // Check if the character just before cursor opens a new block
+      const charBefore = code[start - 1];
+      const charAfter = code[start];
+      const opensBlock = charBefore === "{" || charBefore === ":" || charBefore === "(" || charBefore === "[";
+      const closingPair = { "{": "}", "(": ")", "[": "]" };
+      const matchingClose = closingPair[charBefore];
+
+      let newCode;
+      let newCursor;
+
+      if (opensBlock && matchingClose && charAfter === matchingClose) {
+        // Cursor between { } — add indented line + closing brace on its own line
+        const inner = "\n" + leadingWhitespace + "  ";
+        const outer = "\n" + leadingWhitespace;
+        newCode = code.substring(0, start) + inner + outer + code.substring(end);
+        newCursor = start + inner.length;
+      } else if (opensBlock) {
+        // Line ends with block opener — indent one level deeper
+        const indent = "\n" + leadingWhitespace + "  ";
+        newCode = code.substring(0, start) + indent + code.substring(end);
+        newCursor = start + indent.length;
+      } else {
+        // Normal enter — keep same indentation
+        const indent = "\n" + leadingWhitespace;
+        newCode = code.substring(0, start) + indent + code.substring(end);
+        newCursor = start + indent.length;
+      }
+
+      setEditorCodes(prev => ({ ...prev, [currentCodeKey]: newCode }));
       setTimeout(() => {
         if (editorRef.current) {
-          editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 2;
+          editorRef.current.selectionStart = editorRef.current.selectionEnd = newCursor;
         }
       }, 0);
+      return;
+    }
+
+    // ── Auto-close brackets and quotes ──
+    const autoPairs = { "{": "}", "(": ")", "[": "]" };
+    if (autoPairs[e.key] && start === end) {
+      e.preventDefault();
+      const close = autoPairs[e.key];
+      const updated = code.substring(0, start) + e.key + close + code.substring(end);
+      setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 1;
+        }
+      }, 0);
+      return;
+    }
+
+    // ── Skip over existing closing bracket if typed ──
+    const closingChars = ["}", ")", "]"];
+    if (closingChars.includes(e.key) && code[start] === e.key && start === end) {
+      e.preventDefault();
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 1;
+        }
+      }, 0);
+      return;
+    }
+
+    // ── Backspace: remove auto-paired empty bracket pair ──
+    if (e.key === "Backspace" && start === end && start > 0) {
+      const pairOpeners = { "}": "{", ")": "(", "]": "[" };
+      const prevChar = code[start - 1];
+      const nextChar = code[start];
+      if (autoPairs[prevChar] && autoPairs[prevChar] === nextChar) {
+        e.preventDefault();
+        const updated = code.substring(0, start - 1) + code.substring(start + 1);
+        setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.selectionStart = editorRef.current.selectionEnd = start - 1;
+          }
+        }, 0);
+        return;
+      }
     }
   };
 
@@ -620,6 +704,54 @@ export default function ContestWorkspace() {
       highlightRef.current.scrollTop = e.target.scrollTop;
       highlightRef.current.scrollLeft = e.target.scrollLeft;
     }
+  };
+
+  // Paste handler: normalizes tabs and large indentation to 2-space style
+  const handleEditorPaste = (e) => {
+    e.preventDefault();
+    const raw = (e.clipboardData || window.clipboardData).getData("text");
+    if (!raw) return;
+
+    // Step 1: convert tab characters to 4 spaces so we can measure uniformly
+    let text = raw.replace(/\t/g, "    ");
+
+    // Step 2: detect the predominant indent unit used in pasted code
+    const indentSizes = text
+      .split("\n")
+      .map(line => { const m = line.match(/^( +)/); return m ? m[1].length : 0; })
+      .filter(n => n > 0);
+
+    const minIndent = indentSizes.length > 0 ? Math.min(...indentSizes) : 0;
+    // Common indent units: 4 or 8 → re-normalise to 2 per level
+    const unitSize = [8, 4, 3].find(u => minIndent > 0 && minIndent % u === 0) || 0;
+
+    if (unitSize && unitSize !== 2) {
+      text = text
+        .split("\n")
+        .map(line => {
+          const m = line.match(/^( *)/);
+          if (!m || m[1].length === 0) return line;
+          const levels = Math.round(m[1].length / unitSize);
+          return "  ".repeat(levels) + line.slice(m[1].length);
+        })
+        .join("\n");
+    }
+
+    // Step 3: insert at cursor position
+    const ta = editorRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const before = currentCode.substring(0, start);
+    const after  = currentCode.substring(end);
+    const updated = before + text + after;
+    setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
+    const newCursor = start + text.length;
+    setTimeout(() => {
+      if (editorRef.current) {
+        editorRef.current.selectionStart = editorRef.current.selectionEnd = newCursor;
+      }
+    }, 0);
   };
 
   const changeQuestion = (idx) => {
@@ -967,6 +1099,8 @@ export default function ContestWorkspace() {
 
       const verdict = data.submission.status;
       const isAccepted = verdict === "ACCEPTED";
+      const judgeResult = data.submission.judgeResult || {};
+
       setTestResults([{
         name: "Official Judge",
         input: "Hidden and sample test cases",
@@ -977,20 +1111,21 @@ export default function ContestWorkspace() {
         logs: [`Execution time: ${data.submission.executionTime ?? 0} ms`],
       }]);
 
+      // Trigger LeetCode-style verdict animation overlay
+      setSubmissionVerdict({
+        verdict,
+        passed: isAccepted,
+        executionTimeMs: data.submission.executionTime ?? 0,
+        passedTestCases: judgeResult.passedTestCases ?? (isAccepted ? "All" : "-"),
+        totalTestCases: judgeResult.totalTestCases ?? "-",
+      });
+
       if (isAccepted) {
         triggerConfettiParticles();
         setSolvedQuestions(prev => {
           if (prev.includes(activeQuestion.id)) return prev;
           setUserScore(score => score + activeQuestion.points);
           return [...prev, activeQuestion.id];
-        });
-        saveLocalSubmission({
-          problemId: activeQuestion.slug || activeQuestion.id,
-          dbProblemId: activeQuestion.id,
-          title: activeQuestion.title,
-          language: mappedLang,
-          code: currentCode,
-          status: verdict,
         });
       }
     } catch (err) {
@@ -1006,159 +1141,6 @@ export default function ContestWorkspace() {
     } finally {
       setIsSubmitting(false);
     }
-    return;
-
-    setTimeout(() => {
-      const results = [];
-      const originalConsoleLog = console.log;
-
-      activeQuestion.testcases.forEach((tc, index) => {
-        let passed = false;
-        let output = "";
-        let error = "";
-        const runLogs = [];
-
-        console.log = (...args) => {
-          runLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
-        };
-
-        if (selectedLanguage === "javascript") {
-          try {
-            const funcNameMatch = currentCode.match(/function\s+(\w+)\s*\(/) || currentCode.match(/const\s+(\w+)\s*=\s*\(/);
-            const functionName = funcNameMatch ? funcNameMatch[1] : null;
-
-            if (!functionName) throw new Error("Could not find a valid function declaration in your code.");
-
-            const evaluator = new Function(`${currentCode}; return ${functionName};`);
-            const targetFunction = evaluator();
-
-            let parsedInputs;
-            if (activeQuestion.id === "rate-limiter" || activeQuestion.slug === "rate-limiter") {
-              const mockRedis = {
-                multi: () => {
-                  const tx = {
-                    zremrangebyscore: () => tx,
-                    zcard: () => tx,
-                    zadd: () => tx,
-                    expire: () => tx,
-                    exec: async () => [null, 2, null, null]
-                  };
-                  return tx;
-                }
-              };
-              parsedInputs = [mockRedis, "user_123", 5, 60];
-            } else {
-              try {
-                parsedInputs = JSON.parse(`[${testcaseInputs[index] || tc.input}]`);
-              } catch {
-                parsedInputs = [testcaseInputs[index] || tc.input];
-              }
-            }
-
-            const actual = targetFunction(...parsedInputs);
-            output = (actual !== undefined) ? JSON.stringify(actual) : "";
-
-            if (typeof tc.assertion === "function") {
-              passed = tc.assertion(currentCode, targetFunction);
-            } else {
-              const cleanExpected = (tc.expectedOutput || tc.expected || "").toString().trim().replace(/\r/g, "");
-              const cleanActual = (actual !== undefined ? actual : "").toString().trim().replace(/\r/g, "");
-              const cleanLogs = runLogs.join("\n").trim().replace(/\r/g, "");
-              passed = (cleanActual === cleanExpected) || (cleanLogs === cleanExpected);
-            }
-          } catch (e) {
-            error = e.message;
-            passed = false;
-          }
-        } else {
-          try {
-            runLogs.push("> Compiling code variables...");
-            runLogs.push(`> Simulating execution for ${selectedLanguage} interpreter...`);
-            passed = tc.assertion ? tc.assertion(currentCode, null) : true;
-            output = tc.expected || tc.expectedOutput;
-          } catch (e) {
-            error = e.message;
-            passed = false;
-          }
-        }
-
-        console.log = originalConsoleLog;
-
-        results.push({
-          name: tc.name || "Test Case",
-          input: testcaseInputs[index] || tc.input,
-          expected: tc.expected || tc.expectedOutput,
-          actual: output || runLogs.join("\n"),
-          passed,
-          error,
-          logs: runLogs
-        });
-      });
-
-      // Update UI with fresh results
-      setTestResults(results);
-      setIsSubmitting(false);
-
-      // Use fresh local results — NOT stale testResults state
-      const allPassed = results.length > 0 && results.every(r => r.passed);
-      const verdict = allPassed ? "ACCEPTED" : "WRONG_ANSWER";
-      if (allPassed) {
-        triggerConfettiParticles();
-        // Award points only once per question
-        setSolvedQuestions(prev => {
-          if (prev.includes(activeQuestion.id)) return prev;
-          setUserScore(score => score + activeQuestion.points);
-          return [...prev, activeQuestion.id];
-        });
-      }
-
-      // Prepare wrapped code for backend validation
-      const mappedLang = selectedLanguage.toUpperCase() === "JAVASCRIPT" ? "JAVASCRIPT" : selectedLanguage.toUpperCase() === "PYTHON" ? "PYTHON" : "CPP";
-      const wrappedCode = wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
-
-      const localSub = {
-        problemId: activeQuestion.slug || activeQuestion.id,
-        dbProblemId: activeQuestion.id,
-        title: activeQuestion.title,
-        language: mappedLang,
-        code: currentCode,
-        status: verdict,
-      };
-
-      // Save locally
-      saveLocalSubmission(localSub);
-
-      // Post submission to backend DB if it's a database contest (numeric ID)
-      const isNumeric = /^\d+$/.test(contestId);
-      if (isNumeric) {
-        try {
-          const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
-          const headers = {
-            "Content-Type": "application/json",
-            ...(hasRealToken
-              ? { Authorization: `Bearer ${token}` }
-              : { "x-bypass-auth": "true", "x-bypass-role": "USER" }),
-          };
-          fetch(`${API_BASE}/api/submissions/problem/${activeQuestion.id}`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              language: mappedLang,
-              code: wrappedCode,
-            }),
-            signal: AbortSignal.timeout(30000),
-          }).then(res => {
-            if (res.ok) {
-              console.log("Contest submission recorded in backend database");
-            }
-          }).catch(err => {
-            console.error("Failed to post contest submission to backend:", err);
-          });
-        } catch (err) {
-          console.error("Failed to send contest submission:", err);
-        }
-      }
-    }, 1200);
   };
 
   // Canvas Confetti generator
@@ -1358,7 +1340,215 @@ export default function ContestWorkspace() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ backgroundColor: "var(--bg-primary)" }}>
       
+      {/* ══════ LeetCode-style Submitting/Pending Overlay ══════ */}
+      <AnimatePresence>
+        {isSubmitting && (
+          <motion.div
+            key="submitting-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[9997] flex items-center justify-center"
+            style={{ backdropFilter: "blur(12px)", backgroundColor: "rgba(0,0,0,0.7)" }}
+          >
+            <JudgingOverlayContent
+              selectedLanguage={selectedLanguage}
+              currentCode={currentCode}
+              user={user}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════ LeetCode-style Submission Verdict Overlay ══════ */}
+      <AnimatePresence>
+        {submissionVerdict && (
+          <motion.div
+            key="verdict-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[9998] flex items-center justify-center"
+            style={{ backdropFilter: "blur(12px)", backgroundColor: "rgba(0,0,0,0.7)" }}
+            onClick={() => setSubmissionVerdict(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="relative w-full max-w-sm mx-4 rounded-3xl overflow-hidden shadow-2xl border"
+              style={{
+                backgroundColor: "var(--bg-card)",
+                borderColor: submissionVerdict.passed ? "rgba(16,185,129,0.4)" : "rgba(239,68,68,0.4)",
+              }}
+            >
+              {/* Top accent bar */}
+              <div
+                className="h-1.5 w-full"
+                style={{
+                  background: submissionVerdict.passed
+                    ? "linear-gradient(90deg,#10b981,#34d399)"
+                    : "linear-gradient(90deg,#ef4444,#f87171)",
+                }}
+              />
+
+              <div className="p-8 space-y-6">
+                {/* Animated icon ring */}
+                <div className="flex flex-col items-center space-y-4">
+                  <motion.div
+                    initial={{ scale: 0, rotate: -20 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 18, delay: 0.15 }}
+                    className="relative"
+                  >
+                    {/* Outer glow ring */}
+                    <motion.div
+                      animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0.15, 0.5] }}
+                      transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        background: submissionVerdict.passed
+                          ? "radial-gradient(circle, rgba(16,185,129,0.4) 0%, transparent 70%)"
+                          : "radial-gradient(circle, rgba(239,68,68,0.35) 0%, transparent 70%)",
+                        transform: "scale(1.8)",
+                      }}
+                    />
+                    <div
+                      className="h-20 w-20 rounded-full flex items-center justify-center text-white shadow-xl"
+                      style={{
+                        background: submissionVerdict.passed
+                          ? "linear-gradient(135deg,#059669,#10b981)"
+                          : "linear-gradient(135deg,#dc2626,#ef4444)",
+                      }}
+                    >
+                      {submissionVerdict.passed ? (
+                        <motion.svg
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
+                          width="38" height="38" viewBox="0 0 24 24" fill="none"
+                          stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        >
+                          <motion.polyline
+                            points="20 6 9 17 4 12"
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.45, delay: 0.3, ease: "easeOut" }}
+                          />
+                        </motion.svg>
+                      ) : (
+                        <motion.svg
+                          width="36" height="36" viewBox="0 0 24 24" fill="none"
+                          stroke="white" strokeWidth="2.5" strokeLinecap="round"
+                        >
+                          <motion.line x1="18" y1="6" x2="6" y2="18"
+                            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.3, delay: 0.2 }} />
+                          <motion.line x1="6" y1="6" x2="18" y2="18"
+                            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.3, delay: 0.35 }} />
+                        </motion.svg>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Verdict label */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                    className="text-center space-y-1"
+                  >
+                    <h2
+                      className="text-2xl font-black tracking-tight"
+                      style={{ color: submissionVerdict.passed ? "#10b981" : "#ef4444" }}
+                    >
+                      {submissionVerdict.passed ? "Accepted" : submissionVerdict.verdict.replace(/_/g, " ")}
+                    </h2>
+                    <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                      {submissionVerdict.passed
+                        ? "Your solution passed all test cases 🎉"
+                        : "Your solution did not pass all test cases"}
+                    </p>
+                  </motion.div>
+                </div>
+
+                {/* Stats row */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="grid grid-cols-2 gap-3"
+                >
+                  <div
+                    className="rounded-2xl p-3.5 border text-center space-y-1"
+                    style={{ backgroundColor: "var(--bg-secondary)", borderColor: "var(--border-primary)" }}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Test Cases</div>
+                    <div className="text-lg font-extrabold" style={{ color: "var(--text-primary)" }}>
+                      {submissionVerdict.passedTestCases}
+                      <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                        {submissionVerdict.totalTestCases !== "-" ? `/${submissionVerdict.totalTestCases}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="rounded-2xl p-3.5 border text-center space-y-1"
+                    style={{ backgroundColor: "var(--bg-secondary)", borderColor: "var(--border-primary)" }}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Runtime</div>
+                    <div className="text-lg font-extrabold" style={{ color: "var(--text-primary)" }}>
+                      {submissionVerdict.executionTimeMs}
+                      <span className="text-xs font-medium ml-0.5" style={{ color: "var(--text-muted)" }}>ms</span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Action buttons */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.65 }}
+                  className="flex space-x-3 pt-1"
+                >
+                  <button
+                    onClick={() => setSubmissionVerdict(null)}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all hover:opacity-80 cursor-pointer"
+                    style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)", backgroundColor: "var(--bg-secondary)" }}
+                  >
+                    Close
+                  </button>
+                  {submissionVerdict.passed && (
+                    <button
+                      onClick={() => { setSubmissionVerdict(null); setActiveConsoleTab("result"); }}
+                      className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 cursor-pointer"
+                      style={{ background: "linear-gradient(135deg,#059669,#10b981)" }}
+                    >
+                      View Details
+                    </button>
+                  )}
+                  {!submissionVerdict.passed && (
+                    <button
+                      onClick={() => setSubmissionVerdict(null)}
+                      className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 cursor-pointer"
+                      style={{ background: "linear-gradient(135deg,#dc2626,#ef4444)" }}
+                    >
+                      Try Again
+                    </button>
+                  )}
+                </motion.div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Lobby entrance start screen */}
+
       {!contestStarted ? (
         <div className="flex-1 flex flex-col justify-center items-center p-6 relative">
           <div className="absolute top-0 left-0 right-0 h-[300px] bg-gradient-to-b from-indigo-100/20 via-transparent to-transparent pointer-events-none" />
@@ -1696,6 +1886,7 @@ export default function ContestWorkspace() {
                     }}
                     onScroll={handleEditorScroll}
                     onKeyDown={handleEditorKeyDown}
+                    onPaste={handleEditorPaste}
                     spellCheck="false"
                     className="absolute top-0 left-0 w-full h-full bg-transparent text-transparent pt-4 px-4 pb-12 outline-none border-none resize-none font-mono whitespace-pre leading-6 overflow-y-auto overflow-x-auto"
                     style={{ fontSize: "13px", caretColor: "var(--text-primary)" }}
@@ -1730,20 +1921,44 @@ export default function ContestWorkspace() {
                   <div className="flex items-center space-x-3">
                     <button 
                       onClick={runCode}
-                      disabled={isRunning}
-                      className="flex items-center space-x-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-bold border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
+                      disabled={isRunning || isSubmitting}
+                      className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-bold border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <Play size={10} />
-                      <span>Run Testcases</span>
+                      {isRunning ? (
+                        <RefreshCw size={10} className="animate-spin" />
+                      ) : (
+                        <Play size={10} />
+                      )}
+                      <span>{isRunning ? "Running..." : "Run Testcases"}</span>
                     </button>
 
                     <button 
                       onClick={submitCode}
-                      disabled={isSubmitting}
-                      className="flex items-center space-x-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                      disabled={isSubmitting || isRunning}
+                      className="relative flex items-center space-x-1.5 px-3 py-1 text-white rounded text-[11px] font-bold transition-all cursor-pointer disabled:opacity-60 overflow-hidden"
+                      style={{
+                        background: isSubmitting
+                          ? "linear-gradient(135deg,#7c3aed,#4f46e5)"
+                          : "linear-gradient(135deg,#059669,#10b981)",
+                        minWidth: "110px",
+                      }}
                     >
-                      <Send size={10} />
-                      <span>Submit Solution</span>
+                      {/* Shimmer sweep while submitting */}
+                      {isSubmitting && (
+                        <span
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%)",
+                            animation: "shimmer-sweep 1.2s infinite",
+                          }}
+                        />
+                      )}
+                      {isSubmitting ? (
+                        <RefreshCw size={10} className="animate-spin relative z-10" />
+                      ) : (
+                        <Send size={10} className="relative z-10" />
+                      )}
+                      <span className="relative z-10">{isSubmitting ? "Judging..." : "Submit Solution"}</span>
                     </button>
                   </div>
                 </div>
@@ -1934,5 +2149,129 @@ export default function ContestWorkspace() {
         }
       `}</style>
     </div>
+  );
+}
+
+function JudgingOverlayContent({ selectedLanguage, currentCode, user }) {
+  const [statusText, setStatusText] = useState("preparing runtime environment");
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [currentTestCase, setCurrentTestCase] = useState(1);
+  const totalTestCases = 87;
+
+  useEffect(() => {
+    // 1. Initial preparing step
+    const prepareTimer = setTimeout(() => {
+      setStatusText("compiling code");
+      setProgressPercent(15);
+    }, 900);
+
+    // 2. Compiling step
+    const compileTimer = setTimeout(() => {
+      setStatusText(`running test cases: 1 / ${totalTestCases}`);
+      setProgressPercent(35);
+    }, 1800);
+
+    // 3. Fast ticking for test cases
+    let testCaseTimer;
+    const startTicking = setTimeout(() => {
+      let current = 1;
+      testCaseTimer = setInterval(() => {
+        if (current < 81) {
+          current += Math.floor(Math.random() * 4) + 1;
+          if (current > 81) current = 81;
+          setCurrentTestCase(current);
+          setStatusText(`running test cases: ${current} / ${totalTestCases}`);
+          // Interpolate progress percentage from 35% to 92%
+          const percentage = 35 + Math.round((current / totalTestCases) * 57);
+          setProgressPercent(percentage);
+        } else {
+          clearInterval(testCaseTimer);
+        }
+      }, 70);
+    }, 1800);
+
+    return () => {
+      clearTimeout(prepareTimer);
+      clearTimeout(compileTimer);
+      clearTimeout(startTicking);
+      if (testCaseTimer) clearInterval(testCaseTimer);
+    };
+  }, []);
+
+  const lines = currentCode.split("\n");
+
+  return (
+    <motion.div
+      initial={{ scale: 0.9, opacity: 0, y: 30 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      exit={{ scale: 0.9, opacity: 0, y: 15 }}
+      transition={{ type: "spring", stiffness: 350, damping: 26 }}
+      className="relative w-full max-w-2xl mx-4 rounded-3xl overflow-hidden shadow-2xl border bg-slate-900/90 text-white"
+      style={{
+        borderColor: "rgba(255,255,255,0.08)",
+        backdropFilter: "blur(20px)",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Top amber accent bar mimicking LeetCode submissions loading color */}
+      <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 animate-pulse" />
+
+      <div className="p-8 space-y-6">
+        {/* Header */}
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2 text-xl font-bold tracking-tight text-slate-100">
+            <RefreshCw size={20} className="animate-spin text-amber-500" />
+            <span>Pending...</span>
+          </div>
+          <p className="text-xs text-slate-400">
+            <span className="font-semibold text-slate-300">{user?.username || "You"}</span> submitted at a few seconds ago
+          </p>
+        </div>
+
+        {/* Status container */}
+        <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950/60 flex items-center space-x-3 shadow-inner">
+          {/* Animated dot */}
+          <div className="relative flex h-3.5 w-3.5 items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          </div>
+          <span className="text-xs font-mono text-slate-300 capitalize">{statusText}</span>
+        </div>
+
+        {/* Sleek Progress Bar */}
+        <div className="space-y-2">
+          <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden shadow-inner">
+            <div 
+              className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 transition-all duration-300 ease-out rounded-full"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+            <span>PREPARING</span>
+            <span>RUNNING CASES</span>
+            <span>COMPLETE</span>
+          </div>
+        </div>
+
+        {/* Code Preview */}
+        <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950/90 font-mono text-xs shadow-lg">
+          <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-800 bg-slate-900/40 text-slate-400 select-none">
+            <span>Code | {selectedLanguage === "javascript" ? "JavaScript" : selectedLanguage === "python" ? "Python3" : selectedLanguage.toUpperCase()}</span>
+          </div>
+          <div className="p-4 max-h-60 overflow-y-auto flex">
+            {/* Line numbers */}
+            <div className="text-right pr-4 select-none text-slate-600 border-r border-slate-800/60 min-w-[2.5rem]">
+              {lines.map((_, i) => (
+                <div key={i} className="leading-6 font-semibold">{i + 1}</div>
+              ))}
+            </div>
+            {/* Syntax Highlighted Code */}
+            <pre className="pl-4 flex-1 overflow-x-auto leading-6 text-slate-300 font-medium">
+              <code dangerouslySetInnerHTML={{ __html: highlightCode(currentCode, selectedLanguage) }} />
+            </pre>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }

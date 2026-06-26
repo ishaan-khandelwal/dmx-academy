@@ -211,7 +211,20 @@ const getSingleProblem = async (req, res, next) => {
     // Filter test cases based on user permission (if admin, show all, otherwise only samples)
     const isAdmin = req.user && req.user.role === 'ADMIN';
     if (!isAdmin) {
-      problem.testCases = problem.testCases.filter((tc) => tc.isSample);
+      const isContestProblem = await prisma.contestProblem.findFirst({
+        where: { problemId: problem.id }
+      });
+      if (isContestProblem) {
+        problem.testCases = problem.testCases.map(tc => {
+          const plainTc = { ...tc };
+          if (!plainTc.isSample) {
+            plainTc.expectedOutput = '';
+          }
+          return plainTc;
+        });
+      } else {
+        problem.testCases = problem.testCases.filter((tc) => tc.isSample);
+      }
     }
 
     res.status(200).json({
