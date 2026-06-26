@@ -81,10 +81,8 @@ export default function LivePollPopup({ poll, sessionToken, currentUsername, onA
     }
   }, [poll.id, poll.timerSecs, poll.startedAt]);
 
-  // Countdown timer
+  // Countdown timer — keeps running even after answer is submitted
   useEffect(() => {
-    if (submitted) return;
-
     const startedTimeMs = startTimeRef.current;
 
     const updateTimer = () => {
@@ -103,7 +101,7 @@ export default function LivePollPopup({ poll, sessionToken, currentUsername, onA
     }, 200);
 
     return () => clearInterval(interval);
-  }, [submitted, poll.id, poll.timerSecs]);
+  }, [poll.id, poll.timerSecs]);
 
   const submitAnswer = async (chosenIdx) => {
     if (submitted) return;
