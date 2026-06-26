@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
-  Brain, Plus, Search, Filter, Edit2, Trash2, X, Check,
-  AlertCircle, ChevronDown, BookOpen, Tag, Layers, Sparkles,
-  RefreshCw, AlertTriangle
+  Brain, Plus, Edit2, Trash2, X, Check,
+  AlertCircle, BookOpen, Layers, Sparkles,
+  AlertTriangle, Folder, FolderOpen, ChevronLeft, ChevronRight
 } from "lucide-react";
 
+const QUESTIONS_PER_PAGE = 10;
 const DIFFICULTIES = ["EASY", "MEDIUM", "HARD"];
 const DIFF_COLOR = {
   EASY: { bg: "bg-emerald-500/10", text: "text-emerald-500", border: "border-emerald-500/20" },
@@ -28,13 +29,10 @@ export default function QuestionBankPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Filter state
-  const [filterSubject, setFilterSubject] = useState("");
-  const [filterTopic, setFilterTopic] = useState("");
-  const [filterDifficulty, setFilterDifficulty] = useState("");
-  const [search, setSearch] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("");
+  const [questionPage, setQuestionPage] = useState(1);
 
-  // Subjects & topics for filter dropdowns
+  // Subjects & topics for folder view and modal datalists
   const [allSubjects, setAllSubjects] = useState([]);
   const [allTopics, setAllTopics] = useState([]);
 
@@ -60,18 +58,13 @@ export default function QuestionBankPage() {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      if (filterSubject) params.set("subject", filterSubject);
-      if (filterTopic) params.set("topic", filterTopic);
-      if (filterDifficulty) params.set("difficulty", filterDifficulty);
-      if (search) params.set("search", search);
-      const res = await fetch(`${API_BASE}/api/viva/questions?${params}`, { headers: getHeaders() });
+      const res = await fetch(`${API_BASE}/api/viva/questions`, { headers: getHeaders() });
       const data = await res.json();
       if (res.ok && data.success) setQuestions(data.questions);
       else setError(data.message || "Failed to load questions.");
     } catch { setError("Network error. Is the backend running?"); }
     finally { setLoading(false); }
-  }, [API_BASE, filterSubject, filterTopic, filterDifficulty, search, getHeaders]);
+  }, [API_BASE, getHeaders]);
 
   const fetchMeta = useCallback(async () => {
     try {
@@ -139,7 +132,17 @@ export default function QuestionBankPage() {
   const total = questions.length;
   const byDiff = { EASY: 0, MEDIUM: 0, HARD: 0 };
   questions.forEach(q => { if (byDiff[q.difficulty] !== undefined) byDiff[q.difficulty]++; });
-  const subjectCount = new Set(questions.map(q => q.subject)).size;
+  const subjectNames = useMemo(() => {
+    const names = new Set([...allSubjects, ...questions.map(q => q.subject)].filter(Boolean));
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [allSubjects, questions]);
+  const selectedQuestions = selectedSubject
+    ? questions.filter(q => q.subject === selectedSubject)
+    : [];
+  const questionPageCount = Math.max(1, Math.ceil(selectedQuestions.length / QUESTIONS_PER_PAGE));
+  const currentQuestionPage = Math.min(questionPage, questionPageCount);
+  const questionPageStart = (currentQuestionPage - 1) * QUESTIONS_PER_PAGE;
+  const visibleQuestions = selectedQuestions.slice(questionPageStart, questionPageStart + QUESTIONS_PER_PAGE);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -184,45 +187,6 @@ export default function QuestionBankPage() {
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center p-4 rounded-2xl border"
-           style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
-        <div className="flex items-center space-x-2 flex-1 min-w-[160px] px-3 py-2 rounded-xl border"
-             style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)" }}>
-          <Search size={14} style={{ color: "var(--text-muted)" }} />
-          <input
-            className="flex-1 bg-transparent text-sm outline-none"
-            style={{ color: "var(--text-primary)" }}
-            placeholder="Search questions..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <select className="px-3 py-2 rounded-xl border text-sm font-semibold outline-none"
-                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
-                value={filterSubject} onChange={e => setFilterSubject(e.target.value)}>
-          <option value="">All Subjects</option>
-          {allSubjects.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select className="px-3 py-2 rounded-xl border text-sm font-semibold outline-none"
-                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
-                value={filterTopic} onChange={e => setFilterTopic(e.target.value)}>
-          <option value="">All Topics</option>
-          {allTopics.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select className="px-3 py-2 rounded-xl border text-sm font-semibold outline-none"
-                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
-                value={filterDifficulty} onChange={e => setFilterDifficulty(e.target.value)}>
-          <option value="">All Difficulties</option>
-          {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <button onClick={fetchQuestions} title="Refresh"
-                className="p-2 rounded-xl border transition-all hover:scale-105 cursor-pointer"
-                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
-          <RefreshCw size={15} />
-        </button>
-      </div>
-
       {/* Error */}
       {error && (
         <div className="p-4 rounded-2xl border bg-rose-500/10 border-rose-500/20 flex items-center space-x-3">
@@ -231,12 +195,12 @@ export default function QuestionBankPage() {
         </div>
       )}
 
-      {/* Question List */}
+      {/* Subject Folders */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
           <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--text-accent)" }} />
         </div>
-      ) : questions.length === 0 ? (
+      ) : subjectNames.length === 0 ? (
         <div className="p-12 rounded-3xl border border-dashed text-center space-y-4"
              style={{ borderColor: "var(--border-primary)" }}>
           <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center"
@@ -244,50 +208,119 @@ export default function QuestionBankPage() {
             <Brain size={28} />
           </div>
           <p className="font-bold" style={{ color: "var(--text-primary)" }}>No questions found</p>
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {search || filterSubject || filterDifficulty || filterTopic
-              ? "Try clearing filters."
-              : "Add your first question to get started."}
-          </p>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Add your first question to get started.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-            {questions.length} question{questions.length !== 1 ? "s" : ""}
-          </p>
-          <div className="space-y-2">
-            {questions.map((q) => {
-              const dc = DIFF_COLOR[q.difficulty] || DIFF_COLOR.EASY;
-              return (
-                <div key={q.id}
-                     className="group flex items-start justify-between gap-4 p-5 rounded-2xl border transition-all hover:shadow-sm"
-                     style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <p className="text-sm font-semibold leading-snug" style={{ color: "var(--text-primary)" }}>
-                      {q.questionText}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500">{q.subject}</span>
-                      {q.topic && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-500">{q.topic}</span>}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${dc.bg} ${dc.text}`}>{q.difficulty}</span>
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Subjects
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {subjectNames.map(subject => {
+                const count = questions.filter(q => q.subject === subject).length;
+                const active = selectedSubject === subject;
+                const Icon = active ? FolderOpen : Folder;
+                return (
+                  <button
+                    key={subject}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubject(subject);
+                      setQuestionPage(1);
+                    }}
+                    className={`group flex items-center justify-between gap-4 p-5 rounded-2xl border text-left transition-all cursor-pointer ${active ? "ring-2 ring-indigo-500/40" : "hover:shadow-sm"}`}
+                    style={{ backgroundColor: "var(--bg-card)", borderColor: active ? "var(--border-accent)" : "var(--border-card)" }}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-500 shrink-0">
+                        <Icon size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black truncate" style={{ color: "var(--text-primary)" }}>{subject}</p>
+                        <p className="text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>
+                          {count} question{count !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {selectedSubject ? (
+            <div className="space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                {selectedSubject} Questions
+              </p>
+              <div className="space-y-2">
+                {visibleQuestions.map((q) => (
+                  <div key={q.id}
+                       className="group flex items-start justify-between gap-4 p-5 rounded-2xl border transition-all hover:shadow-sm"
+                       style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold leading-snug" style={{ color: "var(--text-primary)" }}>
+                        {q.questionText}
+                      </p>
+                      {q.topic && (
+                        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{q.topic}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openEdit(q)}
+                              className="p-2 rounded-xl hover:bg-indigo-500/10 hover:text-indigo-500 transition-colors cursor-pointer"
+                              style={{ color: "var(--text-secondary)" }} title="Edit">
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={() => setDeleteTarget({ id: q.id, questionText: q.questionText })}
+                              className="p-2 rounded-xl hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
+                              style={{ color: "var(--text-secondary)" }} title="Delete">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(q)}
-                            className="p-2 rounded-xl hover:bg-indigo-500/10 hover:text-indigo-500 transition-colors cursor-pointer"
-                            style={{ color: "var(--text-secondary)" }} title="Edit">
-                      <Edit2 size={14} />
+                ))}
+              </div>
+              {selectedQuestions.length > QUESTIONS_PER_PAGE && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+                  <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                    Showing {questionPageStart + 1}-{Math.min(questionPageStart + QUESTIONS_PER_PAGE, selectedQuestions.length)} of {selectedQuestions.length} questions
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuestionPage(page => Math.max(1, page - 1))}
+                      disabled={currentQuestionPage === 1}
+                      className="p-2 rounded-xl border transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-500/10 hover:text-indigo-500 cursor-pointer"
+                      style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}
+                      title="Previous page"
+                    >
+                      <ChevronLeft size={16} />
                     </button>
-                    <button onClick={() => setDeleteTarget({ id: q.id, questionText: q.questionText })}
-                            className="p-2 rounded-xl hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
-                            style={{ color: "var(--text-secondary)" }} title="Delete">
-                      <Trash2 size={14} />
+                    <span className="min-w-20 text-center text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+                      Page {currentQuestionPage} of {questionPageCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setQuestionPage(page => Math.min(questionPageCount, page + 1))}
+                      disabled={currentQuestionPage === questionPageCount}
+                      className="p-2 rounded-xl border transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-500/10 hover:text-indigo-500 cursor-pointer"
+                      style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}
+                      title="Next page"
+                    >
+                      <ChevronRight size={16} />
                     </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-8 rounded-3xl border border-dashed text-center"
+                 style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
+              <p className="text-sm font-semibold">Select a subject folder to view its questions.</p>
+            </div>
+          )}
         </div>
       )}
 

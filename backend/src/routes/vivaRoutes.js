@@ -4,8 +4,9 @@ const multer = require('multer');
 
 const {
   getSubjects, startSession, submitQuestionAnswer,
-  completeSession, getSession, getHistory
+  completeSession, getSession, getHistory, correctTranscript
 } = require('../controllers/vivaController');
+
 
 const {
   listQuestions, listSubjects, listTopics,
@@ -72,7 +73,9 @@ router.use(protect);
 router.get( '/history',              getHistory);
 router.get( '/history/:sessionId',   getSession);
 router.post('/session/start',        startSession);
-router.post('/session/answer',       submitQuestionAnswer);
+router.post('/session/correct-transcript', correctTranscript);
+ router.post('/session/answer',       submitQuestionAnswer);
+
 router.post('/session/complete',     completeSession);
 
 module.exports = router;

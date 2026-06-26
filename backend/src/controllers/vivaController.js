@@ -1,4 +1,6 @@
 const vivaService = require('../services/vivaService');
+const { correctTranscript } = require('../services/transcriptCorrectionService');
+
 
 /**
  * Get available subjects for Viva.
@@ -119,11 +121,47 @@ const getHistory = async (req, res, next) => {
   }
 };
 
+/**
+ * Correct a raw voice transcript using AI.
+ * POST /api/viva/session/correct-transcript
+ *
+ * Body: { questionText, rawTranscript, subject, expectedAnswer? }
+ * Returns: { correctedTranscript, rawTranscript, correctionApplied, usedAI }
+ */
+const correctTranscriptController = async (req, res) => {
+  const raw = req.body?.rawTranscript || '';
+  try {
+    const { questionText, rawTranscript, subject, expectedAnswer } = req.body;
+
+    if (!rawTranscript || !questionText || !subject) {
+      return res.status(400).json({
+        success: false,
+        message: 'rawTranscript, questionText, and subject are required.',
+      });
+    }
+
+    const result = await correctTranscript({ questionText, rawTranscript, subject, expectedAnswer });
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    // Never let correction errors propagate — return raw fallback so submission never blocks
+    res.status(200).json({
+      success: true,
+      correctedTranscript: raw,
+      rawTranscript: raw,
+      correctionApplied: false,
+      usedAI: false,
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getSubjects,
   startSession,
   submitQuestionAnswer,
   completeSession,
   getSession,
-  getHistory
+  getHistory,
+  correctTranscript: correctTranscriptController,
 };
+
