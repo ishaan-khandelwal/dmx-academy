@@ -297,9 +297,19 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
   const speakingStudentCameraTrack = tracks.find(
     (t) => t.source === Track.Source.Camera && t.participant?.identity === activeSpeaker
   );
+  const speakingStudentScreenTrack = tracks.find(
+    (t) => t.source === Track.Source.ScreenShare && t.participant?.identity === activeSpeaker
+  );
 
   const isLocalCameraActive = !!localCameraTrack?.publication?.track && !localCameraTrack?.publication?.isMuted;
   const isStudentCameraActive = !!speakingStudentCameraTrack?.publication?.track && !speakingStudentCameraTrack?.publication?.isMuted;
+
+  // Auto-stop admin screen share if student starts screen sharing
+  useEffect(() => {
+    if (speakingStudentScreenTrack?.publication?.track && localScreenTrack?.publication?.track) {
+      room?.localParticipant?.setScreenShareEnabled(false);
+    }
+  }, [speakingStudentScreenTrack?.publication?.track, localScreenTrack?.publication?.track, room]);
 
   const sendStateSync = () => {
     if (!room || room.state !== "connected" || !room.localParticipant) return;
@@ -598,7 +608,12 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
           <div className="relative rounded-[1.35rem] overflow-hidden border flex-1 min-h-0 bg-black shadow-[0_18px_55px_rgba(15,23,42,0.18)]"
             style={{ borderColor: "rgba(148, 163, 184, 0.22)" }}
           >
-            {localScreenTrack?.publication?.track ? (
+            {speakingStudentScreenTrack?.publication?.track ? (
+              <VideoTrack
+                trackRef={speakingStudentScreenTrack}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+            ) : localScreenTrack?.publication?.track ? (
               <VideoTrack
                 trackRef={localScreenTrack}
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
@@ -698,13 +713,23 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
               >
                 Camera
               </TrackToggle>
-              <TrackToggle
-                source={Track.Source.ScreenShare}
-                showIcon={true}
-                className="px-4 py-2.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer shadow-sm text-slate-200 hover:text-white bg-slate-800 border-slate-700/50 hover:bg-slate-750"
-              >
-                Share Screen
-              </TrackToggle>
+              {speakingStudentScreenTrack?.publication?.track ? (
+                <button
+                  disabled
+                  className="px-4 py-2.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider transition-all opacity-40 cursor-not-allowed text-slate-200 bg-slate-800 border-slate-700/50"
+                  title="A student is currently sharing their screen"
+                >
+                  Share Screen
+                </button>
+              ) : (
+                <TrackToggle
+                  source={Track.Source.ScreenShare}
+                  showIcon={true}
+                  className="px-4 py-2.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-wider transition-all hover:scale-105 cursor-pointer shadow-sm text-slate-200 hover:text-white bg-slate-800 border-slate-700/50 hover:bg-slate-750"
+                >
+                  Share Screen
+                </TrackToggle>
+              )}
 
               <div className="w-px h-8 bg-slate-500/20 mx-2" />
 

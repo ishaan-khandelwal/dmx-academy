@@ -410,6 +410,12 @@ console.log(session)
     (t) => t.source === Track.Source.Camera && t.participant?.identity === activeSpeaker
   );
 
+  // Find speaking student's screen share (either remote or local)
+  const studentScreenTrack = tracks.find(
+    (t) => t.source === Track.Source.ScreenShare &&
+      t.participant?.identity === activeSpeaker
+  );
+
   const isHostCameraActive = !!hostCameraTrack?.publication?.track && !hostCameraTrack?.publication?.isMuted;
   const isStudentCameraActive = !!speakingStudentCameraTrack?.publication?.track && !speakingStudentCameraTrack?.publication?.isMuted;
 
@@ -444,6 +450,7 @@ console.log(session)
     if (room) {
       room.localParticipant.setMicrophoneEnabled(false);
       room.localParticipant.setCameraEnabled(false);
+      room.localParticipant.setScreenShareEnabled(false);
     }
     sendData({
       action: "REMOVE_SPEAKER",
@@ -471,6 +478,7 @@ console.log(session)
             setIsHandRaised(false);
             room.localParticipant.setMicrophoneEnabled(false);
             room.localParticipant.setCameraEnabled(false);
+            room.localParticipant.setScreenShareEnabled(false);
           }
         } else if (data.action === "DISMISS_HAND") {
           if (data.username === user?.username) {
@@ -484,6 +492,7 @@ console.log(session)
             setIsHandRaised(false);
             room.localParticipant.setMicrophoneEnabled(false);
             room.localParticipant.setCameraEnabled(false);
+            room.localParticipant.setScreenShareEnabled(false);
           }
         } else if (data.action === "UNBLOCK_STUDENT") {
           setBlockedUsers((prev) => prev.filter((u) => u !== data.username));
@@ -496,6 +505,7 @@ console.log(session)
             setIsHandRaised(false);
             room.localParticipant.setMicrophoneEnabled(false);
             room.localParticipant.setCameraEnabled(false);
+            room.localParticipant.setScreenShareEnabled(false);
           }
 
           // If sync says I'm not active speaker, disable my feeds and hand raise
@@ -505,6 +515,7 @@ console.log(session)
             }
             room.localParticipant.setMicrophoneEnabled(false);
             room.localParticipant.setCameraEnabled(false);
+            room.localParticipant.setScreenShareEnabled(false);
           }
         } else if (data.action === "POLL_START") {
           // New poll launched by mentor
@@ -616,6 +627,10 @@ console.log(session)
             />
             <TrackToggle
               source={Track.Source.Camera}
+              className="!w-8 !h-8 !rounded-full !flex !items-center !justify-center text-white transition-all cursor-pointer !p-0 border border-transparent data-[lk-on=true]:bg-[var(--accent-primary)] data-[lk-on=true]:hover:bg-[var(--accent-secondary)] data-[lk-on=false]:bg-red-600 data-[lk-on=false]:hover:bg-red-700"
+            />
+            <TrackToggle
+              source={Track.Source.ScreenShare}
               className="!w-8 !h-8 !rounded-full !flex !items-center !justify-center text-white transition-all cursor-pointer !p-0 border border-transparent data-[lk-on=true]:bg-[var(--accent-primary)] data-[lk-on=true]:hover:bg-[var(--accent-secondary)] data-[lk-on=false]:bg-red-600 data-[lk-on=false]:hover:bg-red-700"
             />
             <button
@@ -738,7 +753,12 @@ console.log(session)
           borderColor: "rgba(148, 163, 184, 0.22)",
         }}
       >
-        {hostScreenTrack?.publication?.track ? (
+        {studentScreenTrack?.publication?.track ? (
+          <VideoTrack
+            trackRef={studentScreenTrack}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
+        ) : hostScreenTrack?.publication?.track ? (
           <VideoTrack
             trackRef={hostScreenTrack}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
