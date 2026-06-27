@@ -173,9 +173,174 @@ const getAdminStats = async (req, res, next) => {
   }
 };
 
+/**
+ * Add a new institute admin
+ */
+const addInstituteAdmin = async (req, res, next) => {
+  try {
+    // Only Super Admins (role === 'ADMIN') can create new admins
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Super Admins can add Institute Admins.',
+      });
+    }
+
+    const { username, email, password, instituteName } = req.body;
+
+    if (!username || !email || !password || !instituteName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username, email, password, and instituteName are required.',
+      });
+    }
+
+    // Check if email or username already exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { username }],
+      },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username or email already in use.',
+      });
+    }
+
+    // Find or create Institute
+    let institute = await prisma.institute.findUnique({
+      where: { name: instituteName.trim() },
+    });
+
+    if (!institute) {
+      institute = await prisma.institute.create({
+        data: { name: instituteName.trim() },
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
+        password: hashedPassword,
+        role: 'INSTITUTE_ADMIN',
+        instituteId: institute.id,
+      },
+      include: {
+        institute: true,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Institute Admin created successfully.',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        institute: user.institute,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all institute admins
+ */
+const getInstituteAdmins = async (req, res, next) => {
+  try {
+    // Only Super Admins (role === 'ADMIN') can view all admins
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Super Admins can list Institute Admins.',
+      });
+    }
+
+    const admins = await prisma.user.findMany({
+      where: { role: 'INSTITUTE_ADMIN' },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        institute: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.status(200).json({
+      success: true,
+      admins,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete an institute admin
+ */
+const deleteInstituteAdmin = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const adminId = parseInt(id, 10);
+
+    if (isNaN(adminId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Admin ID.',
+      });
+    }
+
+    const userToDelete = await prisma.user.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!userToDelete) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found.',
+      });
+    }
+
+    if (userToDelete.role !== 'INSTITUTE_ADMIN') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only Institute Admins can be deleted via this endpoint.',
+      });
+    }
+
+    await prisma.user.delete({
+      where: { id: adminId },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Institute Admin deleted successfully.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   getProfile,
   getAdminStats,
+  addInstituteAdmin,
+  getInstituteAdmins,
+  deleteInstituteAdmin,
 };

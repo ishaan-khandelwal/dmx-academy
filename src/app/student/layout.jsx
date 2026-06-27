@@ -8,10 +8,12 @@ import {
   Menu, X, ChevronLeft, ChevronRight, BookOpen, ArrowLeftRight, Code, Brain, Radio
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useAuth } from "@/context/AuthContext";
 
 export default function StudentLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { logout } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -58,12 +60,8 @@ export default function StudentLayout({ children }) {
   }, [pathname, router]);
 
   const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("synapse_student_session");
-      localStorage.removeItem("dmx_auth_token");
-      localStorage.removeItem("dmx_auth_user");
-      router.push("/login?redirect=/student/dashboard");
-    }
+    logout();
+    router.push("/login?redirect=/student/dashboard");
   };
 
   const isLoginRoute = pathname === "/student";

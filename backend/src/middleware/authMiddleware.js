@@ -118,8 +118,10 @@ const restrictTo = (...roles) => {
     const isAllowedRole = roles.includes(effectiveRole);
     // Mentors are allowed access to ADMIN routes as well
     const isAllowedMentor = (roles.includes('MENTOR') || roles.includes('ADMIN')) && (effectiveRole === 'MENTOR');
+    // Institute admins are allowed access to ADMIN routes as well
+    const isAllowedInstAdmin = roles.includes('ADMIN') && (effectiveRole === 'INSTITUTE_ADMIN');
 
-    if (!req.user || (!isAllowedRole && !isAllowedMentor)) {
+    if (!req.user || (!isAllowedRole && !isAllowedMentor && !isAllowedInstAdmin)) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to perform this action.',

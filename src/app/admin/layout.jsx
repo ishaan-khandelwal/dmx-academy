@@ -18,7 +18,7 @@ export default function AdminLayout({ children }) {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [adminUser, setAdminUser] = useState(null);
 
-  const { activeSession, setActiveSession, token, API_BASE } = useAuth();
+  const { activeSession, setActiveSession, token, API_BASE, user, logout } = useAuth();
   const [showEndConfirmModal, setShowEndConfirmModal] = useState(false);
   const [pendingNavAction, setPendingNavAction] = useState(null);
 
@@ -77,29 +77,31 @@ export default function AdminLayout({ children }) {
         router.push("/admin/dashboard");
       } else {
         const isMentor = localStorage.getItem("synapse_mentor_session") === "true";
-        setAdminUser(isMentor ? {
-          name: "DMX Mentor",
-          email: "mentor@synapse.com",
-          role: "Senior Mentor",
-          avatar: "SM"
-        } : {
-          name: "DMX Admin",
-          email: "admin@synapse.com",
-          role: "Super Admin",
-          avatar: "SA"
+        const name = user?.username || (isMentor ? "DMX Mentor" : "DMX Admin");
+        const email = user?.email || (isMentor ? "mentor@synapse.com" : "admin@synapse.com");
+        const roleName = user?.role === "INSTITUTE_ADMIN"
+          ? "Institute Admin"
+          : user?.role === "ADMIN"
+            ? "Super Admin"
+            : isMentor
+              ? "Senior Mentor"
+              : "Super Admin";
+        const avatar = name.slice(0, 2).toUpperCase();
+
+        setAdminUser({
+          name,
+          email,
+          role: roleName,
+          avatar
         });
       }
       setCheckingAuth(false);
     }
-  }, [pathname, router]);
+  }, [pathname, router, user]);
 
   const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("synapse_admin_session");
-      localStorage.removeItem("dmx_auth_token");
-      localStorage.removeItem("dmx_auth_user");
-      router.push("/login?redirect=/admin/dashboard");
-    }
+    logout();
+    router.push("/login?redirect=/admin/dashboard");
   };
 
   const isLoginRoute = pathname === "/admin";
@@ -120,11 +122,18 @@ export default function AdminLayout({ children }) {
     return <>{children}</>;
   }
 
+  const isSuperAdmin = user?.role === "ADMIN";
+
   const sidebarLinks = [
     {
       label: "Dashboard",
       href: "/admin/dashboard",
       icon: LayoutDashboard
+    },
+    isSuperAdmin && {
+      label: "Institutes & Admins",
+      href: "/admin/institutes",
+      icon: ShieldAlert
     },
     {
       label: "All Contests",
@@ -151,7 +160,7 @@ export default function AdminLayout({ children }) {
       href: "/contest",
       icon: List
     }
-  ];
+  ].filter(Boolean);
   const isLiveImmersive = pathname === "/admin/live" && activeSession;
 
   return (

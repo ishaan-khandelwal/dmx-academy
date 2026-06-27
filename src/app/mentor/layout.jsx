@@ -19,7 +19,7 @@ export default function MentorLayout({ children }) {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [mentorUser, setMentorUser] = useState(null);
 
-  const { activeSession, setActiveSession, token, API_BASE } = useAuth();
+  const { activeSession, setActiveSession, token, API_BASE, logout } = useAuth();
   const [showEndConfirmModal, setShowEndConfirmModal] = useState(false);
   const [pendingNavAction, setPendingNavAction] = useState(null);
 
@@ -100,12 +100,8 @@ export default function MentorLayout({ children }) {
   }, [pathname, router]);
 
   const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("synapse_mentor_session");
-      localStorage.removeItem("dmx_auth_token");
-      localStorage.removeItem("dmx_auth_user");
-      router.push("/login?redirect=/mentor/dashboard");
-    }
+    logout();
+    router.push("/login?redirect=/mentor/dashboard");
   };
 
   const isLoginRoute = pathname === "/mentor";

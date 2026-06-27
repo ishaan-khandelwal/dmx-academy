@@ -1,5 +1,5 @@
 const express = require('express');
-const { register, login, getProfile, getAdminStats } = require('../controllers/authController');
+const { register, login, getProfile, getAdminStats, addInstituteAdmin, getInstituteAdmins, deleteInstituteAdmin } = require('../controllers/authController');
 const { protect, restrictTo } = require('../middleware/authMiddleware');
 const { authLimiter } = require('../middleware/rateLimiter');
 
@@ -12,5 +12,10 @@ router.post('/login', authLimiter, login);
 // Private/Protected routes
 router.get('/profile', protect, getProfile);
 router.get('/stats', protect, restrictTo('ADMIN'), getAdminStats);
+
+// Institute Admin management (restricted to Super Admin only)
+router.post('/institute-admin', protect, restrictTo('ADMIN'), addInstituteAdmin);
+router.get('/institute-admins', protect, restrictTo('ADMIN'), getInstituteAdmins);
+router.delete('/institute-admin/:id', protect, restrictTo('ADMIN', 'INSTITUTE_ADMIN'), deleteInstituteAdmin);
 
 module.exports = router;

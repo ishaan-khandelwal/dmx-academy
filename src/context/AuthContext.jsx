@@ -67,7 +67,7 @@ function setLegacySession(user) {
   const email = user.email || "";
   const emailLower = email.toLowerCase();
 
-  if (role === "ADMIN" || emailLower.includes("admin")) {
+  if (role === "ADMIN" || role === "INSTITUTE_ADMIN" || emailLower.includes("admin")) {
     localStorage.setItem("synapse_admin_session", "true");
   } else if (role === "MENTOR" || emailLower.includes("mentor")) {
     localStorage.setItem("synapse_admin_session", "true");

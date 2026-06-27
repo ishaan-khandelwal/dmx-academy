@@ -20,6 +20,8 @@ contestParticipations ContestParticipation[]
 liveSessions LiveSession[] @relation("SessionHost")
 submissions Submission[]
 vivaSessions VivaSession[]
+instituteId Int?
+institute Institute? @relation(fields: [instituteId], references: [id])
 }
 
 model Problem {
@@ -135,15 +137,16 @@ chatMessages LiveChatMessage[]
 }
 
 model VivaQuestion {
-id Int @id @default(autoincrement())
-subject String
-questionText String
-expectedAnswer String
-keywords String
-difficulty Difficulty @default(EASY)
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
-vivaAnswers VivaAnswer[]
+  id             Int          @id @default(autoincrement())
+  subject        String
+  questionText   String
+  expectedAnswer String
+  keywords       String
+  difficulty     Difficulty   @default(EASY)
+  topic          String       @default("")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  vivaAnswers    VivaAnswer[]
 }
 
 model VivaSession {
@@ -197,9 +200,10 @@ FAILED
 }
 
 enum Role {
-USER
-ADMIN
-MENTOR
+  USER
+  ADMIN
+  MENTOR
+  INSTITUTE_ADMIN
 }
 
 enum Difficulty {
@@ -261,12 +265,20 @@ poll LivePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
 // ─── Live Chat Messages ───────────────────────────────────────────────────────
 
 model LiveChatMessage {
-id Int @id @default(autoincrement())
-sessionId Int
-senderUsername String
-messageText String
-createdAt DateTime @default(now())
-session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id             Int         @id @default(autoincrement())
+  sessionId      Int
+  senderUsername String
+  messageText    String
+  createdAt      DateTime    @default(now())
+  session        LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-@@index([sessionId, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+model Institute {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
