@@ -1,94 +1,96 @@
 /**
- * summary.service.js
+ * summary.service.js — AI-generated viva session summary.
  *
- * Generates an AI-powered session summary at the end of a Viva.
- * Output is stored in VivaSession.aiSummary as a JSON string.
- *
- * Summary shape:
+ * Output shape (stored as JSON in VivaSession.aiSummary):
  * {
  *   overallRemark: string,
  *   strongTopics: string[],
  *   weakTopics: string[],
+ *   missingConcepts: string[],
  *   recommendedStudy: string[],
+ *   avgScore: number,
  *   generatedAt: ISO string
  * }
  */
 
 const { generateJSON, OllamaUnavailableError } = require('./llm.service');
 
-/**
- * Generate a session summary from all answers.
- *
- * @param {object} session  - VivaSession with vivaAnswers included
- * @param {Array}  answers  - Array of { questionText, answerText, score, strengths, weaknesses }
- * @returns {object|null}   - Summary object or null if AI unavailable
- */
 async function generateSessionSummary(session, answers) {
-  if (!answers || answers.length === 0) return null;
+  if (!answers?.length) return null;
 
-  // Build a compact Q&A summary to fit in context
-  const qaSummary = answers.map((a, i) =>
-    `Q${i + 1} (score ${a.score}/10): ${a.questionText}\n  Answer: ${(a.answerText || '').slice(0, 150)}`
-  ).join('\n\n');
+  const avgScore = Math.round(answers.reduce((s, a) => s + (a.score || 0), 0) / answers.length * 10) / 10;
 
-  const avgScore = Math.round(answers.reduce((s, a) => s + a.score, 0) / answers.length * 10) / 10;
+  // Compact Q&A digest — keep total under ~1200 chars
+  const qaSummary = answers.map((a, i) => {
+    const q = a.questionText?.slice(0, 80) || `Q${i+1}`;
+    const ans = (a.answerText || '').slice(0, 100);
+    const miss = Array.isArray(a.missingConcepts) && a.missingConcepts.length
+      ? ` [missing: ${a.missingConcepts.slice(0,2).join(', ')}]` : '';
+    return `Q${i+1} [${a.score}/10]: ${q} | Answer: ${ans}${miss}`;
+  }).join('\n');
 
-  const prompt = `You are an academic performance analyst reviewing a student's viva session.
+  const prompt = `You are an academic performance analyst. A student just completed a ${session.subject} viva.
 
-Subject: ${session.subject}
-Questions Attempted: ${answers.length}
 Average Score: ${avgScore}/10
+Questions: ${answers.length}
 
-## Q&A Summary
+## Q&A Digest
 ${qaSummary}
 
 ## Task
-Analyse the student's performance and return a JSON object with exactly these fields:
-- "overallRemark": string (2-3 sentence honest overall assessment)
-- "strongTopics": array of strings (topics/concepts the student demonstrated well, 1-4 items)
-- "weakTopics": array of strings (topics/concepts needing improvement, 1-4 items)
-- "recommendedStudy": array of strings (specific topics/resources to study next, 2-4 items)
+Analyse performance. Return ONLY a JSON object:
+{
+  "overallRemark": "<2-3 honest sentences summarising performance>",
+  "strongTopics": [<topics demonstrated well, up to 4>],
+  "weakTopics": [<topics with gaps, up to 4>],
+  "missingConcepts": [<specific concepts not mentioned across all answers, up to 5>],
+  "recommendedStudy": [<specific topics/resources to study, 2-4 items>]
+}
 
-Be specific and constructive. Base analysis only on the answers above.`;
+Be specific. Do not invent topics not present in the questions.`;
 
   try {
-    const { data } = await generateJSON(prompt, { temperature: 0.3, maxTokens: 600 });
-
+    const { data } = await generateJSON(prompt, { temperature: 0.2, maxTokens: 600 });
     return {
       overallRemark:    String(data.overallRemark    || ''),
-      strongTopics:     Array.isArray(data.strongTopics)     ? data.strongTopics.map(String)     : [],
-      weakTopics:       Array.isArray(data.weakTopics)       ? data.weakTopics.map(String)       : [],
-      recommendedStudy: Array.isArray(data.recommendedStudy) ? data.recommendedStudy.map(String) : [],
-      generatedAt:      new Date().toISOString()
+      strongTopics:     toStringArray(data.strongTopics),
+      weakTopics:       toStringArray(data.weakTopics),
+      missingConcepts:  toStringArray(data.missingConcepts),
+      recommendedStudy: toStringArray(data.recommendedStudy),
+      avgScore,
+      generatedAt: new Date().toISOString()
     };
   } catch (err) {
-    if (err instanceof OllamaUnavailableError) {
-      console.warn('[AI] Ollama unavailable for summary, using rule-based fallback.');
-      return ruleBasedSummary(session, answers, avgScore);
-    }
-    console.error('[AI] Summary generation error:', err.message);
+    if (err instanceof OllamaUnavailableError) console.warn('[SummaryService] Fallback');
+    else console.error('[SummaryService] Error:', err.message);
     return ruleBasedSummary(session, answers, avgScore);
   }
 }
 
-/** Simple rule-based summary fallback */
 function ruleBasedSummary(session, answers, avgScore) {
-  const strong = answers.filter(a => a.score >= 7).map(a => a.questionText.slice(0, 60));
-  const weak   = answers.filter(a => a.score <  5).map(a => a.questionText.slice(0, 60));
+  const strong = answers.filter(a => a.score >= 7).map(a => (a.questionText || '').slice(0, 60));
+  const weak   = answers.filter(a => a.score <  5).map(a => (a.questionText || '').slice(0, 60));
+  const allMissing = [...new Set(answers.flatMap(a => toStringArray(a.missingConcepts)))].slice(0, 5);
 
   let overallRemark;
-  if (avgScore >= 8)      overallRemark = `Outstanding performance in ${session.subject}. You demonstrated strong understanding across all topics.`;
-  else if (avgScore >= 6) overallRemark = `Good performance in ${session.subject}. You covered the main concepts well with room to deepen your understanding.`;
-  else if (avgScore >= 4) overallRemark = `Adequate performance in ${session.subject}. Core concepts need more practice before the final assessment.`;
-  else                    overallRemark = `${session.subject} needs significant review. Focus on foundational concepts before attempting advanced topics.`;
+  if      (avgScore >= 8) overallRemark = `Outstanding ${session.subject} performance. Strong command of core concepts.`;
+  else if (avgScore >= 6) overallRemark = `Good ${session.subject} performance with room to deepen understanding.`;
+  else if (avgScore >= 4) overallRemark = `Adequate ${session.subject} performance. Core concepts need more practice.`;
+  else                    overallRemark = `${session.subject} fundamentals need significant review.`;
 
   return {
     overallRemark,
     strongTopics:     strong.slice(0, 3),
     weakTopics:       weak.slice(0, 3),
-    recommendedStudy: [`Review ${session.subject} fundamentals`, 'Practice with more examples'],
-    generatedAt:      new Date().toISOString()
+    missingConcepts:  allMissing,
+    recommendedStudy: allMissing.length > 0
+      ? allMissing.slice(0, 3)
+      : [`Review ${session.subject} fundamentals`],
+    avgScore,
+    generatedAt: new Date().toISOString()
   };
 }
+
+const toStringArray = v => Array.isArray(v) ? v.map(String) : [];
 
 module.exports = { generateSessionSummary };

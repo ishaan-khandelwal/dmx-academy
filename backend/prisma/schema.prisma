@@ -139,43 +139,47 @@ chatMessages LiveChatMessage[]
 model VivaQuestion {
   id             Int          @id @default(autoincrement())
   subject        String
+  topic          String       @default("")
   questionText   String
   expectedAnswer String
   keywords       String
   difficulty     Difficulty   @default(EASY)
-  topic          String       @default("")
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   vivaAnswers    VivaAnswer[]
 }
 
 model VivaSession {
-id Int @id @default(autoincrement())
-userId Int
-subject String
-status String @default("STARTED")
-score Int @default(0)
-feedback String? @db.Text
-aiSummary String? @db.Text
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
-vivaAnswers VivaAnswer[]
-user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          Int          @id @default(autoincrement())
+  userId      Int
+  subject     String
+  status      String       @default("IN_PROGRESS")
+  score       Int          @default(0)
+  feedback    String?      @db.Text
+  aiSummary   String?      @db.Text
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  vivaAnswers VivaAnswer[]
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VivaAnswer {
-id Int @id @default(autoincrement())
-sessionId Int
-questionId Int
-answerText String @db.Text
-score Int @default(0)
-feedback String? @db.Text
-strengths String? @db.Text
-weaknesses String? @db.Text
-followUp String?
-createdAt DateTime @default(now())
-question VivaQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-session VivaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id               Int          @id @default(autoincrement())
+  sessionId        Int
+  questionId       Int
+  answerText       String       @db.Text
+  score            Int          @default(0)
+  confidence       Float?
+  feedback         String?      @db.Text
+  strengths        String?      @db.Text
+  weaknesses       String?      @db.Text
+  missingConcepts  String?      @db.Text
+  suggestedRevision String?     @db.Text
+  rubric           String?      @db.Text
+  followUp         String?
+  createdAt        DateTime     @default(now())
+  question         VivaQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  session          VivaSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model StudyMaterial {
