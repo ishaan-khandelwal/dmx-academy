@@ -221,17 +221,30 @@ export default function VivaResultPage() {
                 </ul>
               </div>
             )}
-            {session.aiSummary.recommendedStudy?.length > 0 && (
+            {session.aiSummary.missingConcepts?.length > 0 && (
               <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-wider text-amber-500">Study Next</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-amber-500">Missing Concepts</p>
                 <ul className="space-y-1">
-                  {session.aiSummary.recommendedStudy.map((t, i) => (
+                  {session.aiSummary.missingConcepts.map((t, i) => (
                     <li key={i} className="flex items-start space-x-1.5">
-                      <Lightbulb size={11} className="text-amber-500 shrink-0 mt-0.5" />
+                      <AlertCircle size={11} className="text-amber-500 shrink-0 mt-0.5" />
                       <span className="text-xs" style={{ color: "var(--text-primary)" }}>{t}</span>
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {session.aiSummary.recommendedStudy?.length > 0 && (
+              <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 space-y-2 sm:col-span-3">
+                <p className="text-[10px] font-black uppercase tracking-wider text-indigo-500">Recommended Study</p>
+                <div className="flex flex-wrap gap-2">
+                  {session.aiSummary.recommendedStudy.map((t, i) => (
+                    <span key={i} className="text-xs px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center space-x-1">
+                      <Lightbulb size={10} />
+                      <span>{t}</span>
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -367,7 +380,34 @@ export default function VivaResultPage() {
                     </div>
                   )}
 
-                  {/* Strengths & Weaknesses (AI) */}
+                  {/* Rubric breakdown */}
+                  {a.rubric && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { label: "Technical", key: "technicalCorrectness", max: 4 },
+                        { label: "Complete",  key: "completeness",         max: 3 },
+                        { label: "Terminology",key:"terminology",          max: 2 },
+                        { label: "Clarity",   key: "clarity",              max: 1 },
+                      ].map(({ label, key, max }) => {
+                        const val = a.rubric[key] ?? 0;
+                        const pct = (val / max) * 100;
+                        return (
+                          <div key={key} className="p-2 rounded-xl border text-center"
+                               style={{ backgroundColor: "var(--bg-primary)", borderColor: "var(--border-primary)" }}>
+                            <div className="text-sm font-black" style={{ color: "var(--text-primary)" }}>
+                              {val}<span className="text-[10px] font-normal">/{max}</span>
+                            </div>
+                            <div className="w-full h-1 rounded-full mt-1 mb-1" style={{ backgroundColor: "var(--bg-card)" }}>
+                              <div className="h-1 rounded-full" style={{ width: `${pct}%`, background: "var(--accent-gradient)" }} />
+                            </div>
+                            <p className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>{label}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Strengths & Weaknesses */}
                   {(a.strengths?.length > 0 || a.weaknesses?.length > 0) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {a.strengths?.length > 0 && (
@@ -393,6 +433,42 @@ export default function VivaResultPage() {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* Missing Concepts + Suggested Revision */}
+                  {(a.missingConcepts?.length > 0 || a.suggestedRevision?.length > 0) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {a.missingConcepts?.length > 0 && (
+                        <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-1">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-amber-500">Missing Concepts</p>
+                          {a.missingConcepts.map((c, i) => (
+                            <p key={i} className="text-[11px] flex items-start space-x-1" style={{ color: "var(--text-secondary)" }}>
+                              <AlertCircle size={10} className="text-amber-500 shrink-0 mt-0.5" />
+                              <span>{c}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {a.suggestedRevision?.length > 0 && (
+                        <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/15 space-y-1">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-indigo-500">Revise</p>
+                          {a.suggestedRevision.map((r, i) => (
+                            <p key={i} className="text-[11px] flex items-start space-x-1" style={{ color: "var(--text-secondary)" }}>
+                              <Lightbulb size={10} className="text-indigo-500 shrink-0 mt-0.5" />
+                              <span>{r}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Confidence indicator */}
+                  {a.confidence != null && (
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      AI confidence: {Math.round(a.confidence * 100)}%
+                      {a.confidence < 0.6 && <span className="text-amber-500 ml-1">· evaluation may be uncertain</span>}
+                    </p>
                   )}
 
                   {/* Follow-up question */}

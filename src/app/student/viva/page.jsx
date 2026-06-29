@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   Brain, Play, CheckCircle2, XCircle, Clock, Award,
   ChevronRight, Activity, BookOpen, Send, Sparkles, MessageSquare,
-  Mic, MicOff, AlertCircle, Flag, Edit2, RefreshCw, CheckCheck
+  Mic, MicOff, AlertCircle, Flag, Edit2, RefreshCw, CheckCheck, Lightbulb, XCircle, CheckCircle2
 } from "lucide-react";
 
 // ─── Sprint 5 config constants (mirroring backend .env defaults) ───────────────
@@ -1320,6 +1320,41 @@ return (
                     <p className="text-xs italic" style={{ color: "var(--text-secondary)" }}>{lastEvaluation.followUp}</p>
                   </div>
                 </div>
+              )}
+
+              {/* Missing concepts + revision */}
+              {(lastEvaluation.missingConcepts?.length > 0 || lastEvaluation.suggestedRevision?.length > 0) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {lastEvaluation.missingConcepts?.length > 0 && (
+                    <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/15 space-y-1">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-amber-500">Missing Concepts</p>
+                      {lastEvaluation.missingConcepts.map((c, i) => (
+                        <p key={i} className="text-[11px] flex items-start space-x-1.5" style={{ color: "var(--text-secondary)" }}>
+                          <AlertCircle size={10} className="text-amber-500 shrink-0 mt-0.5" />
+                          <span>{c}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {lastEvaluation.suggestedRevision?.length > 0 && (
+                    <div className="p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 space-y-1">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-indigo-500">Revise</p>
+                      {lastEvaluation.suggestedRevision.map((r, i) => (
+                        <p key={i} className="text-[11px] flex items-start space-x-1.5" style={{ color: "var(--text-secondary)" }}>
+                          <Lightbulb size={10} className="text-indigo-500 shrink-0 mt-0.5" />
+                          <span>{r}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Confidence */}
+              {lastEvaluation.confidence != null && lastEvaluation.confidence < 0.6 && (
+                <p className="text-[10px] text-amber-500">
+                  ⚠ AI confidence: {Math.round(lastEvaluation.confidence * 100)}% — evaluation may be uncertain
+                </p>
               )}
             </motion.div>
           )}

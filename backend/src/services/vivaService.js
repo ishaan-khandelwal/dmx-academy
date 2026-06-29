@@ -181,13 +181,17 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer, sele
   await prisma.vivaAnswer.create({
     data: {
       sessionId,
-      questionId:  question.id,
-      answerText:  studentAnswer,
-      score:       evaluation.score,
-      feedback:    evaluation.feedback,
-      strengths:   evaluation.strengths?.length  ? JSON.stringify(evaluation.strengths)  : null,
-      weaknesses:  evaluation.weaknesses?.length ? JSON.stringify(evaluation.weaknesses) : null,
-      followUp:    evaluation.followUp || null
+      questionId:        question.id,
+      answerText:        studentAnswer,
+      score:             evaluation.score,
+      confidence:        evaluation.confidence ?? null,
+      feedback:          evaluation.feedback,
+      strengths:         evaluation.strengths?.length         ? JSON.stringify(evaluation.strengths)         : null,
+      weaknesses:        evaluation.weaknesses?.length        ? JSON.stringify(evaluation.weaknesses)        : null,
+      missingConcepts:   evaluation.missingConcepts?.length   ? JSON.stringify(evaluation.missingConcepts)   : null,
+      suggestedRevision: evaluation.suggestedRevision?.length ? JSON.stringify(evaluation.suggestedRevision) : null,
+      rubric:            evaluation.rubric                    ? JSON.stringify(evaluation.rubric)             : null,
+      followUp:          evaluation.followUp || null
     }
   });
 
@@ -214,12 +218,17 @@ const submitAnswer = async (userId, sessionId, questionText, studentAnswer, sele
 
   return {
     answer: {
-      score:      evaluation.score,
-      feedback:   evaluation.feedback,
-      strengths:  evaluation.strengths  || [],
-      weaknesses: evaluation.weaknesses || [],
-      followUp:   evaluation.followUp   || null,
-      usedAI:     !evaluation.usedFallback
+      score:             evaluation.score,
+      confidence:        evaluation.confidence   ?? null,
+      rubric:            evaluation.rubric        ?? null,
+      feedback:          evaluation.feedback,
+      strengths:         evaluation.strengths         || [],
+      weaknesses:        evaluation.weaknesses        || [],
+      missingConcepts:   evaluation.missingConcepts   || [],
+      suggestedRevision: evaluation.suggestedRevision || [],
+      followUp:          evaluation.followUp   || null,
+      usedAI:            !evaluation.usedFallback,
+      usedContext:       evaluation.usedContext ?? false
     },
     nextQuestion: nextQuestion
       ? { id: nextQuestion.id, questionText: nextQuestion.questionText }
@@ -250,11 +259,12 @@ const completeSession = async (userId, sessionId) => {
 
   // ── Generate AI session summary ───────────────────────────────────
   const answersForSummary = session.vivaAnswers.map(a => ({
-    questionText: a.question?.questionText || '',
-    answerText:   a.answerText,
-    score:        a.score,
-    strengths:    tryParseJSON(a.strengths),
-    weaknesses:   tryParseJSON(a.weaknesses)
+    questionText:      a.question?.questionText || '',
+    answerText:        a.answerText,
+    score:             a.score,
+    strengths:         tryParseJSON(a.strengths),
+    weaknesses:        tryParseJSON(a.weaknesses),
+    missingConcepts:   tryParseJSON(a.missingConcepts)
   }));
 
   const summaryObj = await generateSessionSummary(session, answersForSummary);
@@ -327,19 +337,22 @@ const getSubjects = async () => {
 const normalizeSession = (session) => {
   const normalized = {
     ...session,
-    totalScore: session.score ?? 0,
-    startedAt:  session.createdAt,
+    totalScore:  session.score ?? 0,
+    startedAt:   session.createdAt,
     completedAt: session.status === "COMPLETED" ? session.updatedAt : null,
-    aiSummary:  tryParseJSON(session.aiSummary)
+    aiSummary:   tryParseJSON(session.aiSummary)
   };
 
   if (session.vivaAnswers) {
     normalized.vivaAnswers = session.vivaAnswers.map(a => ({
       ...a,
-      studentAnswer: a.answerText,
-      questionText:  a.question?.questionText ?? '',
-      strengths:     tryParseJSON(a.strengths)  || [],
-      weaknesses:    tryParseJSON(a.weaknesses) || []
+      studentAnswer:     a.answerText,
+      questionText:      a.question?.questionText ?? '',
+      strengths:         tryParseJSON(a.strengths)         || [],
+      weaknesses:        tryParseJSON(a.weaknesses)        || [],
+      missingConcepts:   tryParseJSON(a.missingConcepts)   || [],
+      suggestedRevision: tryParseJSON(a.suggestedRevision) || [],
+      rubric:            tryParseJSON(a.rubric)            || null,
     }));
     normalized.totalQuestions = normalized.vivaAnswers.length || undefined;
   }

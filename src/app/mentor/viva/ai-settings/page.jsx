@@ -20,7 +20,12 @@ const PRESET_MODELS = [
 export default function AISettingsPage() {
   const { user, token, API_BASE } = useAuth();
 
-  const [settings, setSettings]   = useState({ model: "phi3", endpoint: "http://localhost:11434", timeout: 60000, enabled: true });
+  const [settings, setSettings]   = useState({
+    model: "phi3", endpoint: "http://localhost:11434",
+    timeout: 60000, enabled: true,
+    temperature: 0.1, top_p: 0.9, top_k: 20,
+    repeat_penalty: 1.1, num_predict: 1024
+  });
   const [health,   setHealth]     = useState(null);
   const [loading,  setLoading]    = useState(true);
   const [saving,   setSaving]     = useState(false);
@@ -221,6 +226,62 @@ export default function AISettingsPage() {
             onChange={e => setSettings(s => ({ ...s, timeout: parseInt(e.target.value) || 60000 }))}
           />
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>60000ms recommended. Increase if model is slow to respond.</p>
+        </div>
+
+        {/* Sampling Parameters */}
+        <div className="pt-1 border-t space-y-3" style={{ borderColor: "var(--border-primary)" }}>
+          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Sampling Parameters
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Temperature <span className="normal-case font-normal">(0=deterministic)</span>
+              </label>
+              <input type="number" step="0.05" min="0" max="1"
+                className="w-full p-2.5 rounded-xl border text-sm outline-none"
+                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
+                value={settings.temperature}
+                onChange={e => setSettings(s => ({ ...s, temperature: parseFloat(e.target.value) || 0.1 }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Top-P
+              </label>
+              <input type="number" step="0.05" min="0" max="1"
+                className="w-full p-2.5 rounded-xl border text-sm outline-none"
+                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
+                value={settings.top_p}
+                onChange={e => setSettings(s => ({ ...s, top_p: parseFloat(e.target.value) || 0.9 }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Top-K
+              </label>
+              <input type="number" min="1" max="100"
+                className="w-full p-2.5 rounded-xl border text-sm outline-none"
+                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
+                value={settings.top_k}
+                onChange={e => setSettings(s => ({ ...s, top_k: parseInt(e.target.value) || 20 }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Repeat Penalty
+              </label>
+              <input type="number" step="0.05" min="1" max="2"
+                className="w-full p-2.5 rounded-xl border text-sm outline-none"
+                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
+                value={settings.repeat_penalty}
+                onChange={e => setSettings(s => ({ ...s, repeat_penalty: parseFloat(e.target.value) || 1.1 }))}
+              />
+            </div>
+          </div>
+          <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+            Recommended for evaluation: temperature=0.1, top_k=20, repeat_penalty=1.1 (consistent scores).
+          </p>
         </div>
 
         {/* Buttons */}
