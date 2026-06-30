@@ -724,9 +724,12 @@ ${invocationAndPrint}
         `    cout << "]" << endl;`;
     } else if (returnType === "bool") {
       invocationAndPrint = `${solverInstantiation}    cout << (${callPrefix}${methodName}(${paramNames.join(", ")}) ? "true" : "false") << endl;`;
+    } else if (returnType === "string" || returnType === "std::string") {
+      invocationAndPrint = `${solverInstantiation}    cout << "\\"" << ${callPrefix}${methodName}(${paramNames.join(", ")}) << "\\"" << endl;`;
     } else {
       invocationAndPrint = `${solverInstantiation}    cout << ${callPrefix}${methodName}(${paramNames.join(", ")}) << endl;`;
     }
+
 
     // 6. Assemble the wrapper
     return `${processedUserCode}
