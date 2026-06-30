@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Play, Send, BookOpen, Terminal, 
+import {
+  Play, Send, BookOpen, Terminal,
   CheckCircle2, ChevronRight, Mic, RefreshCw,
   FileText, MessageCircle, ClipboardCheck, Palette, Trash2,
   Trophy, Clock, Lock, Flag, Volume2
@@ -22,7 +22,7 @@ const getCurrentTime = () => Date.now();
 // Lightweight syntax highlighting tokenizer for real-time editor overlay
 function highlightCode(code, lang) {
   if (!code) return "";
-  
+
   // Escape HTML tags to prevent broken code markup
   let html = code
     .replace(/&/g, "&amp;")
@@ -51,6 +51,26 @@ function highlightCode(code, lang) {
     });
   } else if (lang === "go") {
     const tokenRegex = /(\/\/.*)|("[^"]*"|'[^']*')|\b(package|import|func|var|const|return|type|struct|interface|chan|select|case|default|if|else|for|range|switch|go|defer)\b|\b(fmt\.Println|fmt\.Printf|print|panic)\b|\b(\d+)\b/g;
+    html = html.replace(tokenRegex, (m, comment, string, keyword, builtin, number) => {
+      if (comment) return `<span class="text-emerald-500 italic font-mono">${comment}</span>`;
+      if (string) return `<span class="text-rose-400 font-mono">${string}</span>`;
+      if (keyword) return `<span class="text-blue-400 font-bold font-mono">${keyword}</span>`;
+      if (builtin) return `<span class="text-amber-400 font-semibold font-mono">${builtin}</span>`;
+      if (number) return `<span class="text-purple-400 font-mono">${number}</span>`;
+      return m;
+    });
+  } else if (lang === "cpp") {
+    const tokenRegex = /(\/\/.*|\/\*[\s\S]*?\*\/)|("[^"]*"|'[^']*')|\b(class|struct|public|private|protected|template|typename|void|int|double|float|bool|char|string|if|else|for|while|do|switch|case|default|return|new|delete|std|using|namespace|include|const|constexpr)\b|\b(cout|cin|endl|vector|map|set|unordered_map|unordered_set|queue|stack|pair|make_pair|push_back|size)\b|\b(\d+)\b/g;
+    html = html.replace(tokenRegex, (m, comment, string, keyword, builtin, number) => {
+      if (comment) return `<span class="text-emerald-500 italic font-mono">${comment}</span>`;
+      if (string) return `<span class="text-rose-400 font-mono">${string}</span>`;
+      if (keyword) return `<span class="text-blue-400 font-bold font-mono">${keyword}</span>`;
+      if (builtin) return `<span class="text-amber-400 font-semibold font-mono">${builtin}</span>`;
+      if (number) return `<span class="text-purple-400 font-mono">${number}</span>`;
+      return m;
+    });
+  } else if (lang === "java") {
+    const tokenRegex = /(\/\/.*|\/\*[\s\S]*?\*\/)|("[^"]*"|'[^']*')|\b(public|private|protected|class|interface|extends|implements|void|int|double|float|boolean|char|String|if|else|for|while|do|switch|case|default|return|new|import|package|static|final|this|super|throw|throws|try|catch)\b|\b(System\.out\.println|System\.out\.print|Math\.max|Math\.min|List|ArrayList|Map|HashMap|Set|HashSet)\b|\b(\d+)\b/g;
     html = html.replace(tokenRegex, (m, comment, string, keyword, builtin, number) => {
       if (comment) return `<span class="text-emerald-500 italic font-mono">${comment}</span>`;
       if (string) return `<span class="text-rose-400 font-mono">${string}</span>`;
@@ -151,7 +171,7 @@ export default function ContestWorkspace() {
 
     // Exit fullscreen when contest ends
     if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen?.().catch(() => { });
     }
 
     const elapsedSecs = startTimeStamp ? Math.floor((getCurrentTime() - startTimeStamp) / 1000) : 0;
@@ -169,7 +189,7 @@ export default function ContestWorkspace() {
     };
 
     const combinedLeaderboard = [...contest.leaderboard, userEntry];
-    
+
     combinedLeaderboard.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       const parseTimeToSecs = (str) => {
@@ -258,9 +278,11 @@ export default function ContestWorkspace() {
                 editorTemplates: {
                   javascript: dbProb.templateJS || `// Solve: ${dbProb.title}\nfunction solution() {\n    // Write your code here\n}`,
                   python: dbProb.templatePython || `# Solve: ${dbProb.title}\ndef solution():\n    # Write your code here\n    pass`,
-                  go: dbProb.templateGo || `package main\n\nimport "fmt"\n\n// Solve: ${dbProb.title}\nfunc solution() {\n    // Write your code here\n    fmt.Println(0)\n}\n\nfunc main() {\n    solution()\n}`
+                  go: dbProb.templateGo || `package main\n\nimport "fmt"\n\n// Solve: ${dbProb.title}\nfunc solution() {\n    // Write your code here\n    fmt.Println(0)\n}\n\nfunc main() {\n    solution()\n}`,
+                  cpp: `// Solve: ${dbProb.title}\n#include <iostream>\n#include <vector>\n#include <string>\n\nusing namespace std;\n\nint main() {\n    // Write your code here\n    return 0;\n}`,
+                  java: `// Solve: ${dbProb.title}\nimport java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write your code here\n    }\n}`
                 },
-                defaultLanguage: "javascript"
+                defaultLanguage: "python"
               };
             });
 
@@ -491,7 +513,7 @@ export default function ContestWorkspace() {
       document.removeEventListener("keydown", handleGlobalKeyDown, true);
       document.removeEventListener("contextmenu", handleContextMenu);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contestStarted, contestEnded, finishContest]);
 
   // Real-time leaderboard WebSocket updates
@@ -610,24 +632,24 @@ export default function ContestWorkspace() {
     if (activeLeftTab === "excalidraw" && canvasRef.current) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
-      
+
       const updateCanvasSize = () => {
         if (!canvasRef.current) return;
         const rect = canvas.parentElement.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = 400; // Match CSS height of h-[400px]
-        
+
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.strokeStyle = drawColor;
         ctx.lineWidth = lineWidth;
-        
+
         drawCanvasBackground(canvas, ctx);
         restoreDrawing();
       };
 
       updateCanvasSize();
-      
+
       window.addEventListener("resize", updateCanvasSize);
       return () => {
         window.removeEventListener("resize", updateCanvasSize);
@@ -686,7 +708,7 @@ export default function ContestWorkspace() {
 
     setSecondsLeft(contest.durationMins * 60);
     setStartTimeStamp(getCurrentTime());
-    
+
     const initialCodes = {};
     contest.problems.forEach(prob => {
       if (prob.editorTemplates) {
@@ -904,7 +926,7 @@ export default function ContestWorkspace() {
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
     const before = currentCode.substring(0, start);
-    const after  = currentCode.substring(end);
+    const after = currentCode.substring(end);
     const updated = before + text + after;
     setEditorCodes(prev => ({ ...prev, [currentCodeKey]: updated }));
     const newCursor = start + text.length;
@@ -938,7 +960,7 @@ export default function ContestWorkspace() {
     const containerRect = containerRef.current.getBoundingClientRect();
     const relativeX = e.clientX - containerRect.left;
     const percentage = (relativeX / containerRect.width) * 100;
-    
+
     if (percentage > 20 && percentage < 80) {
       setLeftWidth(percentage);
     }
@@ -956,14 +978,14 @@ export default function ContestWorkspace() {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    
+
     setIsDrawing(true);
     const ctx = canvas.getContext("2d");
     ctx.beginPath();
     ctx.strokeStyle = drawColor;
     ctx.lineWidth = lineWidth;
     ctx.moveTo(x, y);
-    
+
     drawingPaths.current.push({
       color: drawColor,
       width: lineWidth,
@@ -977,11 +999,11 @@ export default function ContestWorkspace() {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    
+
     const ctx = canvas.getContext("2d");
     ctx.lineTo(x, y);
     ctx.stroke();
-    
+
     const currentPath = drawingPaths.current[drawingPaths.current.length - 1];
     if (currentPath) {
       currentPath.points.push({ x, y });
@@ -1015,18 +1037,18 @@ export default function ContestWorkspace() {
       stopSpeaking();
       return;
     }
-    
+
     const query = customQuery || "How do I optimize the code for performance?";
     setIsListening(true);
     setVoiceWaveform(true);
-    
+
     setTimeout(() => {
       setIsListening(false);
-      
+
       const newMessages = [...assistantMessages, { role: "user", text: query }];
       setAssistantMessages(newMessages);
       setAssistantTyping(true);
-      
+
       let responseText = "To optimize your algorithms, check data structures. A nested search takes O(N²) quadratic time. Storing keys inside a dictionary hash table resolves lookups in linear time.";
       if (query.toLowerCase().includes("auth")) {
         responseText = "Remember: Authentication proves identity (401 code). Authorization tests user privileges (403 code). Validate role rules securely inside server scopes.";
@@ -1074,7 +1096,7 @@ export default function ContestWorkspace() {
       setTimeout(() => {
         const results = [];
         const originalConsoleLog = console.log;
-        
+
         activeQuestion.testcases.forEach((tc, index) => {
           let passed = false;
           let output = "";
@@ -1121,7 +1143,7 @@ export default function ContestWorkspace() {
 
             const actual = targetFunction(...parsedInputs);
             output = (actual !== undefined) ? JSON.stringify(actual) : "";
-            
+
             if (typeof tc.assertion === "function") {
               passed = tc.assertion(currentCode, targetFunction);
             } else {
@@ -1129,7 +1151,7 @@ export default function ContestWorkspace() {
               const cleanExpected = (tc.expectedOutput || tc.expected || "").toString().trim().replace(/\r/g, "");
               const cleanActual = (actual !== undefined ? actual : "").toString().trim().replace(/\r/g, "");
               const cleanLogs = runLogs.join("\n").trim().replace(/\r/g, "");
-              
+
               passed = (cleanActual === cleanExpected) || (cleanLogs === cleanExpected);
             }
           } catch (e) {
@@ -1234,7 +1256,7 @@ export default function ContestWorkspace() {
     setTestResults([]);
 
     const langUpper = selectedLanguage.toUpperCase();
-    const mappedLang = langUpper === "JAVASCRIPT" ? "JAVASCRIPT" : langUpper === "PYTHON" ? "PYTHON" : langUpper === "GO" ? "GO" : "CPP";
+    const mappedLang = ["JAVASCRIPT", "PYTHON", "GO", "CPP", "JAVA"].includes(langUpper) ? langUpper : "CPP";
     const wrappedCode = wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {
@@ -1441,7 +1463,7 @@ export default function ContestWorkspace() {
 
   const renderText = (markdownText) => {
     if (!markdownText) return null;
-    
+
     const processInline = (str) => {
       const backtickParts = str.split(/`([^`]+)`/g);
       return backtickParts.flatMap((part, i) => {
@@ -1658,8 +1680,8 @@ export default function ContestWorkspace() {
               </div>
 
               <p className="text-[11px] text-[var(--text-secondary)] max-w-sm leading-normal">
-                {violationCount >= 3 
-                  ? "You have exceeded the maximum of 3 warnings. Your contest will now be submitted and closed." 
+                {violationCount >= 3
+                  ? "You have exceeded the maximum of 3 warnings. Your contest will now be submitted and closed."
                   : "You are strictly prohibited from switching tabs, losing focus, or exiting fullscreen. Re-enter fullscreen to continue."
                 }
               </p>
@@ -1682,7 +1704,7 @@ export default function ContestWorkspace() {
                     background: "linear-gradient(135deg, #f43f5e, #e11d48)"
                   }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
                   <span>Re-enter Fullscreen & Resume</span>
                 </button>
               )}
@@ -1905,12 +1927,12 @@ export default function ContestWorkspace() {
           {/* Futuristic grid and glow backdrop */}
           <div className="absolute top-0 left-0 right-0 h-[400px] bg-gradient-to-b from-indigo-500/5 via-purple-500/5 to-transparent pointer-events-none" />
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(99,102,241,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.02)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-          
+
           {/* Glowing backdrop blobs */}
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-500/15 rounded-full blur-[100px] pointer-events-none" />
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 dark:bg-purple-500/15 rounded-full blur-[100px] pointer-events-none" />
 
-          <motion.div 
+          <motion.div
             initial={{ scale: 0.96, opacity: 0, y: 15 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             className="max-w-xl w-full backdrop-blur-lg bg-white/70 dark:bg-slate-900/70 border border-slate-200/50 dark:border-slate-800/50 shadow-2xl rounded-3xl p-8 space-y-6 relative overflow-hidden transition-all duration-300 hover:shadow-indigo-500/10 hover:border-indigo-500/30"
@@ -1967,9 +1989,8 @@ export default function ContestWorkspace() {
               <button
                 disabled={isUpcoming}
                 onClick={startContest}
-                className={`flex-grow py-3 px-6 font-bold rounded-xl text-xs text-white flex items-center justify-center space-x-2 transition-all hover:scale-102 active:scale-98 shadow-[0_4px_15px_rgba(99,102,241,0.25)] hover:shadow-[0_4px_22px_rgba(99,102,241,0.4)] ${
-                  isUpcoming ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:brightness-110"
-                }`}
+                className={`flex-grow py-3 px-6 font-bold rounded-xl text-xs text-white flex items-center justify-center space-x-2 transition-all hover:scale-102 active:scale-98 shadow-[0_4px_15px_rgba(99,102,241,0.25)] hover:shadow-[0_4px_22px_rgba(99,102,241,0.4)] ${isUpcoming ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:brightness-110"
+                  }`}
                 style={{
                   background: isUpcoming ? "gray" : "linear-gradient(135deg, #6366f1, #8b5cf6)"
                 }}
@@ -1995,7 +2016,7 @@ export default function ContestWorkspace() {
                 {contest.title}
               </span>
               <span className="h-4 w-px bg-slate-500/20" />
-              
+
               {/* Question list selector pills */}
               <div className="flex items-center bg-slate-500/5 p-1 rounded-full border space-x-1" style={{ borderColor: "var(--border-primary)" }}>
                 {contest.problems.map((prob, idx) => {
@@ -2005,11 +2026,10 @@ export default function ContestWorkspace() {
                     <button
                       key={prob.id}
                       onClick={() => changeQuestion(idx)}
-                      className={`px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center space-x-1.5 relative ${
-                        isCurrent 
-                          ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] scale-105 hover:scale-110" 
-                          : "text-[var(--text-secondary)] hover:bg-slate-500/10 hover:text-[var(--text-primary)] hover:scale-102 bg-transparent"
-                      }`}
+                      className={`px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center space-x-1.5 relative ${isCurrent
+                        ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)] scale-105 hover:scale-110"
+                        : "text-[var(--text-secondary)] hover:bg-slate-500/10 hover:text-[var(--text-primary)] hover:scale-102 bg-transparent"
+                        }`}
                     >
                       <span>Q{idx + 1}</span>
                       {isSolved && (
@@ -2024,11 +2044,10 @@ export default function ContestWorkspace() {
             {/* Timers and scoring status */}
             <div className="flex items-center space-x-4">
               {/* Sports-scoreboard style countdown timer */}
-              <div className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-full border text-xs font-bold shadow-[0_0_15px_rgba(99,102,241,0.05)] font-mono transition-all duration-300 ${
-                secondsLeft < 120 
-                  ? "bg-rose-500/10 border-rose-500/30 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse" 
-                  : "bg-indigo-500/10 border-indigo-500/20 text-indigo-500 dark:text-indigo-400"
-              }`}>
+              <div className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-full border text-xs font-bold shadow-[0_0_15px_rgba(99,102,241,0.05)] font-mono transition-all duration-300 ${secondsLeft < 120
+                ? "bg-rose-500/10 border-rose-500/30 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse"
+                : "bg-indigo-500/10 border-indigo-500/20 text-indigo-500 dark:text-indigo-400"
+                }`}>
                 <Clock size={14} className={secondsLeft < 120 ? "animate-pulse text-rose-500" : "text-indigo-500"} />
                 <span>{formatTimer()}</span>
               </div>
@@ -2041,7 +2060,7 @@ export default function ContestWorkspace() {
                 <span className="text-[var(--text-muted)]">/ {contest.totalPoints} pts</span>
               </div>
 
-              <button 
+              <button
                 onClick={() => setShowSubmitConfirm(true)}
                 className="flex items-center space-x-1.5 px-4 py-2 rounded-full text-xs font-bold text-white shadow-[0_4px_12px_rgba(239,68,68,0.25)] hover:scale-105 hover:shadow-[0_4px_20px_rgba(239,68,68,0.4)] active:scale-95 transition-all duration-200 cursor-pointer border border-rose-500/30 shadow-red-500/10"
                 style={{ background: "linear-gradient(135deg, #f43f5e, #e11d48)" }}
@@ -2053,12 +2072,12 @@ export default function ContestWorkspace() {
           </header>
 
           {/* Arena Content split columns */}
-          <div 
+          <div
             ref={containerRef}
             className="flex flex-1 overflow-hidden relative"
           >
             {/* Left Column Problem Description */}
-            <div 
+            <div
               className="flex flex-col h-full overflow-hidden shrink-0"
               style={{ width: `${leftWidth}%` }}
             >
@@ -2078,11 +2097,10 @@ export default function ContestWorkspace() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveLeftTab(tab.id)}
-                      className={`flex items-center space-x-1.5 px-3 py-1.5 text-[11px] font-extrabold cursor-pointer rounded-full transition-all duration-200 whitespace-nowrap hover:-translate-y-0.5 active:translate-y-0 ${
-                        isActive 
-                          ? "bg-gradient-to-r from-indigo-500/15 to-purple-500/15 text-indigo-500 border border-indigo-500/30 shadow-[0_2px_10px_rgba(99,102,241,0.1)]" 
-                          : "text-[var(--text-secondary)] bg-transparent border border-transparent hover:bg-slate-500/5 hover:text-[var(--text-primary)]"
-                      }`}
+                      className={`flex items-center space-x-1.5 px-3 py-1.5 text-[11px] font-extrabold cursor-pointer rounded-full transition-all duration-200 whitespace-nowrap hover:-translate-y-0.5 active:translate-y-0 ${isActive
+                        ? "bg-gradient-to-r from-indigo-500/15 to-purple-500/15 text-indigo-500 border border-indigo-500/30 shadow-[0_2px_10px_rgba(99,102,241,0.1)]"
+                        : "text-[var(--text-secondary)] bg-transparent border border-transparent hover:bg-slate-500/5 hover:text-[var(--text-primary)]"
+                        }`}
                     >
                       {isLocked ? <Lock size={11} className="text-[var(--text-muted)]" /> : tab.icon}
                       <span>{tab.label}</span>
@@ -2102,9 +2120,8 @@ export default function ContestWorkspace() {
                           <button
                             key={col}
                             onClick={() => setDrawColor(col)}
-                            className={`h-5 w-5 rounded-full border cursor-pointer transition-transform ${
-                              drawColor === col ? "scale-110 border-indigo-500 shadow-sm" : "border-slate-500/20"
-                            }`}
+                            className={`h-5 w-5 rounded-full border cursor-pointer transition-transform ${drawColor === col ? "scale-110 border-indigo-500 shadow-sm" : "border-slate-500/20"
+                              }`}
                             style={{ backgroundColor: col }}
                           />
                         ))}
@@ -2112,18 +2129,18 @@ export default function ContestWorkspace() {
                       <span className="h-4 w-px bg-slate-500/20" />
                       <div className="flex items-center space-x-1.5">
                         <span className="text-[10px] text-[var(--text-secondary)] font-bold">Size:</span>
-                        <input 
-                          type="range" 
-                          min="1" 
-                          max="10" 
-                          value={lineWidth} 
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          value={lineWidth}
                           onChange={(e) => setLineWidth(parseInt(e.target.value))}
                           className="w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
                     </div>
 
-                    <button 
+                    <button
                       onClick={clearCanvas}
                       className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-500 hover:bg-rose-500/5 transition-colors cursor-pointer"
                     >
@@ -2150,7 +2167,7 @@ export default function ContestWorkspace() {
             </div>
 
             {/* Split Resize bar */}
-            <div 
+            <div
               onMouseDown={startResizing}
               className="w-1.5 hover:w-2 bg-slate-200 dark:bg-slate-800 hover:bg-indigo-500 cursor-col-resize select-none h-full transition-all duration-150 shrink-0 z-20 relative"
             >
@@ -2172,6 +2189,8 @@ export default function ContestWorkspace() {
                     {activeQuestion && activeQuestion.editorTemplates.javascript && <option value="javascript">JavaScript</option>}
                     {activeQuestion && activeQuestion.editorTemplates.python && <option value="python">Python</option>}
                     {activeQuestion && activeQuestion.editorTemplates.go && <option value="go">Go</option>}
+                    {activeQuestion && activeQuestion.editorTemplates.cpp && <option value="cpp">C++</option>}
+                    {activeQuestion && activeQuestion.editorTemplates.java && <option value="java">Java</option>}
                   </select>
                 </div>
 
@@ -2181,27 +2200,26 @@ export default function ContestWorkspace() {
               </div>
 
               {/* Voice Assistant panel */}
-              <div 
-                className="flex items-center justify-between p-3.5 border-b shadow-[0_4px_15px_rgba(99,102,241,0.03)] transition-all duration-300 relative overflow-hidden" 
-                style={{ 
+              <div
+                className="flex items-center justify-between p-3.5 border-b shadow-[0_4px_15px_rgba(99,102,241,0.03)] transition-all duration-300 relative overflow-hidden"
+                style={{
                   borderColor: "var(--border-primary)",
                   background: "linear-gradient(90deg, rgba(99, 102, 241, 0.03) 0%, rgba(139, 92, 246, 0.03) 50%, rgba(244, 63, 94, 0.03) 100%)"
                 }}
               >
                 {/* Glowing edge accents */}
                 <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20" />
-                
+
                 <div className="flex items-center space-x-3.5 relative z-10">
                   <button
                     onClick={isSpeaking ? stopSpeaking : () => askVoiceAssistant()}
                     disabled={isListening || assistantTyping}
-                    className={`relative h-9 w-9 rounded-full flex items-center justify-center text-white transition-all border border-transparent outline-none focus:outline-none shadow-md ${
-                      isSpeaking 
-                        ? "bg-rose-500 hover:bg-rose-600 cursor-pointer shadow-rose-500/25" 
-                        : isListening 
-                          ? "bg-red-500 shadow-red-500/35 scale-105" 
-                          : "bg-indigo-600 hover:bg-indigo-700 cursor-pointer shadow-indigo-600/25 hover:scale-105 active:scale-95"
-                    }`}
+                    className={`relative h-9 w-9 rounded-full flex items-center justify-center text-white transition-all border border-transparent outline-none focus:outline-none shadow-md ${isSpeaking
+                      ? "bg-rose-500 hover:bg-rose-600 cursor-pointer shadow-rose-500/25"
+                      : isListening
+                        ? "bg-red-500 shadow-red-500/35 scale-105"
+                        : "bg-indigo-600 hover:bg-indigo-700 cursor-pointer shadow-indigo-600/25 hover:scale-105 active:scale-95"
+                      }`}
                     title={isSpeaking ? "Stop speaking" : "Start query"}
                   >
                     {isSpeaking ? (
@@ -2213,7 +2231,7 @@ export default function ContestWorkspace() {
                       <span className="absolute inset-0 rounded-full border-2 border-red-500 animate-ping opacity-75" />
                     )}
                   </button>
-                  
+
                   <div>
                     <div className="text-xs font-black tracking-wider text-[var(--text-primary)] flex items-center space-x-1.5">
                       <span>VOICE AI DEVELOPER ASSISTANT</span>
@@ -2230,20 +2248,20 @@ export default function ContestWorkspace() {
                   {voiceWaveform && (
                     <div className="flex space-x-1 items-end h-5 px-3">
                       {[1, 2, 3, 4, 5, 6].map(bar => (
-                        <span 
-                          key={bar} 
+                        <span
+                          key={bar}
                           className="w-0.75 bg-gradient-to-t from-indigo-500 to-purple-500 rounded-full animate-waveform-bar"
-                          style={{ 
+                          style={{
                             animationDelay: `${bar * 0.1}s`,
                             animationDuration: `${0.6 + (bar % 3) * 0.2}s`,
                             height: "100%",
                             minHeight: "4px"
-                          }} 
+                          }}
                         />
                       ))}
                     </div>
                   )}
-                  
+
                   <button
                     onClick={() => askVoiceAssistant()}
                     disabled={isListening || assistantTyping}
@@ -2257,7 +2275,7 @@ export default function ContestWorkspace() {
               {/* Editor screen */}
               <div className="flex-1 flex overflow-hidden font-mono text-sm relative" style={{ backgroundColor: "var(--bg-code)" }}>
                 {/* Lines column */}
-                <div 
+                <div
                   ref={lineNumbersRef}
                   className="w-12 select-none text-right pr-3 pt-4 border-r overflow-hidden leading-6"
                   style={{ borderColor: "var(--border-primary)", color: "var(--text-muted)", fontSize: "12px" }}
@@ -2309,11 +2327,10 @@ export default function ContestWorkspace() {
                       <button
                         key={ctab.id}
                         onClick={() => setActiveConsoleTab(ctab.id)}
-                        className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          activeConsoleTab === ctab.id 
-                            ? "bg-slate-500/10 text-indigo-400 border border-slate-500/10" 
-                            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                        }`}
+                        className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeConsoleTab === ctab.id
+                          ? "bg-slate-500/10 text-indigo-400 border border-slate-500/10"
+                          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          }`}
                       >
                         {ctab.icon}
                         <span>{ctab.label}</span>
@@ -2322,7 +2339,7 @@ export default function ContestWorkspace() {
                   </div>
 
                   <div className="flex items-center space-x-3">
-                    <button 
+                    <button
                       onClick={runCode}
                       disabled={isRunning || isSubmitting}
                       className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-bold border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
@@ -2335,7 +2352,7 @@ export default function ContestWorkspace() {
                       <span>{isRunning ? "Running..." : "Run Testcases"}</span>
                     </button>
 
-                    <button 
+                    <button
                       onClick={submitCode}
                       disabled={isSubmitting || isRunning}
                       className="relative flex items-center space-x-1.5 px-3 py-1 text-white rounded text-[11px] font-bold transition-all cursor-pointer disabled:opacity-60 overflow-hidden"
@@ -2401,21 +2418,19 @@ export default function ContestWorkspace() {
                         </div>
                       ) : testResults ? (
                         testResults.map((res, idx) => (
-                          <div 
-                            key={idx} 
-                            className={`p-4 rounded-2xl border transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.03)] space-y-3.5 ${
-                              res.passed 
-                                ? "bg-emerald-500/5 dark:bg-emerald-500/5 border-emerald-500/20 shadow-emerald-500/5 hover:border-emerald-500/40" 
-                                : "bg-rose-500/5 dark:bg-rose-500/5 border-rose-500/20 shadow-rose-500/5 hover:border-rose-500/40"
-                            }`}
+                          <div
+                            key={idx}
+                            className={`p-4 rounded-2xl border transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.03)] space-y-3.5 ${res.passed
+                              ? "bg-emerald-500/5 dark:bg-emerald-500/5 border-emerald-500/20 shadow-emerald-500/5 hover:border-emerald-500/40"
+                              : "bg-rose-500/5 dark:bg-rose-500/5 border-rose-500/20 shadow-rose-500/5 hover:border-rose-500/40"
+                              }`}
                           >
                             <div className="flex justify-between items-center">
                               <span className="font-extrabold uppercase tracking-wider text-[10px]" style={{ color: "var(--text-secondary)" }}>{res.name}</span>
-                              <span className={`font-black text-[10px] px-2.5 py-0.8 rounded-full border uppercase tracking-wider ${
-                                res.passed 
-                                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]" 
-                                  : "bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.15)]"
-                              }`}>
+                              <span className={`font-black text-[10px] px-2.5 py-0.8 rounded-full border uppercase tracking-wider ${res.passed
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                                : "bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.15)]"
+                                }`}>
                                 {res.passed ? "Passed" : "Failed"}
                               </span>
                             </div>
@@ -2475,7 +2490,7 @@ export default function ContestWorkspace() {
       <AnimatePresence>
         {contestEnded && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               className="max-w-xl w-full rounded-3xl border p-8 shadow-2xl space-y-6"
@@ -2510,13 +2525,12 @@ export default function ContestWorkspace() {
                 <div className="text-[10px] text-[var(--text-muted)] font-extrabold uppercase tracking-wide">Live Standings</div>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                   {finalScoreboard.map((player) => (
-                    <div 
+                    <div
                       key={player.rank}
-                      className={`flex justify-between items-center p-2.5 rounded-xl border text-xs ${
-                        player.isUser 
-                          ? "bg-indigo-500/10 border-indigo-500/30 font-bold" 
-                          : "bg-slate-500/5 border-transparent"
-                      }`}
+                      className={`flex justify-between items-center p-2.5 rounded-xl border text-xs ${player.isUser
+                        ? "bg-indigo-500/10 border-indigo-500/30 font-bold"
+                        : "bg-slate-500/5 border-transparent"
+                        }`}
                     >
                       <div className="flex items-center space-x-2">
                         <span className="text-[10px] text-[var(--text-secondary)] font-extrabold w-6">
@@ -2526,7 +2540,7 @@ export default function ContestWorkspace() {
                           {player.username} {player.isUser && "(You)"}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center space-x-3 font-mono">
                         <span className="text-[10px] text-[var(--text-muted)]">{player.time}</span>
                         <span className="font-extrabold text-[var(--text-primary)]">{player.score} pts</span>
@@ -2654,7 +2668,7 @@ function JudgingOverlayContent({ selectedLanguage, currentCode, user }) {
         {/* Sleek Progress Bar */}
         <div className="space-y-2">
           <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden shadow-inner">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 transition-all duration-300 ease-out rounded-full"
               style={{ width: `${progressPercent}%` }}
             />

@@ -10,6 +10,8 @@ const {
   getContestParticipation,
   getContestParticipants,
   getAllParticipationReports,
+  updateContest,
+  deleteContest,
 } = require('../controllers/contestController');
 const { protect, restrictTo, fetchUserIfExists } = require('../middleware/authMiddleware');
 
@@ -28,6 +30,8 @@ router.get('/:id/participation', protect, getContestParticipation);
 
 // Admin/Mentor routes
 router.post('/', protect, restrictTo('ADMIN', 'MENTOR'), createContest);
+router.put('/:id', protect, restrictTo('ADMIN', 'MENTOR'), updateContest);
+router.delete('/:id', protect, restrictTo('ADMIN', 'MENTOR'), deleteContest);
 router.post('/:id/problem', protect, restrictTo('ADMIN', 'MENTOR'), addProblemToContest);
 router.get('/:id/participants', protect, restrictTo('ADMIN', 'MENTOR'), getContestParticipants);
 

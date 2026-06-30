@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   Brain, Play, CheckCircle2, XCircle, Clock, Award,
   ChevronRight, Activity, BookOpen, Send, Sparkles, MessageSquare,
-  Mic, MicOff, AlertCircle, Flag, Edit2, RefreshCw, CheckCheck, Lightbulb, XCircle, CheckCircle2
+  Mic, MicOff, AlertCircle, Flag, Edit2, RefreshCw, CheckCheck, Lightbulb
 } from "lucide-react";
 
 // ─── Sprint 5 config constants (mirroring backend .env defaults) ───────────────

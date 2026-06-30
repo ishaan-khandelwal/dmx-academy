@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trophy, Clock, Sparkles, ChevronRight, Save,
@@ -9,9 +9,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-export default function CreateContest() {
+export default function EditContest() {
+  const params = useParams();
   const router = useRouter();
+  const contestId = params.contestId;
   const { token, API_BASE } = useAuth();
+
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [category, setCategory] = useState("Algorithms & Frontend");
@@ -25,22 +28,21 @@ export default function CreateContest() {
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [loadingContest, setLoadingContest] = useState(true);
 
   // Custom problems states
   const [availableProblems, setAvailableProblems] = useState([]);
-  // Reload available problems from backend & local storage fallback
+
   const refreshProblemsList = async () => {
     let merged = [];
     try {
       const res = await fetch(`${API_BASE}/api/problems`);
       const data = await res.json();
       if (data.success && data.problems) {
-        // Map database problems to match the UI format
         merged = data.problems.map(prob => {
-          // Capitalize difficulty: EASY -> Easy, MEDIUM -> Medium, HARD -> Hard
           const formattedDiff = prob.difficulty.charAt(0) + prob.difficulty.slice(1).toLowerCase();
           return {
-            id: prob.id, // Database integer ID
+            id: prob.id,
             slug: prob.slug,
             title: prob.title,
             difficulty: formattedDiff,
@@ -51,14 +53,81 @@ export default function CreateContest() {
     } catch (err) {
       console.error("Failed to fetch problems from backend API:", err);
     }
-
     setAvailableProblems(merged);
   };
 
-  // Load available problems on mount
+  const loadContestData = useCallback(async () => {
+    if (!contestId) return;
+    setLoadingContest(true);
+    try {
+      const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(hasRealToken
+          ? { Authorization: `Bearer ${token}` }
+          : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" }),
+      };
+
+      const res = await fetch(`${API_BASE}/api/contests/${contestId}`, { headers });
+      const data = await res.json();
+      if (data.success && data.contest) {
+        const contest = data.contest;
+        setTitle(contest.title || "");
+        setDesc(contest.description || "");
+        setCategory(contest.category || "Algorithms & Frontend");
+
+        // Parse Start Date and Time
+        if (contest.startTime) {
+          const startObj = new Date(contest.startTime);
+          const yyyy = startObj.getFullYear();
+          const mm = String(startObj.getMonth() + 1).padStart(2, "0");
+          const dd = String(startObj.getDate()).padStart(2, "0");
+          setStartDate(`${yyyy}-${mm}-${dd}`);
+
+          const hh = String(startObj.getHours()).padStart(2, "0");
+          const min = String(startObj.getMinutes()).padStart(2, "0");
+          setStartTime(`${hh}:${min}`);
+        }
+
+        // Calculate Duration
+        if (contest.startTime && contest.endTime) {
+          const diffMins = Math.round((new Date(contest.endTime) - new Date(contest.startTime)) / 60000);
+          setDurationMins(diffMins);
+        }
+
+        // Determine Status based on time (matching getContestStatus logic)
+        const now = new Date();
+        const start = new Date(contest.startTime);
+        const end = new Date(contest.endTime);
+        if (now >= start && now <= end) setStatus("active");
+        else if (now > end) setStatus("past");
+        else setStatus("upcoming");
+
+        // Problems
+        if (contest.contestProblems) {
+          const pIds = contest.contestProblems.map(cp => cp.problemId);
+          setSelectedProblemIds(pIds);
+
+          const sumPoints = contest.contestProblems.reduce((sum, cp) => sum + (cp.points || 0), 0);
+          setTotalPoints(sumPoints || 300);
+        }
+      } else {
+        alert("Failed to load contest details.");
+      }
+    } catch (err) {
+      console.error("Failed to load contest:", err);
+    }
+    setLoadingContest(false);
+  }, [contestId, API_BASE, token]);
+
+  // Load problems and contest details on mount
   useEffect(() => {
-    refreshProblemsList();
-  }, []);
+    const init = async () => {
+      await refreshProblemsList();
+      await loadContestData();
+    };
+    init();
+  }, [contestId, loadContestData]);
 
   // Auto-generate slug from title
   useEffect(() => {
@@ -81,7 +150,7 @@ export default function CreateContest() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title || !slug) return;
+    if (!title) return;
     if (submitting) return; // prevent double submit
     setSubmitting(true);
     setErrorMsg(null);
@@ -92,34 +161,6 @@ export default function CreateContest() {
     }
     const end = new Date(start.getTime() + durationMins * 60000);
 
-    // Build the problems array from selection
-    const contestProblems = selectedProblemIds.map(id => {
-      const prob = availableProblems.find(p => p.id === id);
-      return {
-        ...prob,
-        points: Math.round(totalPoints / (selectedProblemIds.length || 1))
-      };
-    });
-
-    const timeLeftStr = status === "active"
-      ? `${durationMins}m remaining`
-      : status === "upcoming" ? "Starts in 2 hours" : "Completed";
-
-    const newContestObj = {
-      id: slug,
-      title,
-      desc,
-      durationMins: Number(durationMins),
-      totalPoints: Number(totalPoints),
-      status,
-      category,
-      timeLeftStr,
-      startTime: start.toISOString(),
-      endTime: end.toISOString(),
-      problems: contestProblems,
-      leaderboard: []
-    };
-
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {
       "Content-Type": "application/json",
@@ -129,60 +170,49 @@ export default function CreateContest() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/api/contests`, {
-        method: "POST",
+      const res = await fetch(`${API_BASE}/api/contests/${contestId}`, {
+        method: "PUT",
         headers,
         body: JSON.stringify({
           title,
           description: desc,
           category,
           startTime: start.toISOString(),
-          endTime: end.toISOString()
+          endTime: end.toISOString(),
+          problems: selectedProblemIds,
+          totalPoints: Number(totalPoints)
         })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        let errMsg = data.message || "Failed to create contest in database.";
+        let errMsg = data.message || "Failed to update contest in database.";
         setErrorMsg(errMsg);
         setSubmitting(false);
         return;
       }
 
-      const createdContest = data.contest;
-      // Post problem links to the contest
-      for (const problemId of selectedProblemIds) {
-        const numId = typeof problemId === "number" ? problemId : parseInt(problemId);
-        if (!isNaN(numId)) {
-          try {
-            const probRes = await fetch(`${API_BASE}/api/contests/${createdContest.id}/problem`, {
-              method: "POST",
-              headers,
-              body: JSON.stringify({
-                problemId: numId,
-                points: Math.round(totalPoints / (selectedProblemIds.length || 1))
-              })
-            });
-            const probData = await probRes.json();
-            if (!probRes.ok || !probData.success) {
-              console.error("Failed to add problem to contest in database:", probData.message);
-            }
-          } catch (err) {
-            console.error("Failed to add problem to contest in database due to network error:", err);
-          }
-        }
-      }
-
-      console.log("Contest created and problems linked in backend database successfully");
+      console.log("Contest updated and problems synced in database successfully");
       setSuccess(true);
       setTimeout(() => {
         router.push("/admin/contests");
       }, 1000);
     } catch (err) {
-      console.error("Failed to save contest to database:", err);
-      setErrorMsg("Network error connecting to the database server. Check your connection.");
+      console.error("Failed to update contest:", err);
+      setErrorMsg("Network error connecting to the database server.");
       setSubmitting(false);
     }
   };
+
+  if (loadingContest) {
+    return (
+      <div className="flex items-center justify-center py-20 space-x-2">
+        <RefreshCw size={18} className="animate-spin text-cyan-400" />
+        <span className="text-xs font-bold" style={{ color: "var(--text-secondary)" }}>
+          Loading contest details...
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -190,15 +220,15 @@ export default function CreateContest() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <button
-            onClick={() => router.push("/admin/dashboard")}
+            onClick={() => router.push("/admin/contests")}
             className="flex items-center space-x-1.5 text-xs font-semibold hover:underline cursor-pointer"
             style={{ color: "var(--text-secondary)" }}
           >
             <ArrowLeft size={13} />
-            <span>Back to Dashboard</span>
+            <span>Back to Contests List</span>
           </button>
           <h1 className="text-2xl font-black font-display tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Create New Contest
+            Edit Contest
           </h1>
         </div>
       </div>
@@ -209,7 +239,7 @@ export default function CreateContest() {
           animate={{ opacity: 1, y: 0 }}
           className="p-4 rounded-2xl border text-xs text-center font-bold bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
         >
-          🎉 Contest created successfully! Redirecting...
+          🎉 Contest updated successfully! Redirecting back...
         </motion.div>
       )}
 
@@ -258,23 +288,21 @@ export default function CreateContest() {
               </div>
 
               {/* Slug */}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 opacity-60">
                 <label className="text-[10px] font-extrabold uppercase tracking-wider flex items-center space-x-1" style={{ color: "var(--text-secondary)" }}>
                   <span>Contest Slug / URL ID</span>
-                  <HelpCircle size={10} className="text-[var(--text-muted)]" title="URL path identity tag, auto-generated from title" />
+                  <HelpCircle size={10} className="text-[var(--text-muted)]" title="URL path identity tag, read-only for existing contests" />
                 </label>
                 <input
                   type="text"
                   placeholder="synapse-code-clash-05"
                   value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  className="w-full rounded-2xl py-3 px-4 text-xs outline-none border transition-all"
+                  disabled
+                  className="w-full rounded-2xl py-3 px-4 text-xs border bg-slate-500/5 cursor-not-allowed"
                   style={{
-                    backgroundColor: "var(--bg-input)",
                     borderColor: "var(--border-primary)",
-                    color: "var(--text-primary)"
+                    color: "var(--text-muted)"
                   }}
-                  required
                 />
               </div>
 
@@ -514,12 +542,12 @@ export default function CreateContest() {
               {submitting ? (
                 <>
                   <RefreshCw size={14} className="animate-spin" />
-                  <span>Creating Contest...</span>
+                  <span>Saving Changes...</span>
                 </>
               ) : (
                 <>
                   <Save size={14} />
-                  <span>Create Contest &amp; Publish</span>
+                  <span>Save Changes</span>
                 </>
               )}
             </button>
@@ -547,102 +575,63 @@ export default function CreateContest() {
                 }`}
             />
 
-            {/* Card Top */}
-            <div className="space-y-4 relative z-10">
-              <div className="flex justify-between items-center">
-                <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border bg-slate-500/5"
-                  style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span
+                  className="text-[9px] font-bold uppercase px-2 py-0.5 rounded border"
+                  style={{
+                    backgroundColor: "var(--bg-primary)",
+                    borderColor: "var(--border-primary)",
+                    color: "var(--text-secondary)"
+                  }}
                 >
-                  {category || "Category"}
+                  {category}
                 </span>
 
-                {/* Dynamic Tag Pill */}
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${status === "active" ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
-                  status === "upcoming" ? "text-indigo-500 bg-indigo-500/10 border-indigo-500/20" :
-                    "text-[var(--text-muted)] bg-slate-500/5 border-transparent"
-                  }`}>
-                  {status.toUpperCase()}
-                </span>
+                <div className="flex items-center space-x-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${status === "active" ? "bg-emerald-500 animate-pulse" : status === "upcoming" ? "bg-indigo-500" : "bg-slate-400"
+                    }`} />
+                  <span
+                    className="text-[9px] font-extrabold uppercase"
+                    style={{
+                      color: status === "active" ? "var(--text-emerald-500, #10b981)" : status === "upcoming" ? "var(--text-indigo-500, #6366f1)" : "var(--text-muted)"
+                    }}
+                  >
+                    {status}
+                  </span>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <h3 className="text-lg font-bold font-display leading-snug group-hover:text-[var(--text-accent)] transition-colors"
+              <div className="space-y-1">
+                <h3
+                  className="font-bold text-sm leading-snug group-hover:text-[var(--text-accent)] transition-colors"
                   style={{ color: "var(--text-primary)" }}
                 >
                   {title || "Untitled Contest"}
                 </h3>
-                <p className="text-xs leading-relaxed line-clamp-3" style={{ color: "var(--text-secondary)" }}>
-                  {desc || "Contest description preview goes here..."}
+                <p
+                  className="text-[10px] line-clamp-2"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {desc || "No description provided yet."}
                 </p>
               </div>
-
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl border bg-slate-500/5" style={{ borderColor: "var(--border-primary)" }}>
-                <div className="space-y-0.5">
-                  <span className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Points</span>
-                  <div className="text-sm font-black text-[var(--text-primary)]">{totalPoints} pts</div>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-[10px] text-[var(--text-muted)] font-bold uppercase">Duration</span>
-                  <div className="text-sm font-black text-[var(--text-primary)]">{durationMins} mins</div>
-                </div>
-              </div>
             </div>
 
-            {/* Card Bottom CTA Actions */}
-            <div className="pt-4 mt-6 border-t flex items-center justify-between" style={{ borderColor: "var(--border-primary)" }}>
-              <div className="flex items-center space-x-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                <Clock size={12} className="text-[var(--text-muted)]" />
-                <span>{status === "active" ? `${durationMins}m remaining` : status === "upcoming" ? "Starts in 2 hours" : "Completed"}</span>
+            <div className="pt-6 mt-6 border-t flex items-center justify-between text-[10px] font-bold" style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
+              <div className="flex items-center space-x-1">
+                <Clock size={11} />
+                <span>{durationMins} Mins</span>
               </div>
-
-              {status === "active" && (
-                <div
-                  className="px-4 py-2 text-xs font-bold text-white rounded-xl shadow-md flex items-center space-x-1"
-                  style={{ background: "var(--accent-gradient)" }}
-                >
-                  <span>Enter Arena</span>
-                  <ChevronRight size={13} />
-                </div>
-              )}
-
-              {status === "upcoming" && (
-                <div
-                  className="px-4 py-2 text-xs font-bold rounded-xl border"
-                  style={{
-                    backgroundColor: "var(--bg-primary)",
-                    borderColor: "var(--border-primary)",
-                    color: "var(--text-primary)"
-                  }}
-                >
-                  Register
-                </div>
-              )}
-
-              {status === "past" && (
-                <div
-                  className="px-4 py-2 text-xs font-bold rounded-xl border"
-                  style={{
-                    backgroundColor: "var(--bg-primary)",
-                    borderColor: "var(--border-primary)",
-                    color: "var(--text-primary)"
-                  }}
-                >
-                  View Scoreboard
-                </div>
-              )}
+              <div className="flex items-center space-x-1 text-indigo-400">
+                <Trophy size={11} />
+                <span>{totalPoints} Pts</span>
+              </div>
             </div>
-          </div>
-
-          {/* Quick instructions alert */}
-          <div className="p-4 rounded-2xl border text-[11px] space-y-1.5" style={{ backgroundColor: "var(--bg-badge)", borderColor: "var(--border-accent)", color: "var(--text-secondary)" }}>
-            <p className="font-bold text-[var(--text-accent)]">Live Synchronization Preview</p>
-            <p>Creating this contest will compile your metadata and append it to the lobby registry. It becomes instantly visible to guest students.</p>
           </div>
         </div>
 
       </div>
-
     </div>
   );
 }

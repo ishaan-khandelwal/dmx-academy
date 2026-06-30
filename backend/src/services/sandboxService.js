@@ -219,14 +219,17 @@ const runInSandbox = async (language, code, problemConfig, testCases, options = 
         if (langKey === 'cpp') {
           const exeName = isWindows ? 'main.exe' : 'main.out';
           const localCompileArgs = ['-O2', '-o', path.join(tempDir, exeName), path.join(tempDir, srcFile)];
-          compileRes = await runProcess('g++', localCompileArgs, '', 15000);
+          const gxxCmd = process.env.GXX_PATH || 'g++';
+          compileRes = await runProcess(gxxCmd, localCompileArgs, '', 15000);
         } else if (langKey === 'java') {
           const localCompileArgs = [path.join(tempDir, srcFile)];
-          compileRes = await runProcess('javac', localCompileArgs, '', 15000);
+          const javacCmd = process.env.JAVAC_PATH || 'javac';
+          compileRes = await runProcess(javacCmd, localCompileArgs, '', 15000);
         } else if (langKey === 'go') {
           const exeName = isWindows ? 'main.exe' : 'main';
           const localCompileArgs = ['build', '-o', path.join(tempDir, exeName), path.join(tempDir, srcFile)];
-          compileRes = await runProcess('go', localCompileArgs, '', 15000);
+          const goCmd = process.env.GO_PATH || 'go';
+          compileRes = await runProcess(goCmd, localCompileArgs, '', 15000);
         }
       }
 
@@ -286,13 +289,13 @@ const runInSandbox = async (language, code, problemConfig, testCases, options = 
           const exeName = isWindows ? 'main.exe' : 'main.out';
           localCmd = path.join(tempDir, exeName);
         } else if (langKey === 'java') {
-          localCmd = 'java';
+          localCmd = process.env.JAVA_PATH || 'java';
           localArgs = ['-cp', tempDir, 'Main'];
         } else if (langKey === 'python') {
-          localCmd = isWindows ? 'python' : 'python3';
+          localCmd = process.env.PYTHON_PATH || (isWindows ? 'python' : 'python3');
           localArgs = [path.join(tempDir, srcFile)];
         } else if (langKey === 'javascript') {
-          localCmd = 'node';
+          localCmd = process.env.NODE_PATH || 'node';
           localArgs = [path.join(tempDir, srcFile)];
         } else if (langKey === 'go') {
           const exeName = isWindows ? 'main.exe' : 'main';

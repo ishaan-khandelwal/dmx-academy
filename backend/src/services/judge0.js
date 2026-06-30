@@ -54,8 +54,9 @@ async function executeTestcase(sourceCode, language, stdin, expectedOutput, time
   };
   if (apiKey) {
     headers['X-RapidAPI-Key'] = apiKey;
-    headers['X-RapidAPI-Host'] = 'judge0-extra-clean.p.rapidapi.com';
+    headers['X-RapidAPI-Host'] = process.env.JUDGE0_API_HOST || 'judge0-extra-clean.p.rapidapi.com';
   }
+
 
   // Request body
   const payload = {

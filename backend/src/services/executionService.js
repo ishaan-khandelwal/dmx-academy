@@ -73,6 +73,41 @@ const compileGo = (srcFile, exeName, tempDir) => {
 
 
 /**
+ * Compiles Java code
+ */
+const compileJava = (srcFile, tempDir) => {
+  return new Promise((resolve) => {
+    const javacCmd = process.env.JAVAC_PATH || 'javac';
+    const child = spawn(javacCmd, [srcFile], { cwd: tempDir });
+
+    let stderr = '';
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    child.on('error', (err) => {
+      resolve({
+        success: false,
+        error: `Failed to invoke Java compiler (javac). Please ensure JDK is installed and javac is in system PATH. Details: ${err.message}`,
+      });
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        resolve({
+          success: false,
+          error: stderr || `Java compilation failed with exit code ${code}`,
+        });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+};
+
+
+
+/**
  * Runs a command with arguments, pipes stdin, and enforces a timeout limit
  */
 const runProcess = (cmd, args, tempDir, input, timeoutMs) => {
@@ -259,6 +294,22 @@ const executeCode = async (language, code, testCases) => {
 
       runCmd = path.join(tempDir, exeName);
       runArgs = [];
+    } else if (language === 'JAVA') {
+      const srcFile = 'Main.java';
+      writeTempFile(tempDir, srcFile, code);
+
+      // Compile Java source
+      const compileResult = await compileJava(srcFile, tempDir);
+      if (!compileResult.success) {
+        return {
+          status: 'COMPILATION_ERROR',
+          executionTime: 0,
+          error: compileResult.error,
+        };
+      }
+
+      runCmd = process.env.JAVA_PATH || 'java';
+      runArgs = ['-cp', '.', 'Main'];
     } else {
       return {
         status: 'COMPILATION_ERROR',
@@ -397,6 +448,22 @@ const runCustomCode = async (language, code, input) => {
 
       runCmd = path.join(tempDir, exeName);
       runArgs = [];
+    } else if (language === 'JAVA') {
+      const srcFile = 'Main.java';
+      writeTempFile(tempDir, srcFile, code);
+
+      // Compile Java source
+      const compileResult = await compileJava(srcFile, tempDir);
+      if (!compileResult.success) {
+        return {
+          status: 'COMPILATION_ERROR',
+          executionTime: 0,
+          error: compileResult.error,
+        };
+      }
+
+      runCmd = process.env.JAVA_PATH || 'java';
+      runArgs = ['-cp', '.', 'Main'];
     } else {
       return {
         status: 'COMPILATION_ERROR',

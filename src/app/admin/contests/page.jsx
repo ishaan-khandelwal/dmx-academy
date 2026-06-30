@@ -470,19 +470,34 @@ export default function AdminContestsPage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end space-x-2">
                           {contest.isDbContest && (
-                            <button
-                              onClick={() =>
-                                router.push(`/admin/contests/${contest.id}`)
-                              }
-                              className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-500/10 group"
-                              style={{ borderColor: "var(--border-primary)" }}
-                              title="View Participants"
-                            >
-                              <Users
-                                size={12}
-                                style={{ color: "var(--text-accent)" }}
-                              />
-                            </button>
+                            <>
+                              <button
+                                onClick={() =>
+                                  router.push(`/admin/contests/${contest.id}/edit`)
+                                }
+                                className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-500/10 group"
+                                style={{ borderColor: "var(--border-primary)" }}
+                                title="Edit Contest"
+                              >
+                                <Edit3
+                                  size={12}
+                                  style={{ color: "var(--text-secondary)" }}
+                                />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  router.push(`/admin/contests/${contest.id}`)
+                                }
+                                className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-500/10 group"
+                                style={{ borderColor: "var(--border-primary)" }}
+                                title="View Participants"
+                              >
+                                <Users
+                                  size={12}
+                                  style={{ color: "var(--text-accent)" }}
+                                />
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={() =>

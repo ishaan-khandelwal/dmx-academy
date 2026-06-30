@@ -77,7 +77,9 @@ export default function PracticeWorkspace() {
               editorTemplates: {
                 javascript: dbp.templateJS || `// JavaScript Starter Code\nfunction solve(input) {\n  // Write your code here\n}`,
                 python: dbp.templatePython || `# Python Starter Code\ndef solve(input):\n    pass`,
-                go: dbp.templateGo || `// Go Starter Code\npackage main\n\nimport "fmt"\n\nfunc solve(input string) {\n  // Write your Go code here\n}`
+                go: dbp.templateGo || `// Go Starter Code\npackage main\n\nimport "fmt"\n\nfunc solve(input string) {\n  // Write your Go code here\n}`,
+                cpp: `// C++ Starter Code\n#include <iostream>\n#include <vector>\n#include <string>\n\nusing namespace std;\n\nint main() {\n  // Write your code here\n  return 0;\n}`,
+                java: `// Java Starter Code\nimport java.util.*;\n\npublic class Main {\n  public static void main(String[] args) {\n    // Write your code here\n  }\n}`
               },
               testcases: dynamicTC,
               tabs: {
@@ -579,7 +581,7 @@ export default function PracticeWorkspace() {
     
     const code = editorCodes[selectedLanguage] || "";
     const langUpper = selectedLanguage.toUpperCase();
-    const mappedLang = langUpper === "JAVASCRIPT" ? "JAVASCRIPT" : langUpper === "PYTHON" ? "PYTHON" : langUpper === "GO" ? "GO" : "CPP";
+    const mappedLang = ["JAVASCRIPT", "PYTHON", "GO", "CPP", "JAVA"].includes(langUpper) ? langUpper : "CPP";
     const wrappedCode = wrapCodeForBackend(problemId, selectedLanguage, code);
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {
@@ -995,6 +997,8 @@ export default function PracticeWorkspace() {
                 {problem.editorTemplates.javascript && <option value="javascript">JavaScript</option>}
                 {problem.editorTemplates.python && <option value="python">Python</option>}
                 {problem.editorTemplates.go && <option value="go">Go</option>}
+                {problem.editorTemplates.cpp && <option value="cpp">C++</option>}
+                {problem.editorTemplates.java && <option value="java">Java</option>}
               </select>
             </div>
 

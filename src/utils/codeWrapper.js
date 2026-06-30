@@ -422,6 +422,381 @@ func main() {
     }
   }
 
+  if (lang === "java") {
+    // If the user code contains its own main entry point and it actually reads from stdin,
+    // return it unmodified. Otherwise, if it is just a dummy/test main method, we continue
+    // to wrap it.
+    if (/\bstatic\s+void\s+main\b/.test(userCode)) {
+      const readsInput = /System\.in|Scanner|BufferedReader|InputStreamReader/.test(userCode);
+      if (readsInput) {
+        return userCode;
+      }
+    }
+
+    // 1. Identify the user's class name using regex
+    const classMatch = userCode.match(/class\s+(\w+)/);
+    let className = classMatch ? classMatch[1] : "Solution";
+    let processedUserCode = userCode;
+
+    // If the user's class is named Main, rename it to UserSolution to avoid collision
+    // with the wrapper's Main class. We must make it package-private (remove public)
+    // so it compiles successfully within Main.java.
+    if (className === "Main") {
+      className = "UserSolution";
+      processedUserCode = userCode
+        .replace(/\bpublic\s+class\s+Main\b/, "class UserSolution")
+        .replace(/\bclass\s+Main\b/, "class UserSolution");
+    }
+
+    // 2. Identify the target method signature (excluding main)
+    const methodRegex = /(?:public|protected|private|static|\s)+([\w<>[\]]+)\s+(\w+)\s*\(([^)]*)\)/g;
+    let methodMatch;
+    let returnType = "";
+    let methodName = "";
+    let paramsStr = "";
+
+    while ((methodMatch = methodRegex.exec(userCode)) !== null) {
+      if (methodMatch[2] !== "main") {
+        returnType = methodMatch[1];
+        methodName = methodMatch[2];
+        paramsStr = methodMatch[3];
+        break;
+      }
+    }
+
+    if (!methodName) {
+      // If no valid non-main method is found, return the userCode unmodified
+      return userCode;
+    }
+
+    // 3. Parse parameters
+    const params = [];
+    if (paramsStr.trim()) {
+      paramsStr.split(",").forEach(p => {
+        const parts = p.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const type = parts.slice(0, -1).join(" ");
+          const name = parts[parts.length - 1];
+          params.push({ type, name });
+        }
+      });
+    }
+
+    // 4. Generate parameter parsing logic in Java
+    const paramDeclarations = [];
+    const paramNames = [];
+
+    if (params.length === 1) {
+      const type = params[0].type;
+      if (type === "String[]") {
+        paramDeclarations.push("        String[] param0 = parseStringArray(input);");
+      } else if (type === "int[]") {
+        paramDeclarations.push("        int[] param0 = parseIntArray(input);");
+      } else if (type === "int") {
+        paramDeclarations.push("        int param0 = Integer.parseInt(input);");
+      } else if (type === "String") {
+        paramDeclarations.push("        String param0 = input;");
+      } else {
+        paramDeclarations.push("        String param0 = input;"); // default fallback
+      }
+      paramNames.push("param0");
+    } else if (params.length > 1) {
+      paramDeclarations.push("        String[] lines = input.split(\"\\\\n\");");
+      params.forEach((param, index) => {
+        const type = param.type;
+        const lineIdx = `lines.length > ${index} ? lines[${index}].trim() : ""`;
+        if (type === "String[]") {
+          paramDeclarations.push(`        String[] param${index} = parseStringArray(${lineIdx});`);
+        } else if (type === "int[]") {
+          paramDeclarations.push(`        int[] param${index} = parseIntArray(${lineIdx});`);
+        } else if (type === "int") {
+          paramDeclarations.push(`        int param${index} = ${lineIdx}.isEmpty() ? 0 : Integer.parseInt(${lineIdx});`);
+        } else if (type === "String") {
+          paramDeclarations.push(`        String param${index} = ${lineIdx};`);
+        } else {
+          paramDeclarations.push(`        String param${index} = ${lineIdx};`);
+        }
+        paramNames.push(`param${index}`);
+      });
+    }
+
+    // 5. Generate return value printing logic in Java
+    let invocationAndPrint = "";
+    const isStatic = userCode.includes("static " + returnType + " " + methodName) || userCode.includes("static  " + returnType + " " + methodName);
+    const solverInstantiation = isStatic ? "" : `        ${className} solver = new ${className}();\n`;
+    const invocationTarget = isStatic ? className : "solver";
+
+    if (returnType === "void") {
+      invocationAndPrint = `${solverInstantiation}        ${invocationTarget}.${methodName}(${paramNames.join(", ")});`;
+    } else if (returnType === "String") {
+      invocationAndPrint = `${solverInstantiation}        String res = ${invocationTarget}.${methodName}(${paramNames.join(", ")});\n        System.out.println("\\"" + res + "\\"");`;
+    } else if (returnType === "int[]") {
+      invocationAndPrint = `${solverInstantiation}        int[] res = ${invocationTarget}.${methodName}(${paramNames.join(", ")});\n        System.out.print("[");\n        for (int i = 0; i < res.length; i++) {\n            System.out.print(res[i] + (i == res.length - 1 ? "" : ","));\n        }\n        System.out.println("]");`;
+    } else if (returnType === "String[]") {
+      invocationAndPrint = `${solverInstantiation}        String[] res = ${invocationTarget}.${methodName}(${paramNames.join(", ")});\n        System.out.print("[");\n        for (int i = 0; i < res.length; i++) {\n            System.out.print("\\"" + res[i] + "\\"" + (i == res.length - 1 ? "" : ","));\n        }\n        System.out.println("]");`;
+    } else {
+      invocationAndPrint = `${solverInstantiation}        System.out.println(${invocationTarget}.${methodName}(${paramNames.join(", ")}));`;
+    }
+
+    // 6. Assemble the wrapper
+    return `${processedUserCode}
+
+// Backend I/O Wrapper (universal)
+public class Main {
+    public static void main(String[] args) throws Exception {
+        java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = br.readLine()) != null) {
+            sb.append(line).append("\\n");
+        }
+        String input = sb.toString().trim();
+        if (input.isEmpty()) return;
+
+${paramDeclarations.join("\n")}
+
+${invocationAndPrint}
+    }
+
+    private static String[] parseStringArray(String input) {
+        input = input.trim();
+        if (input.startsWith("[")) {
+            input = input.substring(1);
+        }
+        if (input.endsWith("]")) {
+            input = input.substring(0, input.length() - 1);
+        }
+        if (input.isEmpty()) {
+            return new String[0];
+        }
+        String[] parts = input.split(",");
+        String[] res = new String[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i].trim();
+            if (p.startsWith("\\\"") && p.endsWith("\\\"")) {
+                p = p.substring(1, p.length() - 1);
+            } else if (p.startsWith("'") && p.endsWith("'")) {
+                p = p.substring(1, p.length() - 1);
+            }
+            res[i] = p;
+        }
+        return res;
+    }
+
+    private static int[] parseIntArray(String input) {
+        input = input.trim();
+        if (input.startsWith("[")) {
+            input = input.substring(1);
+        }
+        if (input.endsWith("]")) {
+            input = input.substring(0, input.length() - 1);
+        }
+        if (input.isEmpty()) {
+            return new int[0];
+        }
+        String[] parts = input.split("[,\\\\s]+");
+        int[] res = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            res[i] = Integer.parseInt(parts[i].trim());
+        }
+        return res;
+    }
+}
+`;
+  }
+
+  if (lang === "cpp" || lang === "c++") {
+    // If the user code contains a real main method reading from stdin (e.g. cin >> or getline),
+    // we return it unmodified.
+    if (/\bint\s+main\b/.test(userCode)) {
+      const readsInput = /cin\s*>>|getline|scanf/.test(userCode);
+      if (readsInput) {
+        return userCode;
+      }
+    }
+
+    // 1. Identify the user's class name using regex if it is LeetCode class-style
+    const classMatch = userCode.match(/class\s+(\w+)/);
+    const className = classMatch ? classMatch[1] : "";
+
+    // 2. Identify the target method signature (excluding main)
+    const methodRegex = /(?:public|protected|private|static|inline|\s)+([\w<>[\]:]+)\s+(\w+)\s*\(([^)]*)\)/g;
+    let methodMatch;
+    let returnType = "";
+    let methodName = "";
+    let paramsStr = "";
+
+    while ((methodMatch = methodRegex.exec(userCode)) !== null) {
+      const name = methodMatch[2];
+      if (name !== "main" && name !== "vector" && name !== "string" && name !== "unordered_map" && name !== "map") {
+        returnType = methodMatch[1];
+        methodName = name;
+        paramsStr = methodMatch[3];
+        break;
+      }
+    }
+
+    if (!methodName) {
+      return userCode;
+    }
+
+    // Rename user's main to user_main to prevent compilation errors
+    let processedUserCode = userCode.replace(/\bint\s+main\b/, "int user_main");
+
+    // 3. Parse parameters
+    const params = [];
+    if (paramsStr.trim()) {
+      paramsStr.split(",").forEach(p => {
+        const parts = p.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          let type = parts.slice(0, -1).join(" ");
+          const name = parts[parts.length - 1];
+          type = type.replace(/const\s+/, "").replace(/&/, "").trim();
+          params.push({ type, name });
+        }
+      });
+    }
+
+    // 4. Generate parameter parsing logic in C++
+    const paramDeclarations = [];
+    const paramNames = [];
+
+    if (params.length === 1) {
+      const type = params[0].type;
+      if (type === "vector<int>" || type === "std::vector<int>") {
+        paramDeclarations.push("    vector<int> param0 = parseVectorInt(input);");
+      } else if (type === "vector<string>" || type === "std::vector<string>") {
+        paramDeclarations.push("    vector<string> param0 = parseVectorString(input);");
+      } else if (type === "int") {
+        paramDeclarations.push("    int param0 = input.empty() ? 0 : stoi(input);");
+      } else if (type === "string" || type === "std::string") {
+        paramDeclarations.push("    string param0 = input;");
+      } else {
+        paramDeclarations.push("    string param0 = input;");
+      }
+      paramNames.push("param0");
+    } else if (params.length > 1) {
+      paramDeclarations.push("    vector<string> lines;");
+      paramDeclarations.push("    string line;");
+      paramDeclarations.push("    stringstream ss(input);");
+      paramDeclarations.push("    while (getline(ss, line)) {");
+      paramDeclarations.push("        lines.push_back(line);");
+      paramDeclarations.push("    }");
+      
+      params.forEach((param, index) => {
+        const type = param.type;
+        const lineVal = `(lines.size() > ${index} ? lines[${index}] : "")`;
+        if (type === "vector<int>" || type === "std::vector<int>") {
+          paramDeclarations.push(`    vector<int> param${index} = parseVectorInt(${lineVal});`);
+        } else if (type === "vector<string>" || type === "std::vector<string>") {
+          paramDeclarations.push(`    vector<string> param${index} = parseVectorString(${lineVal});`);
+        } else if (type === "int") {
+          paramDeclarations.push(`    int param${index} = ${lineVal}.empty() ? 0 : stoi(${lineVal});`);
+        } else if (type === "string" || type === "std::string") {
+          paramDeclarations.push(`    string param${index} = ${lineVal};`);
+        } else {
+          paramDeclarations.push(`    string param${index} = ${lineVal};`);
+        }
+        paramNames.push(`param${index}`);
+      });
+    }
+
+    // 5. Generate return value printing logic in C++
+    const solverInstantiation = className ? `    ${className} solver;\n` : "";
+    const callPrefix = className ? "solver." : "";
+
+    let invocationAndPrint = "";
+    if (returnType === "void") {
+      invocationAndPrint = `${solverInstantiation}    ${callPrefix}${methodName}(${paramNames.join(", ")});`;
+    } else if (returnType === "vector<int>" || returnType === "std::vector<int>") {
+      invocationAndPrint = `${solverInstantiation}    vector<int> res = ${callPrefix}${methodName}(${paramNames.join(", ")});\n` +
+        `    cout << "[";\n` +
+        `    for (size_t i = 0; i < res.size(); i++) {\n` +
+        `        cout << res[i] << (i == res.size() - 1 ? "" : ",");\n` +
+        `    }\n` +
+        `    cout << "]" << endl;`;
+    } else if (returnType === "vector<string>" || returnType === "std::vector<string>") {
+      invocationAndPrint = `${solverInstantiation}    vector<string> res = ${callPrefix}${methodName}(${paramNames.join(", ")});\n` +
+        `    cout << "[";\n` +
+        `    for (size_t i = 0; i < res.size(); i++) {\n` +
+        `        cout << "\\"" << res[i] << "\\"" << (i == res.size() - 1 ? "" : ",");\n` +
+        `    }\n` +
+        `    cout << "]" << endl;`;
+    } else if (returnType === "bool") {
+      invocationAndPrint = `${solverInstantiation}    cout << (${callPrefix}${methodName}(${paramNames.join(", ")}) ? "true" : "false") << endl;`;
+    } else if (returnType === "string" || returnType === "std::string") {
+      invocationAndPrint = `${solverInstantiation}    cout << "\\"" << ${callPrefix}${methodName}(${paramNames.join(", ")}) << "\\"" << endl;`;
+    } else {
+      invocationAndPrint = `${solverInstantiation}    cout << ${callPrefix}${methodName}(${paramNames.join(", ")}) << endl;`;
+    }
+
+
+    // 6. Assemble the wrapper
+    return `${processedUserCode}
+
+// Backend I/O Wrapper (universal)
+#include <iostream>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <algorithm>
+
+using namespace std;
+
+static vector<int> parseVectorInt(string s) {
+    vector<int> res;
+    s.erase(remove(s.begin(), s.end(), '['), s.end());
+    s.erase(remove(s.begin(), s.end(), ']'), s.end());
+    s.erase(remove(s.begin(), s.end(), ' '), s.end());
+    if (s.empty()) return res;
+    stringstream ss(s);
+    string token;
+    while (getline(ss, token, ',')) {
+        if (!token.empty()) {
+            res.push_back(stoi(token));
+        }
+    }
+    return res;
+}
+
+static vector<string> parseVectorString(string s) {
+    vector<string> res;
+    s.erase(remove(s.begin(), s.end(), '['), s.end());
+    s.erase(remove(s.begin(), s.end(), ']'), s.end());
+    if (s.empty()) return res;
+    stringstream ss(s);
+    string token;
+    while (getline(ss, token, ',')) {
+        token.erase(remove(token.begin(), token.end(), '"'), token.end());
+        token.erase(remove(token.begin(), token.end(), '\\\''), token.end());
+        res.push_back(token);
+    }
+    return res;
+}
+
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+    string input;
+    string line;
+    while (getline(cin, line)) {
+        input += line + "\\n";
+    }
+    if (!input.empty() && input.back() == '\\n') {
+        input.pop_back();
+    }
+    input.erase(0, input.find_first_not_of(" \\t\\r\\n"));
+    input.erase(input.find_last_not_of(" \\t\\r\\n") + 1);
+    if (input.empty()) return 0;
+
+${paramDeclarations.join("\n")}
+
+${invocationAndPrint}
+    return 0;
+}
+`;
+  }
+
   if (lang === "javascript") {
     // Extract function name at wrap-time from user code (before emitting the wrapper)
     const fnNameMatch = userCode.match(
@@ -482,10 +857,10 @@ if (_fn) {
   }
 
   if (_res !== undefined) {
-    if (Array.isArray(_res)) process.stdout.write(JSON.stringify(_res) + '\n');
-    else if (typeof _res === 'object' && _res !== null) process.stdout.write(JSON.stringify(_res) + '\n');
-    else if (typeof _res === 'string') process.stdout.write(JSON.stringify(_res) + '\n');
-    else process.stdout.write(String(_res) + '\n');
+    if (Array.isArray(_res)) process.stdout.write(JSON.stringify(_res) + '\\n');
+    else if (typeof _res === 'object' && _res !== null) process.stdout.write(JSON.stringify(_res) + '\\n');
+    else if (typeof _res === 'string') process.stdout.write(JSON.stringify(_res) + '\\n');
+    else process.stdout.write(String(_res) + '\\n');
   }
 }`;
   }

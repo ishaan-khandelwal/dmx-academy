@@ -524,6 +524,102 @@ const getAllParticipationReports = async (req, res, next) => {
   }
 };
 
+/**
+ * Update a contest (Admin only)
+ */
+const updateContest = async (req, res, next) => {
+  try {
+    const contestId = parseInt(req.params.id);
+
+    if (isNaN(contestId)) {
+      return res.status(400).json({ success: false, message: 'Invalid contest ID format.' });
+    }
+
+    // Verify contest exists
+    const contest = await prisma.contest.findUnique({ where: { id: contestId } });
+    if (!contest) {
+      return res.status(404).json({ success: false, message: 'Contest not found.' });
+    }
+
+    const { title, description, category, startTime, endTime, problems, totalPoints } = req.body;
+
+    const data = {};
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (category !== undefined) data.category = category;
+    if (startTime !== undefined) data.startTime = new Date(startTime);
+    if (endTime !== undefined) data.endTime = new Date(endTime);
+
+    // Update contest core details
+    const updatedContest = await prisma.contest.update({
+      where: { id: contestId },
+      data,
+    });
+
+    // If problems list is provided, synchronize it
+    if (problems !== undefined && Array.isArray(problems)) {
+      // 1. Delete all existing problems for this contest
+      await prisma.contestProblem.deleteMany({
+        where: { contestId }
+      });
+
+      // 2. Add the new ones
+      const pointsPerProblem = Math.round((totalPoints || 300) / (problems.length || 1));
+      for (const pId of problems) {
+        const problemId = parseInt(pId);
+        if (!isNaN(problemId)) {
+          await prisma.contestProblem.create({
+            data: {
+              contestId,
+              problemId,
+              points: pointsPerProblem
+            }
+          });
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Contest updated successfully.',
+      contest: updatedContest,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete a contest (Admin only)
+ */
+const deleteContest = async (req, res, next) => {
+  try {
+    const contestId = parseInt(req.params.id);
+
+    if (isNaN(contestId)) {
+      return res.status(400).json({ success: false, message: 'Invalid contest ID format.' });
+    }
+
+    // Verify contest exists
+    const contest = await prisma.contest.findUnique({ where: { id: contestId } });
+    if (!contest) {
+      return res.status(404).json({ success: false, message: 'Contest not found.' });
+    }
+
+    // Delete the contest
+    await prisma.contest.delete({
+      where: { id: contestId }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Contest deleted successfully.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createContest,
   addProblemToContest,
@@ -535,5 +631,7 @@ module.exports = {
   getContestParticipation,
   getContestParticipants,
   getAllParticipationReports,
+  updateContest,
+  deleteContest,
 };
 
