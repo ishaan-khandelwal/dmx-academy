@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Organization Structure</title>
+<style>
+body {
+  font-family: 'Arial', sans-serif;
+  color: #1e293b;
+  line-height: 1.6;
+  font-size: 11pt;
+  margin: 1in;
+}
+
+h1 {
+  font-size: 22pt;
+  font-weight: bold;
+  color: #0f172a;
+  border-bottom: 2px solid #6366f1;
+  padding-bottom: 6pt;
+  margin-top: 0;
+  margin-bottom: 12pt;
+}
+
+h2 {
+  font-size: 16pt;
+  font-weight: bold;
+  color: #1e293b;
+  margin-top: 18pt;
+  margin-bottom: 9pt;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 4pt;
+}
+
+h3 {
+  font-size: 13pt;
+  font-weight: bold;
+  color: #334155;
+  margin-top: 12pt;
+  margin-bottom: 6pt;
+}
+
+p {
+  margin-bottom: 9pt;
+}
+
+ul {
+  margin-bottom: 9pt;
+  padding-left: 20pt;
+}
+
+li {
+  margin-bottom: 4pt;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12pt 0;
+  font-size: 10pt;
+}
+
+th, td {
+  padding: 8pt 10pt;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+th {
+  background-color: #f1f5f9;
+  font-weight: bold;
+  color: #334155;
+}
+
+tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+code {
+  font-family: 'Courier New', monospace;
+  font-size: 10pt;
+  background-color: #f1f5f9;
+  padding: 2pt 4pt;
+  color: #4f46e5;
+  font-weight: bold;
+}
+
+pre {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 12pt;
+  margin: 12pt 0;
+}
+
+pre code {
+  background-color: transparent;
+  padding: 0;
+  font-size: 9.5pt;
+  color: #0f172a;
+  font-weight: normal;
+}
+</style>
+</head>
+<body>
+
+<h1>Platform Organization & Access Control Architecture</h1>
+
+<p>This document details the roles hierarchy, security gates, data isolation model, and user access matrix implemented across the DMX Academy platform.</p>
+
+<hr />
+
+<h2>1. User Roles & Hierarchy</h2>
+
+<p>The platform defines five distinct roles to support multi-tenant institute scoping and global content delivery.</p>
+
+<h3>Super Admin (ADMIN)</h3>
+<ul>
+  <li><strong>Scope</strong>: Global (Platform-wide).</li>
+  <li><strong>Key Function</strong>: Manages core platform systems, creates global contests, designs coding problems, sets global AI configurations, and provisions new institutes and institute admins.</li>
+</ul>
+
+<h3>Institute Admin (INSTITUTE_ADMIN)</h3>
+<ul>
+  <li><strong>Scope</strong>: Institute-bound.</li>
+  <li><strong>Key Function</strong>: Manages the local institute infrastructure, creates and assigns Batches/Cohorts, registers mentors, registers students, and creates institute-scoped contests.</li>
+</ul>
+
+<h3>Batch Manager (BATCH_MANAGER)</h3>
+<ul>
+  <li><strong>Scope</strong>: Institute-bound.</li>
+  <li><strong>Key Function</strong>: Coordinates operations for specific target cohorts/batches, oversees student progress, uploads custom prep materials, and helps coordinate live instruction sessions.</li>
+</ul>
+
+<h3>Mentor (MENTOR)</h3>
+<ul>
+  <li><strong>Scope</strong>: Institute-bound.</li>
+  <li><strong>Key Function</strong>: Hosts interactive live classes, generates practice questions from uploaded PDFs, provides feedback on student performance, and sets programming contests.</li>
+</ul>
+
+<h3>Student (USER)</h3>
+<ul>
+  <li><strong>Scope</strong>: Global or Institute-bound.</li>
+  <li><strong>Key Function</strong>: Attends classes, completes practice problems, competes in contests, and participates in AI-driven Viva voice reviews.</li>
+</ul>
+
+<hr />
+
+<h2>2. Data Scoping & Multi-Tenancy Isolation</h2>
+
+<p>Data isolation is built directly into the database layers (schema.prisma) using the instituteId field:</p>
+
+<h3>Global Scope (instituteId: null)</h3>
+<ul>
+  <li>Asset examples: Global Problems, Global Contests, Global Study Materials, Global Question Bank.</li>
+  <li>These assets are created by the Super Admin to provide standard core curricula and public practice materials available to everyone on the platform.</li>
+</ul>
+
+<h3>Institute Scope (instituteId: Int)</h3>
+<ul>
+  <li>Asset examples: Private Problems, Target Batch Contests, Cohort Study Materials, Local Viva Questions.</li>
+  <li>These assets are bound to a specific institute ID. They are created by institute staff and are completely hidden from all other competitor institutes.</li>
+</ul>
+
+<hr />
+
+<h2>3. Feature Access Matrix</h2>
+
+<p>The following matrix describes what each role can do across the different platform features.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature Area</th>
+      <th>Super Admin (ADMIN)</th>
+      <th>Institute Admin (INSTITUTE_ADMIN)</th>
+      <th>Batch Manager (BATCH_MANAGER)</th>
+      <th>Mentor (MENTOR)</th>
+      <th>Global Student (USER)</th>
+      <th>Institute Student (USER)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>AI Viva Settings</strong></td>
+      <td>Full Control (Read/Write)</td>
+      <td>Denied</td>
+      <td>Denied</td>
+      <td>Denied</td>
+      <td>Denied</td>
+      <td>Denied</td>
+    </tr>
+    <tr>
+      <td><strong>Global Problems</strong></td>
+      <td>Full Control (Read/Write)</td>
+      <td>Read / Link only</td>
+      <td>Read / Link only</td>
+      <td>Read / Link only</td>
+      <td>Read/Attempt</td>
+      <td>Read/Attempt</td>
+    </tr>
+    <tr>
+      <td><strong>Institute Problems</strong></td>
+      <td>Denied</td>
+      <td>Full Control</td>
+      <td>Full Control</td>
+      <td>Full Control</td>
+      <td>Denied</td>
+      <td>Read/Attempt (Own Inst)</td>
+    </tr>
+    <tr>
+      <td><strong>Global Contests</strong></td>
+      <td>Full Control (Read/Write)</td>
+      <td>Read only</td>
+      <td>Read only</td>
+      <td>Read only</td>
+      <td>Compete</td>
+      <td>Compete</td>
+    </tr>
+    <tr>
+      <td><strong>Institute Contests</strong></td>
+      <td>Denied</td>
+      <td>Full Control</td>
+      <td>Full Control</td>
+      <td>Full Control</td>
+      <td>Denied</td>
+      <td>Compete (Own Inst)</td>
+    </tr>
+    <tr>
+      <td><strong>Study Materials</strong></td>
+      <td>Global Materials</td>
+      <td>Local (Full) + Global (Read/Use)</td>
+      <td>Local (Full) + Global (Read/Use)</td>
+      <td>Local (Full) + Global (Read/Use)</td>
+      <td>Denied (Staff Only)</td>
+      <td>Denied (Staff Only)</td>
+    </tr>
+    <tr>
+      <td><strong>Question Bank</strong></td>
+      <td>Global Bank</td>
+      <td>Local (Full) + Global (Read/Use)</td>
+      <td>Local (Full) + Global (Read/Use)</td>
+      <td>Local (Full) + Global (Read/Use)</td>
+      <td>Denied (Staff Only)</td>
+      <td>Denied (Staff Only)</td>
+    </tr>
+    <tr>
+      <td><strong>AI Viva Practice</strong></td>
+      <td>Denied</td>
+      <td>Denied</td>
+      <td>Denied</td>
+      <td>Denied</td>
+      <td>Take Session (Global Bank)</td>
+      <td>Take Session (Global + Local Bank)</td>
+    </tr>
+    <tr>
+      <td><strong>Live Kit Streaming</strong></td>
+      <td>Host global/scoped streams</td>
+      <td>Host streams in their inst</td>
+      <td>Host streams in their inst</td>
+      <td>Host streams in their inst</td>
+      <td>Denied</td>
+      <td>Join stream (Own Batch)</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>4. Detailed Flow of Core Modules</h2>
+
+<h3>Coding Problems & Contests</h3>
+<ul>
+  <li><strong>Adding Problems</strong>: When an Institute Admin/Mentor adds a problem, it automatically locks to their instituteId. Super Admin's problems are tagged null (Global).</li>
+  <li><strong>Display Switcher</strong>: Institute staff see two tabs: "Your Institute" and "Global". Global tab actions hide edit/delete buttons for non-super-admins.</li>
+  <li><strong>Contest Linking</strong>: Institute staff can link both Global and Institute problems to contests, but they can only publish target contests to cohorts belonging to their own institute.</li>
+</ul>
+
+<h3>AI Viva Question Pools</h3>
+<ul>
+  <li><strong>Generation</strong>: Mentors generate questions by uploading PDF study materials. If uploaded by a mentor, the document and all approved questions generated from it inherit the mentor's instituteId.</li>
+  <li><strong>Student Session Start</strong>: When a student starts an AI Viva:
+    <ul>
+      <li>If Institute Student, the backend loads questions where subject is the chosen subject AND the instituteId is null OR matches the student's instituteId.</li>
+      <li>If Global Student, the backend loads questions where subject is the chosen subject AND the instituteId is null.</li>
+    </ul>
+  </li>
+</ul>
+
+</body>
+</html>

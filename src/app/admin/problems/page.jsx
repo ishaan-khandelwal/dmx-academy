@@ -227,8 +227,8 @@ export default function AdminProblemsPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className={`p-4 rounded-2xl border text-xs text-center font-bold ${notification.type === "error"
-                ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+              ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
               }`}
           >
             {notification.msg}
@@ -248,8 +248,8 @@ export default function AdminProblemsPage() {
             key={key}
             onClick={() => setFilterDiff(key)}
             className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${filterDiff === key
-                ? "ring-1 ring-current"
-                : "hover:bg-slate-500/5"
+              ? "ring-1 ring-current"
+              : "hover:bg-slate-500/5"
               } ${color}`}
             style={{
               backgroundColor: "var(--bg-card)",
@@ -278,8 +278,8 @@ export default function AdminProblemsPage() {
               setFilterDiff("all");
             }}
             className={`px-6 py-3.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 -mb-[2px] cursor-pointer ${activeTab === "institute"
-                ? "border-[var(--accent-primary)] text-[var(--accent-primary)]"
-                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              ? "border-[var(--accent-primary)] text-[var(--accent-primary)]"
+              : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               }`}
           >
             Your Institute Problems
@@ -290,8 +290,8 @@ export default function AdminProblemsPage() {
               setFilterDiff("all");
             }}
             className={`px-6 py-3.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 -mb-[2px] cursor-pointer ${activeTab === "global"
-                ? "border-[var(--accent-primary)] text-[var(--accent-primary)]"
-                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              ? "border-[var(--accent-primary)] text-[var(--accent-primary)]"
+              : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               }`}
           >
             Global Problems
@@ -554,21 +554,38 @@ export default function AdminProblemsPage() {
                                 style={{ color: "var(--text-secondary)" }}
                               />
                             </button>
-                            {problem.isDbProblem && (
-                              <button
-                                onClick={() =>
-                                  setDeletingId({
-                                    id: problem.id,
-                                    slug: problem.slug,
-                                    isDb: true,
-                                  })
-                                }
-                                className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-rose-500/10 hover:border-rose-500/20"
-                                style={{ borderColor: "var(--border-primary)" }}
-                                title="Delete Problem"
-                              >
-                                <Trash2 size={12} className="text-rose-400" />
-                              </button>
+                            {canDeleteProblem(problem) && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    router.push(
+                                      `/admin/problems/${problem.slug || problem.id}/edit`
+                                    )
+                                  }
+                                  className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-500/10"
+                                  style={{ borderColor: "var(--border-primary)" }}
+                                  title="Edit Problem"
+                                >
+                                  <Edit3
+                                    size={12}
+                                    style={{ color: "var(--text-secondary)" }}
+                                  />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setDeletingId({
+                                      id: problem.id,
+                                      slug: problem.slug,
+                                      isDb: true,
+                                    })
+                                  }
+                                  className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-rose-500/10 hover:border-rose-500/20"
+                                  style={{ borderColor: "var(--border-primary)" }}
+                                  title="Delete Problem"
+                                >
+                                  <Trash2 size={12} className="text-rose-400" />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
