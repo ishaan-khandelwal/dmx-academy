@@ -252,7 +252,7 @@ export default function CreateVivaPage() {
     finally { setDeleteLoading(false); }
   };
 
-<<<<<<< HEAD
+
   // --- Extraction Upload & Retry Handlers ---
   const handleUploadPDF = async () => {
     if (!uploadFile) return setUploadError("Please select a PDF file.");
@@ -674,19 +674,7 @@ export default function CreateVivaPage() {
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Manage questions and extract new ones using AI.</p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => { setSubjectModalError(""); setNewFolderSubjectName(""); setSubjectModalOpen(true); }}
-            className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all border hover:scale-105 cursor-pointer"
-            style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
-          >
-            <Plus size={15} className="text-indigo-400" />
-            <span>Add Folder</span>
-          </button>
-          <button
-            onClick={() => setView(VIEWS.EXTRACT)}
-            className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all border hover:scale-105 cursor-pointer"
-            style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
+
         {activeTab === "institute" && (
           <div className="flex items-center gap-3">
             <button
@@ -1052,7 +1040,7 @@ export default function CreateVivaPage() {
             <div className="space-y-2">
               <h3 className="font-black text-sm" style={{ color: "var(--text-primary)" }}>Delete Question?</h3>
               <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                "{deleteTarget.questionText.slice(0, 80)}{deleteTarget.questionText.length > 80 ? '…' : ''}"
+                &quot;{deleteTarget.questionText.slice(0, 80)}{deleteTarget.questionText.length > 80 ? '…' : ''}&quot;
               </p>
               <p className="text-xs text-rose-500 font-semibold">This action cannot be undone.</p>
             </div>
@@ -1182,7 +1170,7 @@ export default function CreateVivaPage() {
             <div className="space-y-2">
               <h3 className="font-black text-sm" style={{ color: "var(--text-primary)" }}>Delete PDF note?</h3>
               <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                This deletes "{pdfDeleteTarget.title}" and its extracted content.
+                This deletes &quot;{pdfDeleteTarget.title}&quot; and its extracted content.
               </p>
             </div>
             <div className="flex gap-3">
