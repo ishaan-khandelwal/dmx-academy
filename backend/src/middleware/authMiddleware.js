@@ -7,8 +7,9 @@ const prisma = require('../prisma');
 const protect = async (req, res, next) => {
   try {
     // Development bypass for local Next.js frontend integration
-    if (process.env.NODE_ENV === 'development' && req.headers['x-bypass-auth'] === 'true') {
-      const bypassRole = req.headers['x-bypass-role'] || 'ADMIN';
+    const isBypass = req.headers['x-bypass-auth'] === 'true' || req.query['x-bypass-auth'] === 'true';
+    if (process.env.NODE_ENV === 'development' && isBypass) {
+      const bypassRole = req.headers['x-bypass-role'] || req.query['x-bypass-role'] || 'ADMIN';
       const bypassUsername = bypassRole === 'ADMIN' ? 'admin' : bypassRole === 'MENTOR' ? 'mentor' : 'student';
       const bypassEmail = bypassRole === 'ADMIN' ? 'admin@example.com' : bypassRole === 'MENTOR' ? 'mentor@synapse.com' : 'student@example.com';
       
@@ -29,14 +30,14 @@ const protect = async (req, res, next) => {
       return next();
     }
 
-    let token;
-
-    // Check Authorization header for Bearer token
+    // Check Authorization header for Bearer token or check query param
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith('Bearer')
     ) {
       token = req.headers.authorization.split(' ')[1];
+    } else if (req.query.token) {
+      token = req.query.token;
     }
 
     if (!token) {
@@ -139,8 +140,9 @@ const restrictTo = (...roles) => {
 const fetchUserIfExists = async (req, res, next) => {
   try {
     // Development bypass — same as protect middleware
-    if (process.env.NODE_ENV === 'development' && req.headers['x-bypass-auth'] === 'true') {
-      const bypassRole = req.headers['x-bypass-role'] || 'USER';
+    const isBypass = req.headers['x-bypass-auth'] === 'true' || req.query['x-bypass-auth'] === 'true';
+    if (process.env.NODE_ENV === 'development' && isBypass) {
+      const bypassRole = req.headers['x-bypass-role'] || req.query['x-bypass-role'] || 'USER';
       const bypassUsername = bypassRole === 'ADMIN' ? 'admin' : bypassRole === 'MENTOR' ? 'mentor' : 'student';
       const bypassEmail = bypassRole === 'ADMIN' ? 'admin@example.com' : bypassRole === 'MENTOR' ? 'mentor@synapse.com' : 'student@example.com';
 

@@ -162,17 +162,17 @@ export default function AdminLayout({ children }) {
       href: "/admin/batch-manager",
       icon: Layers
     },
-    (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {
-      label: "Question Bank",
+    (isBatchMgr || isInstAdmin || isMentor) && {
+      label: "Create Viva",
       href: "/mentor/viva/questions",
       icon: Brain
     },
-    (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {
+    (isBatchMgr || isInstAdmin || isMentor) && {
       label: "Study Materials",
       href: "/mentor/viva/materials",
       icon: FileText
     },
-    isSuperAdmin && {
+    (isBatchMgr || isInstAdmin || isMentor) && {
       label: "AI Settings",
       href: "/mentor/viva/ai-settings",
       icon: Settings

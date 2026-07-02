@@ -5,8 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { 
   LayoutDashboard, Trophy, LogOut, 
-  Menu, X, ChevronLeft, ChevronRight, BookOpen, ArrowLeftRight, Code, Brain, Radio, AlertTriangle,
-  Gamepad2
+  Menu, X, ChevronLeft, ChevronRight, BookOpen, ArrowLeftRight, Code, Brain, Radio, AlertTriangle, FileText, Gamepad2
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -104,6 +103,11 @@ export default function StudentLayout({ children }) {
       label: "Learn with Games",
       href: "/student/games",
       icon: Gamepad2
+    },
+    {
+      label: "Study Materials",
+      href: "/student/materials",
+      icon: FileText
     }
   ];
 

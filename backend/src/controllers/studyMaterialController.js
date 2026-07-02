@@ -1,3 +1,4 @@
+const fs = require('fs');
 const svc = require('../services/studyMaterialService');
 
 /** GET /api/viva/materials */
@@ -127,4 +128,38 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, get, upload, retry, generate, saveQuestions, remove };
+/** GET /api/viva/materials/:id/view */
+const viewFile = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
+    const material = await svc.getMaterial(id);
+    if (!fs.existsSync(material.filePath)) {
+      return res.status(404).json({ success: false, message: 'File not found on disk.' });
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    fs.createReadStream(material.filePath).pipe(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** GET /api/viva/materials/:id/download */
+const downloadFile = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
+    const material = await svc.getMaterial(id);
+    if (!fs.existsSync(material.filePath)) {
+      return res.status(404).json({ success: false, message: 'File not found on disk.' });
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(material.fileName)}"`);
+    fs.createReadStream(material.filePath).pipe(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, get, upload, retry, generate, saveQuestions, remove, viewFile, downloadFile };

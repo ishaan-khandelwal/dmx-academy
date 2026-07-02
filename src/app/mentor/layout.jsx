@@ -142,7 +142,7 @@ export default function MentorLayout({ children }) {
       icon: Code
     },
     {
-      label: "Question Bank",
+      label: "Create Viva",
       href: "/mentor/viva/questions",
       icon: Brain
     },
