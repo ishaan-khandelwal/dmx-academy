@@ -269,7 +269,7 @@ export default function Navbar() {
 
                       {!isUserAdmin && !isUserMentor && (
                         <Link
-                          href="/student"
+                          href="/student/dashboard"
                           className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-500/5 transition-all"
                           onClick={() => setIsSignInDropdownOpen(false)}
                         >
@@ -343,7 +343,7 @@ export default function Navbar() {
                       }}
                     >
                       <Link
-                        href="/login?redirect=/student"
+                        href="/login?redirect=/student/dashboard"
                         className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-500/5 transition-all"
                         onClick={() => setIsSignInDropdownOpen(false)}
                       >
@@ -533,7 +533,7 @@ export default function Navbar() {
                   {!isUserAdmin && !isUserMentor && (
                     <li>
                       <Link
-                        href="/student"
+                        href="/student/dashboard"
                         onClick={() => setIsOpen(false)}
                         className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
                         style={{ color: "var(--text-secondary)" }}
@@ -563,7 +563,7 @@ export default function Navbar() {
                   </li>
                   <li>
                     <Link
-                      href="/login?redirect=/student"
+                      href="/login?redirect=/student/dashboard"
                       onClick={() => setIsOpen(false)}
                       className="flex items-center gap-2.5 text-sm font-bold pl-2 transition-colors hover:text-[var(--text-accent)]"
                       style={{ color: "var(--text-secondary)" }}

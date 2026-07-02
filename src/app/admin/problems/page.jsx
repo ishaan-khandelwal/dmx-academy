@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Code, Plus, RefreshCw, Search, Trash2, Eye,
+  Code, Plus, RefreshCw, Search, Trash2, Eye, Edit3,
   Tag, BarChart2, ArrowUpRight, Filter, X, CheckCircle2,
   Clock, AlertCircle, ChevronRight
 } from "lucide-react";
@@ -504,20 +504,37 @@ export default function AdminProblemsPage() {
                               />
                             </button>
                             {problem.isDbProblem && (
-                              <button
-                                onClick={() =>
-                                  setDeletingId({
-                                    id: problem.id,
-                                    slug: problem.slug,
-                                    isDb: true,
-                                  })
-                                }
-                                className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-rose-500/10 hover:border-rose-500/20"
-                                style={{ borderColor: "var(--border-primary)" }}
-                                title="Delete Problem"
-                              >
-                                <Trash2 size={12} className="text-rose-400" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() =>
+                                    router.push(
+                                      `/admin/problems/${problem.slug || problem.id}/edit`
+                                    )
+                                  }
+                                  className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-500/10 group"
+                                  style={{ borderColor: "var(--border-primary)" }}
+                                  title="Edit Problem"
+                                >
+                                  <Edit3
+                                    size={12}
+                                    style={{ color: "var(--text-secondary)" }}
+                                  />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setDeletingId({
+                                      id: problem.id,
+                                      slug: problem.slug,
+                                      isDb: true,
+                                    })
+                                  }
+                                  className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-rose-500/10 hover:border-rose-500/20"
+                                  style={{ borderColor: "var(--border-primary)" }}
+                                  title="Delete Problem"
+                                >
+                                  <Trash2 size={12} className="text-rose-400" />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>

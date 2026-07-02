@@ -646,7 +646,7 @@ export default function ContestLobby() {
                           {!isStudentLoggedIn ? (
                             // Non-students / guests: show login nudge
                             <Link
-                              href="/student"
+                              href="/login?redirect=/contest"
                               className="px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer flex items-center space-x-1"
                               style={{
                                 backgroundColor: "var(--bg-primary)",
