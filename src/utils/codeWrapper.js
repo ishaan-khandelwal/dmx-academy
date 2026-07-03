@@ -980,35 +980,40 @@ if _fn is not None:
       });
     }
 
-    // 3. Clean user code: strip package declaration, imports, and rename main to user_main
+    // 3. Check if user has written their own main() function
+    const hasOwnMain = /\bfunc\s+main\s*\(\s*\)/.test(userCode);
+
+    // 4. If no solution function was extracted AND user has their own main(),
+    //    pass the code through directly — just strip the package declaration
+    //    and re-add correct imports. Do NOT rename main or replace it.
+    if (!fnName) {
+      if (hasOwnMain) {
+        // Build only the imports the user actually used (plus their own)
+        const onlyUserImports = Array.from(userImports);
+        const importBlock = onlyUserImports.length > 0
+          ? `import (\n${onlyUserImports.map(imp => `\t"${imp}"`).join("\n")}\n)`
+          : "";
+
+        // Strip package + imports from user code, keep everything else intact
+        const bareCode = userCode
+          .replace(/^\s*package\s+\w+\s*/gm, "")
+          .replace(/import\s*\([\s\S]*?\)/g, "")
+          .replace(/import\s+"[^"]+"/g, "")
+          .trim();
+
+        return `package main\n\n${importBlock}\n\n${bareCode}\n`;
+      }
+
+      // No solution function and no main() — unreachable but safe fallback
+      return `package main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("No solution function found.")\n}\n`;
+    }
+
+    // 3b. Clean user code: strip package declaration, imports, rename main → user_main
     let cleanedCode = userCode
       .replace(/^\s*package\s+\w+/gm, "")
-      .replace(/import\s*\(([\s\S]*?)\)/g, "")
+      .replace(/import\s*\([\s\S]*?\)/g, "")
       .replace(/import\s+"[^"]+"/g, "")
       .replace(/\bfunc\s+main\s*\(\s*\)/g, "func user_main()");
-
-    // 4. If no solution function was extracted (user wrote their own main), use a minimal wrapper.
-    // Only add imports that the generated harness actually uses — do NOT force encoding/json.
-    if (!fnName) {
-      // The fallback wrapper only uses fmt, io, os, strings — no JSON
-      const fallbackImports = new Set(["fmt", "io", "os", "strings", ...userImports]);
-      const importBlock = Array.from(fallbackImports).map(imp => `\t"${imp}"`).join("\n");
-      return `package main
-
-import (
-${importBlock}
-)
-
-${cleanedCode}
-
-func main() {
-	inputBytes, _ := io.ReadAll(os.Stdin)
-	input := strings.TrimSpace(string(inputBytes))
-	_ = input
-	fmt.Println("Code compiled successfully.")
-}
-`;
-    }
 
     // For the full harness (solution function found), we DO use encoding/json
     const imports = new Set(["fmt", "io", "os", "strings", "encoding/json", ...userImports]);
