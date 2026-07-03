@@ -125,6 +125,20 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     console.log(`[SOCKET] User connected: ${socket.id}`);
 
+    // Join personal user room
+    socket.on('joinUser', (userId) => {
+      const roomId = `user_${userId}`;
+      socket.join(roomId);
+      console.log(`[SOCKET] Client ${socket.id} joined personal room: ${roomId}`);
+    });
+
+    // Leave personal user room
+    socket.on('leaveUser', (userId) => {
+      const roomId = `user_${userId}`;
+      socket.leave(roomId);
+      console.log(`[SOCKET] Client ${socket.id} left personal room: ${roomId}`);
+    });
+
     // Join a contest room (e.g. contest_1)
     socket.on('joinContest', (contestId) => {
       const roomId = `contest_${contestId}`;
@@ -219,10 +233,25 @@ const broadcastLeaderboardUpdate = async (contestId) => {
   }
 };
 
+/**
+ * Invalidates other active connections for the given user with a new sessionId
+ */
+const invalidateSession = (userId, newSessionId) => {
+  try {
+    const socketio = getIO();
+    const roomId = `user_${userId}`;
+    socketio.to(roomId).emit('newSessionLoggedIn', { newSessionId });
+    console.log(`[SOCKET] Broadcasted session invalidation for user_${userId} to ${newSessionId}`);
+  } catch (error) {
+    console.error(`[SOCKET] Failed to invalidate session for user ${userId}:`, error.message);
+  }
+};
+
 module.exports = {
   initSocket,
   getIO,
   broadcastLiveSubmission,
   broadcastParticipationReport,
   broadcastLeaderboardUpdate,
+  invalidateSession,
 };
