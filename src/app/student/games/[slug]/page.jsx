@@ -90,7 +90,8 @@ export default function GamePageWrapper() {
         {/* Render selected live game component */}
         <GameComponent 
           onProgressChange={handleProgressChange} 
-          savedProgress={savedProgress} 
+          savedProgress={savedProgress}
+          onBack={() => router.push("/student/games")}
         />
       </div>
     </div>
