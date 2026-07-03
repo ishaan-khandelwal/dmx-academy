@@ -958,14 +958,14 @@ if _fn is not None:
       }
     }
 
-    // 2. Parse imports from user code to merge them with our required imports
-    const imports = new Set(["fmt", "io", "os", "strings", "encoding/json"]);
-    
+    // 2. Parse imports from user code to collect what the user already imports
+    const userImports = new Set();
+
     // Parse single line imports
     const singleImportRegex = /import\s+"([^"]+)"/g;
     let singleMatch;
     while ((singleMatch = singleImportRegex.exec(userCode)) !== null) {
-      imports.add(singleMatch[1]);
+      userImports.add(singleMatch[1]);
     }
 
     // Parse block imports
@@ -976,36 +976,47 @@ if _fn is not None:
       const lines = inner.split("\n");
       lines.forEach(line => {
         const lineMatch = line.match(/"([^"]+)"/);
-        if (lineMatch) imports.add(lineMatch[1]);
+        if (lineMatch) userImports.add(lineMatch[1]);
       });
     }
 
-    // 3. Clean user code: strip package declaration, imports, and rename main to user_main
+    // 3. Check if user has written their own main() function
+    const hasOwnMain = /\bfunc\s+main\s*\(\s*\)/.test(userCode);
+
+    // 4. If no solution function was extracted AND user has their own main(),
+    //    pass the code through directly — just strip the package declaration
+    //    and re-add correct imports. Do NOT rename main or replace it.
+    if (!fnName) {
+      if (hasOwnMain) {
+        // Build only the imports the user actually used (plus their own)
+        const onlyUserImports = Array.from(userImports);
+        const importBlock = onlyUserImports.length > 0
+          ? `import (\n${onlyUserImports.map(imp => `\t"${imp}"`).join("\n")}\n)`
+          : "";
+
+        // Strip package + imports from user code, keep everything else intact
+        const bareCode = userCode
+          .replace(/^\s*package\s+\w+\s*/gm, "")
+          .replace(/import\s*\([\s\S]*?\)/g, "")
+          .replace(/import\s+"[^"]+"/g, "")
+          .trim();
+
+        return `package main\n\n${importBlock}\n\n${bareCode}\n`;
+      }
+
+      // No solution function and no main() — unreachable but safe fallback
+      return `package main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("No solution function found.")\n}\n`;
+    }
+
+    // 3b. Clean user code: strip package declaration, imports, rename main → user_main
     let cleanedCode = userCode
       .replace(/^\s*package\s+\w+/gm, "")
-      .replace(/import\s*\(([\s\S]*?)\)/g, "")
+      .replace(/import\s*\([\s\S]*?\)/g, "")
       .replace(/import\s+"[^"]+"/g, "")
       .replace(/\bfunc\s+main\s*\(\s*\)/g, "func user_main()");
 
-    // 4. If no solution function was extracted, output standard fallback
-    if (!fnName) {
-      const importBlock = Array.from(imports).map(imp => `\t"${imp}"`).join("\n");
-      return `package main
-
-import (
-${importBlock}
-)
-
-${cleanedCode}
-
-func main() {
-	inputBytes, _ := io.ReadAll(os.Stdin)
-	input := strings.TrimSpace(string(inputBytes))
-	_ = input
-	fmt.Println("Code compiled successfully.")
-}
-`;
-    }
+    // For the full harness (solution function found), we DO use encoding/json
+    const imports = new Set(["fmt", "io", "os", "strings", "encoding/json", ...userImports]);
 
     // 5. Parse parameter types to generate unmarshalling logic
     const params = [];

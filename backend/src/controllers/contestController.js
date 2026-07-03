@@ -111,34 +111,40 @@ const addProblemToContest = async (req, res, next) => {
  */
 const getAllContests = async (req, res, next) => {
   try {
+    // Unauthenticated users see nothing
+    if (!req.user) {
+      return res.status(200).json({ success: true, count: 0, contests: [] });
+    }
+
     let whereClause = {};
 
-    if (req.user && req.user.role === 'USER') {
+    if (req.user.role === 'USER') {
+      // Student: fetch their institute and enrolled batches
       const student = await prisma.user.findUnique({
         where: { id: req.user.id },
         select: {
+          instituteId: true,
           batchesStudied: { select: { id: true } }
         }
       });
+      const studentInstituteId = student?.instituteId || null;
       const batchIds = student ? student.batchesStudied.map(b => b.id) : [];
 
+      // Only show contests from the student's own institute
+      // AND (no batch restriction OR student is enrolled in that batch)
       whereClause = {
+        creator: { instituteId: studentInstituteId },
         OR: [
-          {
-            batches: {
-              some: { id: { in: batchIds } }
-            }
-          },
-          {
-            batches: { none: {} },
-            creator: {
-              OR: [
-                { role: 'ADMIN' },
-                { instituteId: req.user.instituteId }
-              ]
-            }
-          }
+          { batches: { none: {} } },
+          ...(batchIds.length > 0 ? [{
+            batches: { some: { id: { in: batchIds } } }
+          }] : [])
         ]
+      };
+    } else {
+      // Admin / Mentor / Institute Admin: see only their own institute's contests
+      whereClause = {
+        creator: { instituteId: req.user.instituteId }
       };
     }
 
@@ -149,6 +155,7 @@ const getAllContests = async (req, res, next) => {
           select: {
             id: true,
             username: true,
+            instituteId: true,
           },
         },
         contestProblems: {
@@ -160,12 +167,9 @@ const getAllContests = async (req, res, next) => {
       orderBy: { startTime: 'desc' },
     });
 
-    let userParticipations = [];
-    if (req.user) {
-      userParticipations = await prisma.contestParticipation.findMany({
-        where: { userId: req.user.id }
-      });
-    }
+    const userParticipations = await prisma.contestParticipation.findMany({
+      where: { userId: req.user.id }
+    });
 
     const mappedContests = contests.map(c => {
       const participation = userParticipations.find(p => p.contestId === c.id) || null;
