@@ -82,6 +82,7 @@ const updateProblem = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid problem ID format.' });
     }
 
+    const validatedData = problemUpdateSchema.parse(req.body);
     const { title, difficulty, statement, inputFormat, outputFormat, constraints, explanation, followup, editorial, solution, evaluation, templateJS, templatePython, templateGo, templateCPP, templateJava, testCases } = validatedData;
 
     // Find the problem first

@@ -241,10 +241,7 @@ export default function CreateProblem() {
     loadProblemData();
   }, [loadProblemData]);
 
-  useEffect(() => {
-    if (activeTab === "templates") setTemplatesVisited(true);
-    if (activeTab === "tabcontent") setTabcontentVisited(true);
-  }, [activeTab]);
+
 
   const stepDone = {
     details:    title.trim().length >= 3,

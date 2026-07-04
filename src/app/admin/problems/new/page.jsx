@@ -128,11 +128,6 @@ export default function CreateProblem() {
   const { token, API_BASE, user } = useAuth();
 
   const [activeTab,  setActiveTab]  = useState("details");
-
-  useEffect(() => {
-    if (activeTab === "templates") setTemplatesVisited(true);
-    if (activeTab === "tabcontent") setTabcontentVisited(true);
-  }, [activeTab]);
   const [saving,     setSaving]     = useState(false);
   const [success,    setSuccess]    = useState(false);
   const [toast,      setToast]      = useState(null);
