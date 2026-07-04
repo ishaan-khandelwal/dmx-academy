@@ -425,7 +425,6 @@ export default function AdminProblemsPage() {
                   <th className="px-6 py-3">Difficulty</th>
                   <th className="px-6 py-3">Category</th>
                   <th className="px-6 py-3 text-center">Test Cases</th>
-                  <th className="px-6 py-3 text-center">Source</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -517,19 +516,6 @@ export default function AdminProblemsPage() {
                           </span>
                         </td>
 
-                        {/* Source */}
-                        <td className="px-6 py-4 text-center">
-                          {problem.isDbProblem ? (
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded border text-indigo-500 bg-indigo-500/10 border-indigo-500/20">
-                              Database
-                            </span>
-                          ) : (
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded border text-slate-400 bg-slate-500/5 border-slate-500/20">
-                              Static
-                            </span>
-                          )}
-                        </td>
-
                         {/* Actions */}
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end space-x-2">
@@ -553,7 +539,7 @@ export default function AdminProblemsPage() {
                                 <button
                                   onClick={() =>
                                     router.push(
-                                      `/admin/problems/${problem.slug || problem.id}/edit`
+                                      `/admin/problems/${problem.id}/edit`
                                     )
                                   }
                                   className="p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-500/10"
