@@ -248,7 +248,7 @@ export function AuthProvider({ children }) {
     // 0. Check built-in demo accounts first (always take precedence for mock testing)
     const demo = DEMO_ACCOUNTS.find(a => a.email === email && a.password === password);
     if (demo) {
-      const demoToken = `demo-token-${Date.now()}`;
+      const demoToken = `demo-token-${demo.user.email}`;
       setToken(demoToken);
       setUser(demo.user);
       setLegacySession(demo.user);

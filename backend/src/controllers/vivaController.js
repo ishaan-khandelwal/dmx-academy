@@ -17,18 +17,15 @@ const getSubjects = async (req, res, next) => {
   }
 };
 
-/**
- * Start a new Viva session.
- */
 const startSession = async (req, res, next) => {
   try {
-    const { subject, difficulty, numQuestions } = req.body;
-    if (!subject) {
-      return res.status(400).json({ success: false, message: "Subject is required" });
+    const { vivaId } = req.body;
+    if (!vivaId) {
+      return res.status(400).json({ success: false, message: "vivaId is required" });
     }
 
     const userId = req.user.id;
-    const result = await vivaService.startVivaSession(userId, subject, { difficulty, numQuestions });
+    const result = await vivaService.startVivaSession(userId, parseInt(vivaId));
 
     res.status(201).json({ success: true, ...result });
   } catch (error) {

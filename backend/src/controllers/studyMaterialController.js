@@ -4,7 +4,10 @@ const svc = require('../services/studyMaterialService');
 /** GET /api/viva/materials */
 const list = async (req, res, next) => {
   try {
-    const instituteId = req.user && req.user.role !== 'ADMIN' ? req.user.instituteId : null;
+    const instituteId = req.user ? req.user.instituteId : null;
+    if (!instituteId) {
+      return res.json({ success: true, count: 0, materials: [] });
+    }
     const materials = await svc.listMaterials(instituteId);
     res.json({ success: true, count: materials.length, materials });
   } catch (err) { next(err); }
@@ -18,7 +21,7 @@ const get = async (req, res, next) => {
     const material = await svc.getMaterial(id);
 
     // Scoping validation
-    if (req.user && req.user.role !== 'ADMIN' && material.instituteId !== req.user.instituteId) {
+    if (!req.user || !req.user.instituteId || material.instituteId !== req.user.instituteId) {
       return res.status(403).json({ success: false, message: 'You are not authorized to view this material.' });
     }
 
@@ -37,7 +40,10 @@ const upload = async (req, res, next) => {
     if (!title?.trim()) return res.status(400).json({ success: false, message: 'Title is required.' });
     if (!subject?.trim()) return res.status(400).json({ success: false, message: 'Subject is required.' });
 
-    const instituteId = req.user && req.user.role !== 'ADMIN' ? req.user.instituteId : null;
+    const instituteId = req.user ? req.user.instituteId : null;
+    if (!instituteId) {
+      return res.status(403).json({ success: false, message: 'You must belong to an institute to upload materials.' });
+    }
 
     const material = await svc.createMaterial({
       title,
@@ -61,7 +67,7 @@ const retry = async (req, res, next) => {
     if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
     
     const materialCheck = await svc.getMaterial(id);
-    if (req.user && req.user.role !== 'ADMIN' && materialCheck.instituteId !== req.user.instituteId) {
+    if (!req.user || !req.user.instituteId || materialCheck.instituteId !== req.user.instituteId) {
       return res.status(403).json({ success: false, message: 'You are not authorized to retry extraction on this material.' });
     }
 
@@ -80,7 +86,7 @@ const generate = async (req, res, next) => {
     if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
 
     const materialCheck = await svc.getMaterial(id);
-    if (req.user && req.user.role !== 'ADMIN' && materialCheck.instituteId !== req.user.instituteId) {
+    if (!req.user || !req.user.instituteId || materialCheck.instituteId !== req.user.instituteId) {
       return res.status(403).json({ success: false, message: 'You are not authorized to generate questions from this material.' });
     }
 
@@ -100,7 +106,10 @@ const saveQuestions = async (req, res, next) => {
     if (!Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ success: false, message: 'questions array is required.' });
     }
-    const instituteId = req.user && req.user.role !== 'ADMIN' ? req.user.instituteId : null;
+    const instituteId = req.user ? req.user.instituteId : null;
+    if (!instituteId) {
+      return res.status(403).json({ success: false, message: 'You must belong to an institute to save questions.' });
+    }
     const saved = await svc.saveQuestionsToBank(questions, instituteId);
     res.json({ success: true, saved: saved.length, questions: saved });
   } catch (err) {
@@ -116,7 +125,7 @@ const remove = async (req, res, next) => {
     if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
 
     const materialCheck = await svc.getMaterial(id);
-    if (req.user && req.user.role !== 'ADMIN' && materialCheck.instituteId !== req.user.instituteId) {
+    if (!req.user || !req.user.instituteId || materialCheck.instituteId !== req.user.instituteId) {
       return res.status(403).json({ success: false, message: 'You are not authorized to delete this material.' });
     }
 
@@ -134,6 +143,11 @@ const viewFile = async (req, res, next) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
     const material = await svc.getMaterial(id);
+
+    if (!req.user || !req.user.instituteId || material.instituteId !== req.user.instituteId) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to view this material.' });
+    }
+
     if (!fs.existsSync(material.filePath)) {
       return res.status(404).json({ success: false, message: 'File not found on disk.' });
     }
@@ -151,6 +165,11 @@ const downloadFile = async (req, res, next) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
     const material = await svc.getMaterial(id);
+
+    if (!req.user || !req.user.instituteId || material.instituteId !== req.user.instituteId) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to download this material.' });
+    }
+
     if (!fs.existsSync(material.filePath)) {
       return res.status(404).json({ success: false, message: 'File not found on disk.' });
     }
