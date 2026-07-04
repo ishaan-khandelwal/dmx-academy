@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
+import AntiCheatShield from "@/components/AntiCheatShield";
 import {
   Brain, Play, CheckCircle2, XCircle, Clock, Award,
   ChevronRight, Activity, BookOpen, Send, Sparkles, MessageSquare,
@@ -666,6 +667,37 @@ const submitAnswer = async (overrideText) => {
   }
 };
 
+const disqualifySession = async () => {
+  if (!activeSession) return;
+  stopListening(true);
+  setPhase("evaluating");
+  try {
+    // 1. Submit a final proctoring flag answer
+    await fetch(`${API_BASE}/api/viva/session/answer`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        sessionId: activeSession.id,
+        questionText: currentQuestion?.questionText || "Active Question",
+        studentAnswer: "DISQUALIFIED: Multiple anti-cheat proctoring violations detected.",
+        selectedQuestionIds
+      })
+    });
+    // 2. Force complete the session
+    await fetch(`${API_BASE}/api/viva/session/complete`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ sessionId: activeSession.id })
+    });
+    
+    // Redirect to results with disqualified flag
+    window.location.assign(`/student/viva/result/${activeSession.id}?disqualified=true`);
+  } catch (err) {
+    console.error("Disqualification error:", err);
+    setView("lobby");
+  }
+};
+
 /** Retry — clear transcript so student can re-record. Stays in answering phase. */
 const retryAnswer = () => {
   stopListening(true);
@@ -903,6 +935,14 @@ return (
     {/* ── ACTIVE SESSION VIEW ── */}
     {view === "active" && currentQuestion && (
       <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="max-w-3xl mx-auto space-y-6">
+
+        {/* Anti-cheat Proctoring Shield */}
+        <AntiCheatShield
+          active={view === "active" && (phase === "reading" || phase === "answering" || phase === "reviewing")}
+          maxViolations={3}
+          onDisqualify={disqualifySession}
+          subject={activeSession?.subject || "Viva Exam"}
+        />
 
         {/* Header & Progress */}
         <div className="flex justify-between items-end">

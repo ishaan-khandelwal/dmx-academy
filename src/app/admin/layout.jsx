@@ -131,10 +131,11 @@ export default function AdminLayout({ children }) {
     return <>{children}</>;
   }
 
-  const isSuperAdmin = user?.role === "ADMIN";
-  const isInstAdmin = user?.role === "INSTITUTE_ADMIN";
-  const isBatchMgr = user?.role === "BATCH_MANAGER";
-  const isMentor = user?.role === "MENTOR";
+  const effectiveRole = user?.role || (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("dmx_auth_user") || "{}")?.role : null);
+  const isSuperAdmin = effectiveRole === "ADMIN";
+  const isInstAdmin = effectiveRole === "INSTITUTE_ADMIN";
+  const isBatchMgr = effectiveRole === "BATCH_MANAGER";
+  const isMentor = effectiveRole === "MENTOR";
 
   const sidebarLinks = [
     {
@@ -172,9 +173,9 @@ export default function AdminLayout({ children }) {
       href: "/mentor/viva/materials",
       icon: FileText
     },
-    (isBatchMgr || isInstAdmin || isMentor) && {
+    isSuperAdmin && {
       label: "AI Settings",
-      href: "/mentor/viva/ai-settings",
+      href: "/admin/viva/ai-settings",
       icon: Settings
     },
     (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {

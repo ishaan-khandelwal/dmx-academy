@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   LiveKitRoom,
   VideoTrack,
@@ -822,6 +823,7 @@ export default function AdminLivePage() {
   // Batches targeting state
   const [batches, setBatches] = useState([]);
   const [selectedBatchIds, setSelectedBatchIds] = useState([]);
+  const [showRecordPrompt, setShowRecordPrompt] = useState(false);
 
   useEffect(() => {
     const fetchBatches = async () => {
@@ -976,12 +978,8 @@ export default function AdminLivePage() {
     reader.readAsDataURL(file);
   };
 
-  const handleStartSession = async () => {
-    if (!formState.title.trim()) {
-      setError("Session title is required.");
-      return;
-    }
-
+  const startActualSession = async () => {
+    console.log("[LIVE] startActualSession triggered");
     setIsStarting(true);
     setError(null);
 
@@ -1001,6 +999,7 @@ export default function AdminLivePage() {
       });
 
       const data = await res.json();
+      console.log("[LIVE] startActualSession response data:", data);
 
       if (!data.success) {
         setError(data.message || "Failed to start session.");
@@ -1012,10 +1011,22 @@ export default function AdminLivePage() {
       setActiveSession(data.session);
       await fetchToken(data.session.roomName);
     } catch (e) {
+      console.error("[LIVE] startActualSession error:", e);
       setError("Network error. Is the backend running?");
     } finally {
       setIsStarting(false);
     }
+  };
+
+  const handleStartSession = async () => {
+    console.log("[LIVE] handleStartSession clicked. title:", formState.title);
+    if (!formState.title.trim()) {
+      setError("Session title is required.");
+      return;
+    }
+    setError(null);
+    console.log("[LIVE] Setting showRecordPrompt to true");
+    setShowRecordPrompt(true);
   };
 
   const endActiveSession = async () => {
@@ -1079,7 +1090,8 @@ export default function AdminLivePage() {
   // ─── Pre-Session Form (Setup) ──────────────────────────────────────
   if (!session || !livekitToken) {
     return (
-      <div className="max-w-2xl mx-auto space-y-8 animate-fade-in">
+      <>
+        <div className="max-w-2xl mx-auto space-y-8 animate-fade-in">
         {/* Page Header */}
         <div className="space-y-2">
           <div className="flex items-center gap-3">
@@ -1353,6 +1365,56 @@ export default function AdminLivePage() {
           )}
         </div>
       </div>
+
+      {/* Recording Prompt Modal Overlay */}
+      <AnimatePresence>
+        {showRecordPrompt && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm rounded-3xl border shadow-2xl p-6 text-center space-y-4"
+              style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
+            >
+              <div className="w-12 h-12 rounded-2xl bg-[var(--bg-badge)] text-[var(--text-accent)] flex items-center justify-center mx-auto">
+                <Radio size={24} className="animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+                  Record Session
+                </h3>
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Do you want to record this live stream session?
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowRecordPrompt(false);
+                    startActualSession();
+                  }}
+                  className="px-5 py-2.5 rounded-2xl border text-xs font-bold transition-all hover:bg-slate-100 dark:hover:bg-slate-800/60 cursor-pointer"
+                  style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}
+                >
+                  No, Skip
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRecordPrompt(false);
+                    startActualSession();
+                  }}
+                  className="px-6 py-2.5 rounded-2xl text-white text-xs font-black uppercase transition-all shadow-lg hover:scale-[1.02] cursor-pointer"
+                  style={{ background: "var(--accent-gradient)" }}
+                >
+                  Yes, Record
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      </>
     );
   }
 

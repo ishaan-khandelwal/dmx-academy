@@ -18,6 +18,14 @@ export default function VivaResultPage() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isDisqualified, setIsDisqualified] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsDisqualified(params.get("disqualified") === "true");
+    }
+  }, []);
 
   const getHeaders = () => ({
     "Content-Type": "application/json",
@@ -107,6 +115,17 @@ export default function VivaResultPage() {
           <span>Back to AI Viva</span>
         </Link>
       </div>
+      {isDisqualified && (
+        <div className="p-6 rounded-3xl border bg-rose-500/10 border-rose-500/25 flex items-start space-x-4 text-rose-500">
+          <AlertCircle size={24} className="shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h3 className="text-sm font-black uppercase tracking-wider">Session Disqualified</h3>
+            <p className="text-xs leading-relaxed opacity-90">
+              This session was automatically terminated and submitted due to multiple proctoring violations (tab switching, window focus loss, or exiting fullscreen). The results shown below have been flagged as invalid.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Hero Score Card */}
       <div className="relative p-8 md:p-10 rounded-3xl border shadow-lg overflow-hidden"

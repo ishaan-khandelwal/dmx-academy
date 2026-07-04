@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, UserPlus, Trash2, Mail, Shield, GraduationCap, X,
-  CheckCircle2, AlertCircle, Calendar, Briefcase, Award, Layers, Edit, RefreshCw
+  CheckCircle2, AlertCircle, Calendar, Briefcase, Award, Layers, Edit, RefreshCw, Eye, EyeOff
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -44,6 +44,12 @@ export default function ManagePeoplePage() {
   // Submitting States
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  // Password visibility states
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
 
   // Batches state
   const [batches, setBatches] = useState([]);
@@ -127,6 +133,12 @@ export default function ManagePeoplePage() {
       return;
     }
 
+    if (password !== confirmPassword) {
+      setFormError("Passwords do not match.");
+      setSubmitting(false);
+      return;
+    }
+
     if (people.some(p => p.email.toLowerCase() === email.trim().toLowerCase())) {
       setFormError("Email is already in use by another member.");
       setSubmitting(false);
@@ -190,6 +202,7 @@ export default function ManagePeoplePage() {
       setName("");
       setEmail("");
       setPassword("");
+      setConfirmPassword("");
       setSelectedBatchIds([]);
 
       setTimeout(() => {
@@ -633,15 +646,46 @@ export default function ManagePeoplePage() {
                       <label className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-secondary)]">
                         Password
                       </label>
-                      <input
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
-                        style={{ borderColor: "var(--border-primary)" }}
-                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 pr-11 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                          style={{ borderColor: "var(--border-primary)" }}
+                        />
+                        <button type="button" onClick={() => setShowPassword(v => !v)}
+                          className="absolute right-3 top-3 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                          {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-secondary)]">
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          required
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 pr-11 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                          style={{ borderColor: confirmPassword && confirmPassword !== password ? "#f43f5e" : "var(--border-primary)" }}
+                        />
+                        <button type="button" onClick={() => setShowConfirmPassword(v => !v)}
+                          className="absolute right-3 top-3 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                          {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                      {confirmPassword && confirmPassword !== password && (
+                        <p className="text-[10px] text-rose-500 font-bold">Passwords do not match</p>
+                      )}
                     </div>
 
                     {/* Role Selector */}
@@ -862,14 +906,20 @@ export default function ManagePeoplePage() {
                           Leave blank to keep current
                         </span>
                       </div>
-                      <input
-                        type="password"
-                        value={editPassword}
-                        onChange={(e) => setEditPassword(e.target.value)}
-                        placeholder="Enter new password"
-                        className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
-                        style={{ borderColor: "var(--border-primary)" }}
-                      />
+                      <div className="relative">
+                        <input
+                          type={showEditPassword ? "text" : "password"}
+                          value={editPassword}
+                          onChange={(e) => setEditPassword(e.target.value)}
+                          placeholder="Enter new password"
+                          className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 pr-11 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                          style={{ borderColor: "var(--border-primary)" }}
+                        />
+                        <button type="button" onClick={() => setShowEditPassword(v => !v)}
+                          className="absolute right-3 top-3 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                          {showEditPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Role Badge (Read-Only) */}

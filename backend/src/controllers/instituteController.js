@@ -288,9 +288,41 @@ const updateMember = async (req, res, next) => {
   }
 };
 
+
+/**
+ * Toggle block/unblock an institute (Super Admin only)
+ */
+const toggleBlockInstitute = async (req, res, next) => {
+  try {
+    const instituteId = parseInt(req.params.instituteId, 10);
+    if (!instituteId) {
+      return res.status(400).json({ success: false, message: "Invalid institute ID." });
+    }
+
+    const institute = await prisma.institute.findUnique({ where: { id: instituteId } });
+    if (!institute) {
+      return res.status(404).json({ success: false, message: "Institute not found." });
+    }
+
+    const updated = await prisma.institute.update({
+      where: { id: instituteId },
+      data: { isBlocked: !institute.isBlocked }
+    });
+
+    res.status(200).json({
+      success: true,
+      isBlocked: updated.isBlocked,
+      message: updated.isBlocked ? "Institute blocked successfully." : "Institute unblocked successfully."
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getMembers,
   addMember,
   deleteMember,
-  updateMember
+  updateMember,
+  toggleBlockInstitute
 };

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ShieldAlert, Plus, Users, School, Mail, Key, UserPlus, 
-  X, CheckCircle2, AlertCircle, Calendar, ShieldCheck 
+  X, CheckCircle2, AlertCircle, Calendar, ShieldCheck, Ban, Eye, EyeOff
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -27,6 +27,14 @@ export default function InstitutesPage() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
   const [modalSuccess, setModalSuccess] = useState("");
+
+  // Block states
+  const [blockLoading, setBlockLoading] = useState(null); // id of institute being blocked
+
+  // Confirm password + eye toggle
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Delete modal states
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -73,11 +81,42 @@ export default function InstitutesPage() {
     }
   }, [user, token, API_BASE]);
 
+  const handleToggleBlock = async (admin) => {
+    if (!admin.institute?.id) return;
+    setBlockLoading(admin.institute.id);
+    try {
+      const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(hasRealToken ? { Authorization: `Bearer ${token}` } : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" }),
+      };
+      const res = await fetch(`${API_BASE}/api/institutes/${admin.institute.id}/block`, { method: "PATCH", headers });
+      const data = await res.json();
+      if (data.success) {
+        setAdmins(prev => prev.map(a =>
+          a.institute?.id === admin.institute.id
+            ? { ...a, institute: { ...a.institute, isBlocked: data.isBlocked } }
+            : a
+        ));
+      }
+    } catch (err) {
+      console.error("Failed to toggle block:", err);
+    } finally {
+      setBlockLoading(null);
+    }
+  };
+
   const handleAddAdminSubmit = async (e) => {
     e.preventDefault();
     setModalError("");
     setModalSuccess("");
     setModalLoading(true);
+
+    if (password !== confirmPassword) {
+      setModalError("Passwords do not match.");
+      setModalLoading(false);
+      return;
+    }
 
     try {
       const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
@@ -100,6 +139,7 @@ export default function InstitutesPage() {
         setUsername("");
         setEmail("");
         setPassword("");
+        setConfirmPassword("");
         setInstituteName("");
         // Reload table
         fetchAdmins();
@@ -230,6 +270,7 @@ export default function InstitutesPage() {
                   <th className="px-6 py-4">Username</th>
                   <th className="px-6 py-4">Email</th>
                   <th className="px-6 py-4">Institute</th>
+                  <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Role Permission</th>
                   <th className="px-6 py-4">Created Date</th>
                   <th className="px-6 py-4">Actions</th>
@@ -247,6 +288,17 @@ export default function InstitutesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
+                      {adm.institute?.isBlocked ? (
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1 w-fit">
+                          <Ban size={9} /> Blocked
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-fit block">
+                          Active
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
                       <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-blue-500/10 text-blue-400 border border-blue-500/20">
                         {adm.role === "INSTITUTE_ADMIN" ? "INSTITUTE ADMIN" : adm.role}
                       </span>
@@ -258,12 +310,26 @@ export default function InstitutesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleDeleteClick(adm)}
-                        className="flex items-center gap-1 text-[10px] font-black uppercase text-rose-500 hover:text-rose-600 transition-colors cursor-pointer border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 rounded-xl hover:bg-rose-500/10"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleBlock(adm)}
+                          disabled={blockLoading === adm.institute?.id}
+                          className={`flex items-center gap-1 text-[10px] font-black uppercase transition-colors cursor-pointer border px-2.5 py-1.5 rounded-xl disabled:opacity-50 ${
+                            adm.institute?.isBlocked
+                              ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10"
+                              : "text-amber-500 border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
+                          }`}
+                        >
+                          <Ban size={10} />
+                          {blockLoading === adm.institute?.id ? "..." : adm.institute?.isBlocked ? "Unblock" : "Block"}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(adm)}
+                          className="flex items-center gap-1 text-[10px] font-black uppercase text-rose-500 hover:text-rose-600 transition-colors cursor-pointer border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 rounded-xl hover:bg-rose-500/10"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -361,15 +427,44 @@ export default function InstitutesPage() {
                   </label>
                   <div className="relative">
                     <input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                      className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 pr-11 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
                       style={{ borderColor: "var(--border-primary)" }}
                     />
+                    <button type="button" onClick={() => setShowPassword(v => !v)}
+                      className="absolute right-3 top-3 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </div>
+                </div>
+
+                {/* Confirm Password */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 pr-11 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                      style={{ borderColor: confirmPassword && confirmPassword !== password ? "var(--rose-500, #f43f5e)" : "var(--border-primary)" }}
+                    />
+                    <button type="button" onClick={() => setShowConfirmPassword(v => !v)}
+                      className="absolute right-3 top-3 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                      {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  {confirmPassword && confirmPassword !== password && (
+                    <p className="text-[10px] text-rose-500 font-bold">Passwords do not match</p>
+                  )}
                 </div>
 
                 {/* Institute Name Input */}

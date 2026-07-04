@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Mail, Lock, User, ShieldAlert, ArrowRight, RefreshCw, AlertCircle, GraduationCap, Users } from "lucide-react";
+import { Sparkles, Mail, Lock, User, ShieldAlert, ArrowRight, RefreshCw, AlertCircle, GraduationCap, Users, Eye, EyeOff, Ban } from "lucide-react";
 
 function LoginForm() {
   const { login, register, user, logout } = useAuth();
@@ -29,6 +29,12 @@ function LoginForm() {
   // State
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  // Password enhancements
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Detect and lock active role and pre-populated fields from query params/redirect path
   useEffect(() => {
@@ -70,7 +76,7 @@ function LoginForm() {
 
     if (path.startsWith('/admin') && !isUserAdmin) return true;
     if (path.startsWith('/mentor')) {
-      const isVivaAccess = path.startsWith('/mentor/viva/questions') || path.startsWith('/mentor/viva/materials') || path.startsWith('/mentor/viva/ai-settings');
+      const isVivaAccess = path.startsWith('/mentor/viva/questions') || path.startsWith('/mentor/viva/materials');
       if (isVivaAccess) {
         if (!isUserAdmin && !isUserMentor) return true;
       } else {
@@ -185,6 +191,32 @@ function LoginForm() {
     );
   }
 
+  // Institute blocked screen
+  if (isBlocked) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-center space-y-6 p-8" style={{ backgroundColor: "var(--bg-primary)" }}>
+        <div className="w-20 h-20 rounded-3xl bg-rose-500/10 flex items-center justify-center mx-auto">
+          <Ban size={36} className="text-rose-500" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-black" style={{ color: "var(--text-primary)" }}>Institute Blocked</h1>
+          <p className="text-sm max-w-md mx-auto" style={{ color: "var(--text-secondary)" }}>
+            Your institute account has been suspended by the Super Administrator. All access is currently restricted.
+          </p>
+          <p className="text-xs font-bold text-rose-500">Please contact your Super Administrator to restore access.</p>
+        </div>
+        <button onClick={() => {
+          setIsBlocked(false);
+          router.push("/");
+        }}
+          className="px-5 py-2.5 rounded-2xl border text-xs font-bold transition-all cursor-pointer"
+          style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}>
+          ← Back to Homepage
+        </button>
+      </div>
+    );
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
@@ -198,6 +230,12 @@ function LoginForm() {
 
     if (isRegistering && !username) {
       setErrorMsg("Username is required.");
+      setLoading(false);
+      return;
+    }
+
+    if (isRegistering && password !== confirmPassword) {
+      setErrorMsg("Passwords do not match.");
       setLoading(false);
       return;
     }
@@ -230,6 +268,8 @@ function LoginForm() {
         } else {
           router.replace(targetRoute);
         }
+      } else if (result.blocked) {
+        setIsBlocked(true);
       } else {
         setErrorMsg(result.message || "An error occurred. Please check your credentials.");
       }
@@ -426,11 +466,11 @@ function LoginForm() {
             <div className="relative">
               <Lock size={15} className="absolute left-4 top-3.5 text-slate-400" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-2xl py-3 pl-11 pr-4 text-xs outline-none border transition-all"
+                className="w-full rounded-2xl py-3 pl-11 pr-11 text-xs outline-none border transition-all"
                 style={{
                   backgroundColor: "var(--bg-input)",
                   borderColor: "var(--border-primary)",
@@ -438,8 +478,44 @@ function LoginForm() {
                 }}
                 required
               />
+              <button type="button" onClick={() => setShowPassword(v => !v)}
+                className="absolute right-4 top-3.5 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
             </div>
           </div>
+
+          {/* Confirm Password (register only) */}
+          {isRegistering && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-extrabold uppercase tracking-wider pl-1" style={{ color: "var(--text-secondary)" }}>
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-4 top-3.5 text-slate-400" />
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full rounded-2xl py-3 pl-11 pr-11 text-xs outline-none border transition-all"
+                  style={{
+                    backgroundColor: "var(--bg-input)",
+                    borderColor: confirmPassword && confirmPassword !== password ? "#f43f5e" : "var(--border-primary)",
+                    color: "var(--text-primary)"
+                  }}
+                  required
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(v => !v)}
+                  className="absolute right-4 top-3.5 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                  {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              {confirmPassword && confirmPassword !== password && (
+                <p className="text-[10px] text-rose-500 font-bold pl-1">Passwords do not match</p>
+              )}
+            </div>
+          )}
 
           {/* Submit Button */}
           <button

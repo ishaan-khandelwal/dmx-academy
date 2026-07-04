@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 import { getApiBase } from "@/utils/api";
+import { getSocket } from "@/utils/socket";
+import { AlertTriangle } from "lucide-react";
 
 const AuthContext = createContext(null);
 
@@ -102,6 +104,58 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeSession, setActiveSession] = useState(null);
+  const [isInstituteBlocked, setIsInstituteBlocked] = useState(false);
+  const [sessionConflict, setSessionConflict] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+
+  // Sync WebSocket for single-session tracking
+  useEffect(() => {
+    if (!token || !user?.id || token.startsWith("demo-token-") || token.startsWith("local-token-")) {
+      return;
+    }
+    const socket = getSocket();
+    if (socket) {
+      socket.emit("joinUser", user.id);
+
+      socket.on("newSessionLoggedIn", (data) => {
+        const storedUser = localStorage.getItem("dmx_auth_user");
+        let mySessionId = "";
+        try {
+          mySessionId = JSON.parse(storedUser)?.sessionId;
+        } catch {}
+
+        if (data.newSessionId && mySessionId && data.newSessionId !== mySessionId) {
+          setSessionConflict(true);
+        }
+      });
+
+      return () => {
+        socket.off("newSessionLoggedIn");
+        socket.emit("leaveUser", user.id);
+      };
+    }
+  }, [token, user]);
+
+  // Countdown timer for automatic logout
+  useEffect(() => {
+    if (!sessionConflict) return;
+    setCountdown(3);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          logout();
+          setSessionConflict(false);
+          if (typeof window !== "undefined") {
+            window.location.href = "/";
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sessionConflict]);
 
   // Sync / check active session for host
   useEffect(() => {
@@ -147,6 +201,13 @@ export function AuthProvider({ children }) {
                 setUser(data.user);
                 setToken(storedToken);
                 setLegacySession(data.user);
+                setLoading(false);
+                return;
+              }
+            } else if (res.status === 401) {
+              const data = await res.json();
+              if (data.code === 'SESSION_EXPIRED') {
+                setSessionConflict(true);
                 setLoading(false);
                 return;
               }
@@ -202,6 +263,7 @@ export function AuthProvider({ children }) {
         setToken(data.token);
         setUser(data.user);
         setLegacySession(data.user);
+        setIsInstituteBlocked(false);
         localStorage.setItem("dmx_auth_token", data.token);
         localStorage.setItem("dmx_auth_user", JSON.stringify(data.user));
         return { success: true, user: data.user };
@@ -209,6 +271,10 @@ export function AuthProvider({ children }) {
 
       // If it's a 4xx (bad credentials, wrong password, etc.) — report immediately
       if (res.status >= 400 && res.status < 500) {
+        if (data.code === 'INSTITUTE_BLOCKED') {
+          setIsInstituteBlocked(true);
+          return { success: false, message: 'Your institute has been blocked. Please contact the Super Administrator.', blocked: true };
+        }
         return { success: false, message: formatBackendError(data) };
       }
       // 5xx / 503 → DB down, fall through to offline checks
@@ -296,8 +362,35 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, API_BASE, activeSession, setActiveSession }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, API_BASE, activeSession, setActiveSession, isInstituteBlocked, setIsInstituteBlocked }}>
       {children}
+
+      {/* Cross-Device Single Session Countdown Overlay */}
+      {sessionConflict && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-lg p-4 font-sans select-none pointer-events-auto">
+          <div className="w-full max-w-sm rounded-3xl border border-rose-500/20 bg-slate-900/90 p-8 text-center space-y-6 shadow-2xl shadow-rose-950/20">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto animate-bounce">
+              <AlertTriangle size={32} />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-lg font-black tracking-tight text-white uppercase">
+                Session Terminated
+              </h3>
+              <p className="text-xs leading-relaxed text-slate-300">
+                This account was logged in from another device or browser tab.
+              </p>
+              <div className="pt-2 flex items-center justify-center gap-2">
+                <span className="text-xs font-semibold text-slate-400">Logging out in</span>
+                <span className="inline-flex w-7 h-7 rounded-lg bg-rose-500 text-white font-extrabold text-xs items-center justify-center animate-ping absolute opacity-20"></span>
+                <span className="inline-flex w-7 h-7 rounded-lg bg-rose-500 text-white font-extrabold text-xs items-center justify-center relative">
+                  {countdown}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">seconds...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }
