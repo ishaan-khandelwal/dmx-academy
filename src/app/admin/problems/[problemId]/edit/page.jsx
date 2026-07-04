@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
@@ -58,14 +58,6 @@ function MdToolbar({ taRef, setValue }) {
       {label}
     </button>
   );
-  if (loadingProblem) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-        <RefreshCw className="animate-spin text-indigo-400" size={32} />
-        <p className="text-slate-400 text-xs font-semibold">Loading problem data...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-[#1a1f2e] border border-white/10 flex-wrap">
@@ -85,8 +77,8 @@ function MdToolbar({ taRef, setValue }) {
 }
 
 function CodePanel({ lang, value, onChange, rows = 10 }) {
-  const colors = { javascript: "#f59e0b", python: "#3b82f6", go: "#10b981" };
-  const labels = { javascript: "JS · Node.js", python: "Python 3", go: "Go" };
+  const colors = { javascript: "#f59e0b", python: "#3b82f6", go: "#10b981", cpp: "#f43f5e", java: "#06b6d4" };
+  const labels = { javascript: "JS · Node.js", python: "Python 3", go: "Go", cpp: "C++ (GCC 17)", java: "Java (JDK 21)" };
   return (
     <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
       <div className="flex items-center justify-between px-4 py-2.5 bg-[#161b27] border-b border-white/10">
@@ -135,8 +127,24 @@ const STEPS = [
 export default function CreateProblem() {
   const router = useRouter();
   const { token, API_BASE, user } = useAuth();
+  const params = useParams();
+  const { problemId } = params;
+
+  const [dbId, setDbId] = useState(null);
+  const [loadingProblem, setLoadingProblem] = useState(true);
 
   const [activeTab,  setActiveTab]  = useState("details");
+  const [templatesVisited, setTemplatesVisited] = useState(true);
+  const [tabcontentVisited, setTabcontentVisited] = useState(true);
+
+  useEffect(() => {
+    if (activeTab === "templates") {
+      setTimeout(() => setTemplatesVisited(true), 0);
+    }
+    if (activeTab === "tabcontent") {
+      setTimeout(() => setTabcontentVisited(true), 0);
+    }
+  }, [activeTab]);
   const [saving,     setSaving]     = useState(false);
   const [success,    setSuccess]    = useState(false);
   const [toast,      setToast]      = useState(null);
@@ -180,9 +188,13 @@ export default function CreateProblem() {
   const [evaluation, setEvaluation] = useState("");
   const [sub5,       setSub5]       = useState("followup");
 
+  const showToast = useCallback((text, type = "error") => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
   const loadProblemData = useCallback(async () => {
     if (!problemId) return;
-    setLoadingProblem(true);
     try {
       const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
       const headers = {
@@ -238,26 +250,21 @@ export default function CreateProblem() {
   }, [problemId, API_BASE, token, showToast]);
 
   useEffect(() => {
-    loadProblemData();
+    const timer = setTimeout(() => {
+      loadProblemData();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [loadProblemData]);
 
-  useEffect(() => {
-    if (activeTab === "templates") setTemplatesVisited(true);
-    if (activeTab === "tabcontent") setTabcontentVisited(true);
-  }, [activeTab]);
+
 
   const stepDone = {
     details:    title.trim().length >= 3,
     statement:  desc.trim().length >= 10,
-    templates:  !!(tmplJS.trim() || tmplPy.trim()),
+    templates:  templatesVisited && !!(tmplJS.trim() || tmplPy.trim() || tmplGo.trim() || tmplCPP.trim() || tmplJava.trim()),
     testcases:  testCases.length > 0 && testCases.some(t => t.isSample && t.expectedOutput.trim()),
-    tabcontent: true,
+    tabcontent: tabcontentVisited,
   };
-
-  const showToast = useCallback((text, type = "error") => {
-    setToast({ text, type });
-    setTimeout(() => setToast(null), 3500);
-  }, []);
 
   const handleTitleChange = (v) => {
     setTitle(v);
@@ -293,6 +300,7 @@ export default function CreateProblem() {
         explanation: "No explanation provided.",
         followup: followup || "", editorial: editorial || "", solution: solution || "", evaluation: evaluation || "",
         templateJS: tmplJS || "", templatePython: tmplPy || "", templateGo: tmplGo || "",
+        templateCPP: tmplCPP || "", templateJava: tmplJava || "",
         testCases: testCases.map(tc => ({ input: tc.input || "", expectedOutput: tc.expectedOutput || "", isSample: !!tc.isSample })),
         timeout: Number(timeLimit), memoryLimit: Number(memLimit),
       };
@@ -304,7 +312,7 @@ export default function CreateProblem() {
       }
       setSuccess(true);
       setTimeout(() => router.push("/admin/problems"), 1600);
-    } catch (err) {
+    } catch {
       showToast("Network error — check your server connection.", "error");
     } finally {
       setSaving(false);
@@ -333,6 +341,15 @@ export default function CreateProblem() {
   const idx = STEPS.findIndex(s => s.id === activeTab);
   const goNext = () => { if (idx < STEPS.length - 1) setActiveTab(STEPS[idx + 1].id); };
   const goPrev = () => { if (idx > 0) setActiveTab(STEPS[idx - 1].id); };
+
+  if (loadingProblem) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3" style={{ background: "var(--bg-primary)" }}>
+        <RefreshCw className="animate-spin text-indigo-400" size={32} />
+        <p className="text-slate-400 text-xs font-semibold">Loading problem data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
@@ -387,7 +404,6 @@ export default function CreateProblem() {
           <div className="space-y-3 lg:sticky lg:top-8">
             <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--bg-card)", borderColor: "var(--border-primary)" }}>
               {STEPS.map((step, i) => {
-                const Icon = step.icon;
                 const isActive = activeTab === step.id;
                 const done = stepDone[step.id];
                 return (
@@ -591,7 +607,9 @@ export default function CreateProblem() {
                     <div className="flex gap-2 flex-wrap">
                       {[
                         { id: "javascript", label: "JavaScript", cls: "text-amber-400 bg-amber-500/15 border-amber-500/40" },
-                        { id: "python",     label: "Python 3",   cls: "text-blue-400  bg-blue-500/15  border-blue-500/40" },
+                        { id: "cpp",        label: "C++",        cls: "text-rose-400   bg-rose-500/15   border-rose-500/40" },
+                        { id: "java",       label: "Java",       cls: "text-cyan-400   bg-cyan-500/15   border-cyan-500/40" },
+                        { id: "python",     label: "Python 3",   cls: "text-blue-400   bg-blue-500/15   border-blue-500/40" },
                         { id: "go",         label: "Go",         cls: "text-emerald-400 bg-emerald-500/15 border-emerald-500/40" },
                       ].map(l => (
                         <button key={l.id} type="button" onClick={() => setActiveTmpl(l.id)}
@@ -601,9 +619,11 @@ export default function CreateProblem() {
                       ))}
                     </div>
                     <AnimatePresence mode="wait">
-                      {activeTmpl === "javascript" && <motion.div key="js" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="javascript" value={tmplJS} onChange={setTmplJS} rows={12} /></motion.div>}
-                      {activeTmpl === "python"     && <motion.div key="py" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="python"     value={tmplPy} onChange={setTmplPy} rows={12} /></motion.div>}
-                      {activeTmpl === "go"         && <motion.div key="go" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="go"         value={tmplGo} onChange={setTmplGo} rows={12} /></motion.div>}
+                      {activeTmpl === "javascript" && <motion.div key="js"   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="javascript" value={tmplJS} onChange={setTmplJS} rows={12} /></motion.div>}
+                      {activeTmpl === "cpp"        && <motion.div key="cpp"  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="cpp"        value={tmplCPP} onChange={setTmplCPP} rows={12} /></motion.div>}
+                      {activeTmpl === "java"       && <motion.div key="java" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="java"       value={tmplJava} onChange={setTmplJava} rows={12} /></motion.div>}
+                      {activeTmpl === "python"     && <motion.div key="py"   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="python"     value={tmplPy} onChange={setTmplPy} rows={12} /></motion.div>}
+                      {activeTmpl === "go"         && <motion.div key="go"   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="go"         value={tmplGo} onChange={setTmplGo} rows={12} /></motion.div>}
                     </AnimatePresence>
                   </motion.div>
                 )}
@@ -699,24 +719,58 @@ export default function CreateProblem() {
                       ))}
                     </div>
                     <AnimatePresence mode="wait">
-                      {[
-                        { id: "followup",   ref: followupRef,   val: followup,   set: setFollowup,   lbl: "Followup Questions",       clr: "text-indigo-400",  previewCls: "border-indigo-500/20 bg-indigo-500/5" },
-                        { id: "editorial",  ref: editorialRef,  val: editorial,  set: setEditorial,  lbl: "Editorial / Approach",     clr: "text-violet-400",  previewCls: "border-violet-500/20 bg-violet-500/5" },
-                        { id: "solution",   ref: solutionRef,   val: solution,   set: setSolution,   lbl: "Official Solution Code",   clr: "text-emerald-400", previewCls: "border-emerald-500/20 bg-emerald-500/5" },
-                        { id: "evaluation", ref: evaluationRef, val: evaluation, set: setEvaluation, lbl: "Evaluation Criteria",      clr: "text-amber-400",   previewCls: "border-amber-500/20 bg-amber-500/5" },
-                      ].filter(s => s.id === sub5).map(s => (
-                        <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                      {sub5 === "followup" && (
+                        <motion.div key="followup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                           <div className="space-y-2">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <label className={`text-[11px] font-extrabold uppercase tracking-widest ${s.clr}`}>{s.lbl}</label>
-                              <MdToolbar taRef={s.ref} setValue={s.set} />
+                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-400">Followup Questions</label>
+                              <MdToolbar taRef={followupRef} setValue={setFollowup} />
                             </div>
-                            <DarkTextarea ref={s.ref} placeholder="Write in markdown…" value={s.val} onChange={e => s.set(e.target.value)} rows={14} />
+                            <DarkTextarea ref={followupRef} placeholder="Write in markdown…" value={followup} onChange={e => setFollowup(e.target.value)} rows={14} />
                           </div>
-                          <div className={`rounded-2xl border p-5 overflow-auto text-xs ${s.previewCls}`} style={{ minHeight: "14rem" }}
-                            dangerouslySetInnerHTML={{ __html: renderMarkdown(s.val || "*Preview will appear here…*") }} />
+                          <div className="rounded-2xl border p-5 overflow-auto text-xs border-indigo-500/20 bg-indigo-500/5" style={{ minHeight: "14rem" }}
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(followup || "*Preview will appear here…*") }} />
                         </motion.div>
-                      ))}
+                      )}
+                      {sub5 === "editorial" && (
+                        <motion.div key="editorial" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-violet-400">Editorial / Approach</label>
+                              <MdToolbar taRef={editorialRef} setValue={setEditorial} />
+                            </div>
+                            <DarkTextarea ref={editorialRef} placeholder="Write in markdown…" value={editorial} onChange={e => setEditorial(e.target.value)} rows={14} />
+                          </div>
+                          <div className="rounded-2xl border p-5 overflow-auto text-xs border-violet-500/20 bg-violet-500/5" style={{ minHeight: "14rem" }}
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(editorial || "*Preview will appear here…*") }} />
+                        </motion.div>
+                      )}
+                      {sub5 === "solution" && (
+                        <motion.div key="solution" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-400">Official Solution Code</label>
+                              <MdToolbar taRef={solutionRef} setValue={setSolution} />
+                            </div>
+                            <DarkTextarea ref={solutionRef} placeholder="Write in markdown…" value={solution} onChange={e => setSolution(e.target.value)} rows={14} />
+                          </div>
+                          <div className="rounded-2xl border p-5 overflow-auto text-xs border-emerald-500/20 bg-emerald-500/5" style={{ minHeight: "14rem" }}
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(solution || "*Preview will appear here…*") }} />
+                        </motion.div>
+                      )}
+                      {sub5 === "evaluation" && (
+                        <motion.div key="evaluation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">Evaluation Criteria</label>
+                              <MdToolbar taRef={evaluationRef} setValue={setEvaluation} />
+                            </div>
+                            <DarkTextarea ref={evaluationRef} placeholder="Write in markdown…" value={evaluation} onChange={e => setEvaluation(e.target.value)} rows={14} />
+                          </div>
+                          <div className="rounded-2xl border p-5 overflow-auto text-xs border-amber-500/20 bg-amber-500/5" style={{ minHeight: "14rem" }}
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(evaluation || "*Preview will appear here…*") }} />
+                        </motion.div>
+                      )}
                     </AnimatePresence>
                   </motion.div>
                 )}
@@ -737,7 +791,7 @@ export default function CreateProblem() {
                   Next: {STEPS[idx + 1]?.label} <ArrowRight size={13} />
                 </button>
               ) : (
-                <button type="button" onClick={handlePublish} disabled={saving}
+                <button type="button" onClick={handleSave} disabled={saving}
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white shadow-lg transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
                   style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}>
                   {saving

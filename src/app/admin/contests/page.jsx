@@ -352,7 +352,6 @@ export default function AdminContestsPage() {
                   <th className="px-6 py-3">Start Time</th>
                   <th className="px-6 py-3">End Time</th>
                   <th className="px-6 py-3 text-center">Problems</th>
-                  <th className="px-6 py-3 text-center">Source</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -441,23 +440,6 @@ export default function AdminContestsPage() {
                             contest.problems?.length ??
                             "—"}
                         </span>
-                      </td>
-
-                      {/* Source badge */}
-                      <td className="px-6 py-4 text-center">
-                        {contest.isDbContest ? (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded border text-cyan-500 bg-cyan-500/10 border-cyan-500/20">
-                            Database
-                          </span>
-                        ) : contest.isLocalContest ? (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded border text-amber-500 bg-amber-500/10 border-amber-500/20">
-                            Local
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded border text-slate-400 bg-slate-500/5 border-slate-500/20">
-                            Static
-                          </span>
-                        )}
                       </td>
 
                       {/* Actions */}

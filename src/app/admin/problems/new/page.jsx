@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
@@ -76,8 +76,8 @@ function MdToolbar({ taRef, setValue }) {
 }
 
 function CodePanel({ lang, value, onChange, rows = 10 }) {
-  const colors = { javascript: "#f59e0b", python: "#3b82f6", go: "#10b981" };
-  const labels = { javascript: "JS · Node.js", python: "Python 3", go: "Go" };
+  const colors = { javascript: "#f59e0b", python: "#3b82f6", go: "#10b981", cpp: "#f43f5e", java: "#06b6d4" };
+  const labels = { javascript: "JS · Node.js", python: "Python 3", go: "Go", cpp: "C++ (GCC 17)", java: "Java (JDK 21)" };
   return (
     <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
       <div className="flex items-center justify-between px-4 py-2.5 bg-[#161b27] border-b border-white/10">
@@ -128,10 +128,16 @@ export default function CreateProblem() {
   const { token, API_BASE, user } = useAuth();
 
   const [activeTab,  setActiveTab]  = useState("details");
+  const [templatesVisited, setTemplatesVisited] = useState(false);
+  const [tabcontentVisited, setTabcontentVisited] = useState(false);
 
   useEffect(() => {
-    if (activeTab === "templates") setTemplatesVisited(true);
-    if (activeTab === "tabcontent") setTabcontentVisited(true);
+    if (activeTab === "templates") {
+      setTimeout(() => setTemplatesVisited(true), 0);
+    }
+    if (activeTab === "tabcontent") {
+      setTimeout(() => setTabcontentVisited(true), 0);
+    }
   }, [activeTab]);
   const [saving,     setSaving]     = useState(false);
   const [success,    setSuccess]    = useState(false);
@@ -179,9 +185,9 @@ export default function CreateProblem() {
   const stepDone = {
     details:    title.trim().length >= 3,
     statement:  desc.trim().length >= 10,
-    templates:  !!(tmplJS.trim() || tmplPy.trim()),
+    templates:  templatesVisited && !!(tmplJS.trim() || tmplPy.trim() || tmplGo.trim() || tmplCPP.trim() || tmplJava.trim()),
     testcases:  testCases.length > 0 && testCases.some(t => t.isSample && t.expectedOutput.trim()),
-    tabcontent: true,
+    tabcontent: tabcontentVisited,
   };
 
   const showToast = useCallback((text, type = "error") => {
@@ -223,6 +229,7 @@ export default function CreateProblem() {
         explanation: "No explanation provided.",
         followup: followup || "", editorial: editorial || "", solution: solution || "", evaluation: evaluation || "",
         templateJS: tmplJS || "", templatePython: tmplPy || "", templateGo: tmplGo || "",
+        templateCPP: tmplCPP || "", templateJava: tmplJava || "",
         testCases: testCases.map(tc => ({ input: tc.input || "", expectedOutput: tc.expectedOutput || "", isSample: !!tc.isSample })),
         timeout: Number(timeLimit), memoryLimit: Number(memLimit),
       };
@@ -521,7 +528,9 @@ export default function CreateProblem() {
                     <div className="flex gap-2 flex-wrap">
                       {[
                         { id: "javascript", label: "JavaScript", cls: "text-amber-400 bg-amber-500/15 border-amber-500/40" },
-                        { id: "python",     label: "Python 3",   cls: "text-blue-400  bg-blue-500/15  border-blue-500/40" },
+                        { id: "cpp",        label: "C++",        cls: "text-rose-400   bg-rose-500/15   border-rose-500/40" },
+                        { id: "java",       label: "Java",       cls: "text-cyan-400   bg-cyan-500/15   border-cyan-500/40" },
+                        { id: "python",     label: "Python 3",   cls: "text-blue-400   bg-blue-500/15   border-blue-500/40" },
                         { id: "go",         label: "Go",         cls: "text-emerald-400 bg-emerald-500/15 border-emerald-500/40" },
                       ].map(l => (
                         <button key={l.id} type="button" onClick={() => setActiveTmpl(l.id)}
@@ -531,9 +540,11 @@ export default function CreateProblem() {
                       ))}
                     </div>
                     <AnimatePresence mode="wait">
-                      {activeTmpl === "javascript" && <motion.div key="js" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="javascript" value={tmplJS} onChange={setTmplJS} rows={12} /></motion.div>}
-                      {activeTmpl === "python"     && <motion.div key="py" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="python"     value={tmplPy} onChange={setTmplPy} rows={12} /></motion.div>}
-                      {activeTmpl === "go"         && <motion.div key="go" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="go"         value={tmplGo} onChange={setTmplGo} rows={12} /></motion.div>}
+                      {activeTmpl === "javascript" && <motion.div key="js"   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="javascript" value={tmplJS} onChange={setTmplJS} rows={12} /></motion.div>}
+                      {activeTmpl === "cpp"        && <motion.div key="cpp"  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="cpp"        value={tmplCPP} onChange={setTmplCPP} rows={12} /></motion.div>}
+                      {activeTmpl === "java"       && <motion.div key="java" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="java"       value={tmplJava} onChange={setTmplJava} rows={12} /></motion.div>}
+                      {activeTmpl === "python"     && <motion.div key="py"   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="python"     value={tmplPy} onChange={setTmplPy} rows={12} /></motion.div>}
+                      {activeTmpl === "go"         && <motion.div key="go"   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><CodePanel lang="go"         value={tmplGo} onChange={setTmplGo} rows={12} /></motion.div>}
                     </AnimatePresence>
                   </motion.div>
                 )}

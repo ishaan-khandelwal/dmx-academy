@@ -108,6 +108,15 @@ export function AuthProvider({ children }) {
   const [sessionConflict, setSessionConflict] = useState(false);
   const [countdown, setCountdown] = useState(3);
 
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    clearLegacySessions();
+    localStorage.removeItem("dmx_auth_token");
+    localStorage.removeItem("dmx_auth_user");
+    // Note: dmx_local_accounts is intentionally kept so users can log back in
+  };
+
   // Sync WebSocket for single-session tracking
   useEffect(() => {
     if (!token || !user?.id || token.startsWith("demo-token-") || token.startsWith("local-token-")) {
@@ -126,6 +135,7 @@ export function AuthProvider({ children }) {
 
         if (data.newSessionId && mySessionId && data.newSessionId !== mySessionId) {
           setSessionConflict(true);
+          setCountdown(3);
         }
       });
 
@@ -139,7 +149,6 @@ export function AuthProvider({ children }) {
   // Countdown timer for automatic logout
   useEffect(() => {
     if (!sessionConflict) return;
-    setCountdown(3);
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -352,14 +361,6 @@ export function AuthProvider({ children }) {
   };
 
   // ---------------------------------------------------------------------------
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    clearLegacySessions();
-    localStorage.removeItem("dmx_auth_token");
-    localStorage.removeItem("dmx_auth_user");
-    // Note: dmx_local_accounts is intentionally kept so users can log back in
-  };
 
   return (
     <AuthContext.Provider value={{ user, token, loading, login, register, logout, API_BASE, activeSession, setActiveSession, isInstituteBlocked, setIsInstituteBlocked }}>
