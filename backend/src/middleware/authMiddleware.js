@@ -46,6 +46,7 @@ const protect = async (req, res, next) => {
     }
 
     // Check Authorization header for Bearer token or check query param
+    let token;
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith('Bearer')
@@ -60,6 +61,56 @@ const protect = async (req, res, next) => {
         success: false,
         message: 'Not authorized to access this route. Token missing.',
       });
+    }
+
+    // Handle Demo/Mock Token
+    if (token.startsWith('demo-token-')) {
+      const email = token.replace('demo-token-', '');
+      let dbUser = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          createdAt: true,
+          instituteId: true,
+        }
+      });
+
+      if (!dbUser) {
+        const username = email.split('@')[0];
+        let role = 'USER';
+        if (email.includes('admin')) role = 'ADMIN';
+        else if (email.includes('mentor') || email.includes('majeed') || email === 'mentor@synapse.com' || email === 'nitin@dmx.com' || email === 'divyashant@dmx.com' || (process.env.NODE_ENV === 'development' && /^\d+$/.test(email))) role = 'MENTOR';
+        else if (email === 'aditya@dmx.com' || email === 'sakshi@dmx.com') role = 'BATCH_MANAGER';
+
+        let inst = await prisma.institute.findFirst();
+        if (!inst) {
+          inst = await prisma.institute.create({ data: { name: 'Synapse Institute' } });
+        }
+
+        dbUser = await prisma.user.create({
+          data: {
+            username,
+            email,
+            password: 'demohashedpassword',
+            role,
+            instituteId: inst.id
+          },
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            instituteId: true,
+          }
+        });
+      }
+
+      req.user = dbUser;
+      return next();
     }
 
     // Verify token
@@ -154,14 +205,26 @@ const restrictTo = (...roles) => {
 
     // Dynamically map role based on email keyword or DB role
     const isEmailAdmin = emailLower.includes('admin');
-    const isEmailMentor = emailLower.includes('mentor') || emailLower === 'mentor@synapse.com';
-    const effectiveRole = isEmailAdmin ? 'ADMIN' : (isEmailMentor ? 'MENTOR' : userRole);
+    const isEmailMentor = emailLower.includes('mentor') || emailLower.includes('majeed') || emailLower === 'mentor@synapse.com' || emailLower === 'majeed@dmx.com' || emailLower === 'nitin@dmx.com' || emailLower === 'divyashant@dmx.com' || (process.env.NODE_ENV === 'development' && /^\d+$/.test(emailLower));
+    const isEmailBm = emailLower.includes('bm') || emailLower === 'aditya@dmx.com' || emailLower === 'sakshi@dmx.com';
+    const effectiveRole = isEmailAdmin ? 'ADMIN' : (isEmailMentor ? 'MENTOR' : (isEmailBm ? 'BATCH_MANAGER' : userRole));
 
     const isAllowedRole = roles.includes(effectiveRole);
     // Mentors are allowed access to ADMIN routes as well
     const isAllowedMentor = (roles.includes('MENTOR') || roles.includes('ADMIN')) && (effectiveRole === 'MENTOR');
     // Institute admins are allowed access to ADMIN routes as well
     const isAllowedInstAdmin = roles.includes('ADMIN') && (effectiveRole === 'INSTITUTE_ADMIN');
+
+    console.log("RESTRICT_TO DEBUG:", {
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      effectiveRole,
+      allowedRoles: roles,
+      isAllowedRole,
+      isAllowedMentor,
+      isAllowedInstAdmin,
+      decision: (!req.user || (!isAllowedRole && !isAllowedMentor && !isAllowedInstAdmin)) ? "REJECTED" : "ALLOWED"
+    });
 
     if (!req.user || (!isAllowedRole && !isAllowedMentor && !isAllowedInstAdmin)) {
       return res.status(403).json({

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { 
   LayoutDashboard, Trophy, LogOut, 
   Menu, X, ChevronLeft, ChevronRight, GraduationCap, ArrowLeftRight, BookOpen,
-  PlusCircle, Code, Radio, AlertTriangle, Brain, FileText, Settings
+  PlusCircle, Code, Radio, AlertTriangle, Brain, FileText, Settings, Calendar
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -72,7 +72,7 @@ export default function MentorLayout({ children }) {
     if (typeof window !== "undefined") {
       const isMentorSession = localStorage.getItem("synapse_mentor_session") === "true";
       const isAdminSession = localStorage.getItem("synapse_admin_session") === "true";
-      const isVivaRoute = pathname.startsWith("/mentor/viva/questions") || pathname.startsWith("/mentor/viva/materials");
+      const isVivaRoute = pathname.startsWith("/mentor/viva/questions") || pathname.startsWith("/mentor/viva/materials") || pathname.startsWith("/mentor/viva/ai-settings") || pathname.startsWith("/mentor/viva/schedule");
       const isLoginRoute = pathname === "/mentor";
 
       const hasAccess = isMentorSession || (isVivaRoute && isAdminSession);
@@ -142,7 +142,7 @@ export default function MentorLayout({ children }) {
       icon: Code
     },
     {
-      label: "Create Viva",
+      label: "AI Viva",
       href: "/mentor/viva/questions",
       icon: Brain
     },

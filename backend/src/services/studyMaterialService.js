@@ -14,20 +14,12 @@ const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'study-materials');
 
 /** List all study materials, newest first. */
 const listMaterials = async (instituteId) => {
-  const where = {};
-  if (instituteId !== undefined) {
-    if (instituteId === null) {
-      where.instituteId = null;
-    } else {
-      where.OR = [
-        { instituteId: null },
-        { instituteId }
-      ];
-    }
+  if (instituteId === undefined || instituteId === null) {
+    return [];
   }
 
   return prisma.studyMaterial.findMany({
-    where,
+    where: { instituteId },
     orderBy: { createdAt: 'desc' }
   });
 };
