@@ -108,55 +108,52 @@ const evaluateAnswer = (question, answerText) => {
  * Supports optional difficulty filter and numQuestions cap.
  * DB columns: id, userId, subject, status, score, feedback, createdAt, updatedAt
  */
-const startVivaSession = async (userId, subject, { difficulty, numQuestions } = {}) => {
-  await seedQuestionsIfNeeded();
-
+const startVivaSession = async (userId, vivaId) => {
   const studentUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { instituteId: true }
   });
   const studentInstId = studentUser?.instituteId;
-
-  const filter = { subject };
-  if (difficulty && ['EASY', 'MEDIUM', 'HARD'].includes(difficulty)) {
-    filter.difficulty = difficulty;
+  if (!studentInstId) {
+    throw new Error("Student must belong to an institute.");
   }
 
-  if (studentInstId) {
-    // Institute Student: Can pull global (null) and their institute's questions
-    filter.OR = [
-      { instituteId: null },
-      { instituteId: studentInstId }
-    ];
-  } else {
-    // Global Student: Can pull only global (null) questions
-    filter.instituteId = null;
-  }
-
-  const allMatchingQuestions = await prisma.vivaQuestion.findMany({
-    where: filter,
-    orderBy: { createdAt: 'asc' }
+  const viva = await prisma.viva.findUnique({
+    where: { id: vivaId },
+    include: { questions: true }
   });
 
-  if (allMatchingQuestions.length === 0) {
-    throw new Error(`No questions available for subject: ${subject}${difficulty ? ` (${difficulty})` : ''}`);
+  if (!viva) {
+    throw new Error("Viva not found.");
   }
 
-  // Cap to requested number (default: all questions, max 10)
-  const cap = numQuestions ? Math.min(parseInt(numQuestions), allMatchingQuestions.length, 10) : Math.min(allMatchingQuestions.length, 10);
-  // Shuffle and pick cap questions
-  const shuffled = allMatchingQuestions.sort(() => Math.random() - 0.5).slice(0, cap);
+  if (viva.instituteId !== studentInstId) {
+    throw new Error("Unauthorized: This Viva belongs to a different institute.");
+  }
+
+  const now = new Date();
+  if (now < viva.startTime) {
+    throw new Error("This Viva has not started yet.");
+  }
+  if (viva.endTime && now > viva.endTime) {
+    throw new Error("This Viva has already ended.");
+  }
+
+  const questions = viva.questions;
+  if (questions.length === 0) {
+    throw new Error("This Viva has no questions.");
+  }
 
   const session = await prisma.vivaSession.create({
-    data: { userId, subject, status: "IN_PROGRESS" }
+    data: {
+      userId,
+      subject: viva.subject,
+      status: "IN_PROGRESS",
+      vivaId: viva.id
+    }
   });
 
-  // Store selected question IDs in session metadata via a separate lookup approach:
-  // We tag questions for this session by storing the ordered list in a lightweight way.
-  // Since the DB has no session-question junction table, we piggyback on the session's
-  // feedback field temporarily until the session is completed.
-  // Instead, we return the question list to the frontend and track via answered questions.
-  const firstQuestion = shuffled[0];
+  const firstQuestion = questions[0];
 
   return {
     sessionId: session.id,
@@ -164,9 +161,8 @@ const startVivaSession = async (userId, subject, { difficulty, numQuestions } = 
       id: firstQuestion.id,
       questionText: firstQuestion.questionText
     },
-    // Pass the selected question IDs so frontend can track progress correctly
-    selectedQuestionIds: shuffled.map(q => q.id),
-    progress: { current: 1, total: shuffled.length },
+    selectedQuestionIds: questions.map(q => q.id),
+    progress: { current: 1, total: questions.length },
     isCompleted: false
   };
 };

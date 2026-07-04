@@ -8,7 +8,7 @@ import AntiCheatShield from "@/components/AntiCheatShield";
 import {
   Brain, Play, CheckCircle2, XCircle, Clock, Award,
   ChevronRight, Activity, BookOpen, Send, Sparkles, MessageSquare,
-  Mic, MicOff, AlertCircle, Flag, Edit2, RefreshCw, CheckCheck, Lightbulb
+  Mic, MicOff, AlertCircle, Flag, Edit2, RefreshCw, CheckCheck, Lightbulb, Calendar
 } from "lucide-react";
 
 // ─── Sprint 5 config constants (mirroring backend .env defaults) ───────────────
@@ -24,11 +24,9 @@ export default function AIVivaPage() {
   const [view, setView] = useState("lobby");
 
   // ── Lobby Data ──────────────────────────────────────────────────────────
-  const [subjects, setSubjects] = useState(["JavaScript", "Python", "DBMS", "Computer Networks"]);
+  const [scheduledVivas, setScheduledVivas] = useState([]);
+  const [selectedVivaId, setSelectedVivaId] = useState(null);
   const [history, setHistory] = useState([]);
-  const [selectedSubject, setSelectedSubject] = useState("");
-  const [selectedDifficulty, setSelectedDifficulty] = useState("");
-  const [selectedNumQuestions, setSelectedNumQuestions] = useState(5);
   const [showFeedbackAfterEach, setShowFeedbackAfterEach] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [lobbyError, setLobbyError] = useState("");
@@ -202,12 +200,10 @@ export default function AIVivaPage() {
       setLoadingInitial(true);
       const headers = getHeaders();
 
-      const subRes = await fetch(`${API_BASE}/api/viva/subjects`, { headers }).catch(() => null);
-      if (subRes && subRes.ok) {
-        const subData = await subRes.json();
-        if (subData.subjects && subData.subjects.length > 0) {
-          setSubjects(subData.subjects);
-        }
+      const res = await fetch(`${API_BASE}/api/viva/scheduled`, { headers }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json();
+        setScheduledVivas(data.vivas || []);
       }
 
       const histRes = await fetch(`${API_BASE}/api/viva/history`, { headers }).catch(() => null);
@@ -543,22 +539,21 @@ const runAICorrection = async (raw) => {
 // ──────────────────────────────────────────────────────────────────────
 // API Actions
 // ──────────────────────────────────────────────────────────────────────
-const startSession = async () => {
-  if (!selectedSubject) return;
+const startSession = async (vivaId) => {
+  if (!vivaId) return;
   setLobbyError("");
   try {
     const res = await fetch(`${API_BASE}/api/viva/session/start`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
-        subject: selectedSubject,
-        ...(selectedDifficulty && { difficulty: selectedDifficulty }),
-        numQuestions: selectedNumQuestions
+        vivaId
       })
     });
     const data = await res.json();
     if (res.ok && data.success) {
-      setActiveSession({ id: data.sessionId, subject: selectedSubject });
+      const selectedVivaObj = scheduledVivas.find(v => v.id === vivaId);
+      setActiveSession({ id: data.sessionId, subject: selectedVivaObj?.subject || "Viva" });
       setCurrentQuestion(data.nextQuestion);
       setProgress(data.progress);
       setSelectedQuestionIds(data.selectedQuestionIds || []);
@@ -574,11 +569,11 @@ const startSession = async () => {
       setPhase("reading");
       setTimeLeft(15);
     } else {
-      setLobbyError(data.message || "Failed to start session. Backend might be down.");
+      setLobbyError(data.message || "Failed to start session.");
     }
   } catch (err) {
     console.error("Failed to start session:", err);
-    setLobbyError("Network error: Please fully refresh the page (F5) so your browser connects to the right port.");
+    setLobbyError("Network error starting session.");
   }
 };
 
@@ -752,7 +747,7 @@ const exitToLobby = () => {
   setView("lobby");
   setSummaryData(null);
   setActiveSession(null);
-  setSelectedSubject("");
+  setSelectedVivaId(null);
   setSelectedQuestionIds([]);
   fetchLobbyData();
 };
@@ -807,37 +802,6 @@ return (
             )}
 
             <div className="pt-4 flex flex-col sm:flex-row gap-3 flex-wrap items-center">
-              <select
-                className="w-full sm:w-52 p-3 rounded-2xl text-sm border font-semibold outline-none"
-                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
-              >
-                <option value="" disabled>Select Subject</option>
-                {subjects.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-
-              <select
-                className="w-full sm:w-40 p-3 rounded-2xl text-sm border font-semibold outline-none"
-                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
-                value={selectedDifficulty}
-                onChange={(e) => setSelectedDifficulty(e.target.value)}
-              >
-                <option value="">Any Difficulty</option>
-                <option value="EASY">Easy</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HARD">Hard</option>
-              </select>
-
-              <select
-                className="w-full sm:w-36 p-3 rounded-2xl text-sm border font-semibold outline-none"
-                style={{ backgroundColor: "var(--bg-input)", borderColor: "var(--border-primary)", color: "var(--text-primary)" }}
-                value={selectedNumQuestions}
-                onChange={(e) => setSelectedNumQuestions(parseInt(e.target.value))}
-              >
-                {[3, 5, 7, 10].map(n => <option key={n} value={n}>{n} Questions</option>)}
-              </select>
-
               <button
                 type="button"
                 role="switch"
@@ -877,18 +841,106 @@ return (
                   />
                 </span>
               </button>
-
-              <button
-                onClick={startSession}
-                disabled={!selectedSubject}
-                className="w-full sm:w-auto px-6 py-3 rounded-2xl font-bold text-sm text-white shadow-md transition-all cursor-pointer flex items-center justify-center space-x-2 hover:scale-102 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: "var(--accent-gradient)" }}
-              >
-                <Play size={16} fill="currentColor" />
-                <span>Start Viva Session</span>
-              </button>
             </div>
           </div>
+        </div>
+
+        {/* Scheduled Vivas List */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold font-display flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
+            <Calendar className="w-5 h-5 text-indigo-400" />
+            Active & Upcoming Vivas
+          </h2>
+          
+          {scheduledVivas.length === 0 ? (
+            <div className="p-8 rounded-3xl border border-dashed text-center" style={{ borderColor: "var(--border-primary)" }}>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No Vivas currently scheduled for your institute.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {scheduledVivas.map(viva => {
+                const now = new Date();
+                const start = new Date(viva.startTime);
+                const end = viva.endTime ? new Date(viva.endTime) : null;
+                const isActive = now >= start && (!end || now <= end);
+                const isUpcoming = now < start;
+                const isEnded = end && now > end;
+
+                if (isEnded) return null; // Don't show ended ones in active/upcoming
+
+                return (
+                  <div
+                    key={viva.id}
+                    className="p-6 rounded-3xl border shadow-md flex flex-col justify-between space-y-4 transition-all hover:scale-[1.01]"
+                    style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400">
+                          {viva.subject}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          isActive
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse"
+                            : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                        }`}>
+                          {isActive ? "Active" : "Upcoming"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                          {viva.title}
+                        </h3>
+                        {viva.description && (
+                          <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                            {viva.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5 pt-2 border-t border-slate-800 text-xs text-slate-400">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Start: {start.toLocaleString()}</span>
+                        </div>
+                        {end && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-rose-400" />
+                            <span>End: {end.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Questions: {viva.questions?.length || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      {isActive ? (
+                        <button
+                          onClick={() => startSession(viva.id)}
+                          className="w-full py-2.5 rounded-xl font-bold text-xs text-white shadow-md transition-all flex items-center justify-center gap-2 hover:scale-[1.02]"
+                          style={{ background: "var(--accent-gradient)" }}
+                        >
+                          <Play className="w-3.5 h-3.5" fill="currentColor" />
+                          Start Viva Attempt
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed text-center"
+                        >
+                          Upcoming (Locked)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* History */}

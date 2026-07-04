@@ -36,9 +36,7 @@ export default function AISettingsPage() {
 
   const getHeaders = useCallback(() => ({
     "Content-Type": "application/json",
-    ...(token && !token.startsWith("demo-") && !token.startsWith("local-")
-      ? { Authorization: `Bearer ${token}` }
-      : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" })
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   }), [token]);
 
   const fetchSettings = useCallback(async () => {

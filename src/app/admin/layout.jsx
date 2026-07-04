@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, PlusCircle, Trophy, LogOut,
   Menu, X, ChevronLeft, ChevronRight, ShieldAlert, ArrowLeftRight, Code, Radio, AlertTriangle, List,
-  Users, Layers, Brain, FileText, Settings
+  Users, Layers, Brain, FileText, Settings, Calendar
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -163,7 +163,7 @@ export default function AdminLayout({ children }) {
       icon: Layers
     },
     (isBatchMgr || isInstAdmin || isMentor) && {
-      label: "Create Viva",
+      label: "AI Viva",
       href: "/mentor/viva/questions",
       icon: Brain
     },

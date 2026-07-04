@@ -21,6 +21,9 @@ const {
 
 const { protect, restrictTo } = require('../middleware/authMiddleware');
 const { UPLOADS_DIR } = require('../services/studyMaterialService');
+const {
+  scheduleViva, listScheduledVivas, getScheduledVivaDetails
+} = require('../controllers/vivaSchedulingController');
 
 // ── Multer: PDF uploads ──────────────────────────────────────────────
 const storage = multer.diskStorage({
@@ -68,6 +71,11 @@ router.get(   '/materials/:id/download', protect, downloadFile);
 router.delete('/materials/:id',          protect, restrictTo('INSTITUTE_ADMIN', 'BATCH_MANAGER', 'MENTOR'), deleteMaterial);
 router.post(  '/materials/:id/retry',    protect, restrictTo('INSTITUTE_ADMIN', 'BATCH_MANAGER', 'MENTOR'), retryExtraction);
 router.post(  '/materials/:id/generate', protect, restrictTo('INSTITUTE_ADMIN', 'BATCH_MANAGER', 'MENTOR'), generateQuestions);
+
+// ── Viva Scheduling ──────────────────────────────────────────────────
+router.post('/schedule',      protect, restrictTo('INSTITUTE_ADMIN', 'BATCH_MANAGER', 'MENTOR'), scheduleViva);
+router.get( '/scheduled',     protect, listScheduledVivas);
+router.get( '/scheduled/:id', protect, getScheduledVivaDetails);
 
 // ── Session routes (all protected) ───────────────────────────────────
 router.use(protect);

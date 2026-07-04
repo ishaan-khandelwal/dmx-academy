@@ -54,9 +54,7 @@ export default function StudyMaterialsPage() {
 
   const getHeaders = useCallback((isJson = true) => ({
     ...(isJson ? { "Content-Type": "application/json" } : {}),
-    ...(token && !token.startsWith("demo-") && !token.startsWith("local-")
-      ? { Authorization: `Bearer ${token}` }
-      : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" })
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   }), [token]);
 
   const fetchMaterials = useCallback(async () => {
