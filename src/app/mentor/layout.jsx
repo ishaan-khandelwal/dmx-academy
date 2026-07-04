@@ -72,7 +72,7 @@ export default function MentorLayout({ children }) {
     if (typeof window !== "undefined") {
       const isMentorSession = localStorage.getItem("synapse_mentor_session") === "true";
       const isAdminSession = localStorage.getItem("synapse_admin_session") === "true";
-      const isVivaRoute = pathname.startsWith("/mentor/viva/questions") || pathname.startsWith("/mentor/viva/materials") || pathname.startsWith("/mentor/viva/ai-settings");
+      const isVivaRoute = pathname.startsWith("/mentor/viva/questions") || pathname.startsWith("/mentor/viva/materials");
       const isLoginRoute = pathname === "/mentor";
 
       const hasAccess = isMentorSession || (isVivaRoute && isAdminSession);
@@ -151,11 +151,7 @@ export default function MentorLayout({ children }) {
       href: "/mentor/viva/materials",
       icon: FileText
     },
-    (user?.role === "ADMIN") && {
-      label: "AI Settings",
-      href: "/mentor/viva/ai-settings",
-      icon: Settings
-    },
+
     {
       label: "Go Live",
       href: "/admin/live",

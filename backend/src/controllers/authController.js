@@ -2,12 +2,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../prisma');
 const { registerSchema, loginSchema } = require('../utils/validators');
+const { invalidateSession } = require('../services/socketService');
 
 /**
  * Helper to generate JWT token
  */
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+const generateToken = (id, sessionId = "") => {
+  return jwt.sign({ id, sessionId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 };
@@ -44,6 +45,9 @@ const register = async (req, res, next) => {
     // MENTOR is a UI-only role label until a migration adds it to DB
     const dbRole = role === 'MENTOR' ? 'USER' : (role || 'USER');
 
+    // Generate unique session ID
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
     // Create user
     const user = await prisma.user.create({
       data: {
@@ -51,11 +55,12 @@ const register = async (req, res, next) => {
         email,
         password: hashedPassword,
         role: dbRole,
+        currentSessionId: sessionId
       },
     });
 
     // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, sessionId);
 
     res.status(201).json({
       success: true,
@@ -66,6 +71,7 @@ const register = async (req, res, next) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        sessionId,
       },
     });
   } catch (error) {
@@ -104,8 +110,35 @@ const login = async (req, res, next) => {
       });
     }
 
+    // Check if institute is blocked (non-super-admins only)
+    if (user.instituteId && user.role !== 'ADMIN') {
+      const institute = await prisma.institute.findUnique({
+        where: { id: user.instituteId },
+        select: { isBlocked: true }
+      });
+      if (institute?.isBlocked) {
+        return res.status(403).json({
+          success: false,
+          code: 'INSTITUTE_BLOCKED',
+          message: 'Your institute has been blocked. Please contact the Super Administrator.',
+        });
+      }
+    }
+
+    // Generate a unique session ID
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Update user currentSessionId in DB
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { currentSessionId: sessionId }
+    });
+
+    // Invalidate other devices
+    invalidateSession(user.id, sessionId);
+
     // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, sessionId);
 
     res.status(200).json({
       success: true,
@@ -116,6 +149,7 @@ const login = async (req, res, next) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        sessionId,
       },
     });
   } catch (error) {

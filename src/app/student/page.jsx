@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Lock, Mail, ArrowRight, BookOpen } from "lucide-react";
+import { Lock, Mail, ArrowRight, BookOpen, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function StudentLogin() {
@@ -13,6 +13,7 @@ export default function StudentLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Check if already logged in
   useEffect(() => {
@@ -147,11 +148,11 @@ export default function StudentLogin() {
                 <Lock size={16} className="absolute left-4 top-3.5" style={{ color: "var(--text-muted)" }} />
                 <input
                   id="student-password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-2xl py-3 pl-11 pr-4 text-xs outline-none border transition-all"
+                  className="w-full rounded-2xl py-3 pl-11 pr-11 text-xs outline-none border transition-all"
                   style={{
                     backgroundColor: "var(--bg-input)",
                     borderColor: "var(--border-primary)",
@@ -159,6 +160,10 @@ export default function StudentLogin() {
                   }}
                   required
                 />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-4 top-3.5 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
               </div>
             </div>
 

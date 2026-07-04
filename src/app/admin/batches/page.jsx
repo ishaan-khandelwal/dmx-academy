@@ -54,6 +54,7 @@ export default function ManageBatchesPage() {
   // Roster Assign States
   const [isAssignMentorOpen, setIsAssignMentorOpen] = useState(false);
   const [isAssignStudentOpen, setIsAssignStudentOpen] = useState(false);
+  const [assignToast, setAssignToast] = useState(null); // { message, type }
 
   // Edit States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -375,6 +376,7 @@ export default function ManageBatchesPage() {
   const handleAddMentorToBatch = async (menId) => {
     if (!selectedBatchDetails) return;
     if (selectedBatchDetails.mentorIds.includes(menId)) return;
+    const mentorName = mentors.find(m => m.id === menId)?.name || "Mentor";
     try {
       if (token) {
         await fetch(`${API_BASE}/api/batches/batch-manager/batches/${selectedBatchDetails.id}/mentors`, {
@@ -391,6 +393,8 @@ export default function ManageBatchesPage() {
     }
     const updatedMentorIds = [...selectedBatchDetails.mentorIds, menId];
     setBatches(prev => prev.map(b => b.id === selectedBatchDetails.id ? { ...b, mentorIds: updatedMentorIds } : b));
+    setAssignToast({ message: `${mentorName} assigned successfully!` });
+    setTimeout(() => setAssignToast(null), 2500);
   };
 
   const handleRemoveStudentFromBatch = async (stdId) => {
@@ -416,6 +420,7 @@ export default function ManageBatchesPage() {
   const handleAddStudentToBatch = async (stdId) => {
     if (!selectedBatchDetails) return;
     if (selectedBatchDetails.studentIds.includes(stdId)) return;
+    const studentName = students.find(s => s.id === stdId)?.name || "Student";
     try {
       if (token) {
         await fetch(`${API_BASE}/api/batches/batch-manager/batches/${selectedBatchDetails.id}/students`, {
@@ -432,6 +437,8 @@ export default function ManageBatchesPage() {
     }
     const updatedStudentIds = [...selectedBatchDetails.studentIds, stdId];
     setBatches(prev => prev.map(b => b.id === selectedBatchDetails.id ? { ...b, studentIds: updatedStudentIds } : b));
+    setAssignToast({ message: `${studentName} assigned successfully!` });
+    setTimeout(() => setAssignToast(null), 2500);
   };
 
   if (!user || (user.role !== "INSTITUTE_ADMIN" && user.role !== "ADMIN")) {
@@ -1459,6 +1466,27 @@ export default function ManageBatchesPage() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Assignment Success Toast */}
+      <AnimatePresence>
+        {assignToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border"
+            style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
+          >
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+              <CheckCircle2 size={16} />
+            </div>
+            <div>
+              <p className="text-xs font-black text-emerald-500">Assigned!</p>
+              <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{assignToast.message}</p>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

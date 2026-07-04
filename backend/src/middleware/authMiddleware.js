@@ -66,6 +66,7 @@ const protect = async (req, res, next) => {
         username: true,
         email: true,
         role: true,
+        currentSessionId: true,
         createdAt: true,
         instituteId: true,
       },
@@ -76,6 +77,30 @@ const protect = async (req, res, next) => {
         success: false,
         message: 'The user belonging to this token no longer exists.',
       });
+    }
+
+    // Verify session ID matches DB (prevent multi-device concurrent logins)
+    if (decoded.sessionId && user.currentSessionId && decoded.sessionId !== user.currentSessionId) {
+      return res.status(401).json({
+        success: false,
+        code: 'SESSION_EXPIRED',
+        message: 'Your session has expired because you logged in on another device.',
+      });
+    }
+
+    // Check if the user's institute is blocked (not applicable to super admins)
+    if (user.instituteId && user.role !== 'ADMIN') {
+      const institute = await prisma.institute.findUnique({
+        where: { id: user.instituteId },
+        select: { isBlocked: true }
+      });
+      if (institute?.isBlocked) {
+        return res.status(403).json({
+          success: false,
+          code: 'INSTITUTE_BLOCKED',
+          message: 'Your institute has been blocked. Please contact the Super Administrator.',
+        });
+      }
     }
 
     // Grant access and store user info in request object
