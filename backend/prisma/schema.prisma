@@ -45,6 +45,8 @@ evaluation  String  @default("")
 templateJS     String  @default("")
 templatePython String  @default("")
 templateGo     String  @default("")
+templateCPP    String  @default("")
+templateJava   String  @default("")
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 comparator String @default("tokens")

@@ -39,6 +39,8 @@ const problemSchema = z.object({
   templateJS: z.string().optional().default(''),
   templatePython: z.string().optional().default(''),
   templateGo: z.string().optional().default(''),
+  templateCPP: z.string().optional().default(''),
+  templateJava: z.string().optional().default(''),
   testCases: z.array(testCaseSchema).min(1, 'At least one testcase is required'),
 });
 

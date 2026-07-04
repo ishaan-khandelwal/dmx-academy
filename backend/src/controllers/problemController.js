@@ -19,7 +19,7 @@ const slugify = (title) => {
 const createProblem = async (req, res, next) => {
   try {
     const validatedData = problemSchema.parse(req.body);
-    const { title, difficulty, statement, inputFormat, outputFormat, constraints, explanation, followup, editorial, solution, evaluation, templateJS, templatePython, templateGo, testCases } = validatedData;
+    const { title, difficulty, statement, inputFormat, outputFormat, constraints, explanation, followup, editorial, solution, evaluation, templateJS, templatePython, templateGo, templateCPP, templateJava, testCases } = validatedData;
 
     // Generate unique slug
     let slug = slugify(title);
@@ -48,6 +48,8 @@ const createProblem = async (req, res, next) => {
         templateJS: templateJS || '',
         templatePython: templatePython || '',
         templateGo: templateGo || '',
+        templateCPP: templateCPP || '',
+        templateJava: templateJava || '',
         instituteId,
         testCases: {
           create: testCases,
@@ -80,8 +82,7 @@ const updateProblem = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid problem ID format.' });
     }
 
-    const validatedData = problemUpdateSchema.parse(req.body);
-    const { title, difficulty, statement, inputFormat, outputFormat, constraints, explanation, followup, editorial, solution, evaluation, templateJS, templatePython, templateGo, testCases } = validatedData;
+    const { title, difficulty, statement, inputFormat, outputFormat, constraints, explanation, followup, editorial, solution, evaluation, templateJS, templatePython, templateGo, templateCPP, templateJava, testCases } = validatedData;
 
     // Find the problem first
     const problemExists = await prisma.problem.findUnique({ where: { id: problemId } });
@@ -125,6 +126,8 @@ const updateProblem = async (req, res, next) => {
     if (templateJS !== undefined) updateData.templateJS = templateJS;
     if (templatePython !== undefined) updateData.templatePython = templatePython;
     if (templateGo !== undefined) updateData.templateGo = templateGo;
+    if (templateCPP !== undefined) updateData.templateCPP = templateCPP;
+    if (templateJava !== undefined) updateData.templateJava = templateJava;
 
     // Perform update in a transaction
     const result = await prisma.$transaction(async (tx) => {

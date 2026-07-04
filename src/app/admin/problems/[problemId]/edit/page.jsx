@@ -162,6 +162,8 @@ export default function CreateProblem() {
 
   // Step 3
   const [tmplJS,  setTmplJS]  = useState("// JavaScript Starter Code\nfunction solve(input) {\n  // Write your solution here\n  return \"\";\n}");
+  const [tmplCPP, setTmplCPP] = useState("// C++ Starter Code\n#include <iostream>\n#include <string>\n#include <vector>\n\nusing namespace std;\n\nstring solve(string input) {\n  // Write your solution here\n  return \"\";\n}");
+  const [tmplJava, setTmplJava] = useState("// Java Starter Code\nimport java.util.*;\n\npublic class Solution {\n  public static String solve(String input) {\n    // Write your solution here\n    return \"\";\n  }\n}");
   const [tmplPy,  setTmplPy]  = useState("# Python 3 Starter Code\ndef solve(input_data):\n    # Write your solution here\n    pass");
   const [tmplGo,  setTmplGo]  = useState("// Go Starter Code\npackage main\n\nimport \"fmt\"\n\nfunc solve(input string) string {\n  // Write your solution here\n  return \"\"\n}");
   const [activeTmpl, setActiveTmpl] = useState("javascript");
@@ -207,6 +209,8 @@ export default function CreateProblem() {
         setTmplJS(prob.templateJS || "");
         setTmplPy(prob.templatePython || "");
         setTmplGo(prob.templateGo || "");
+        setTmplCPP(prob.templateCPP || "");
+        setTmplJava(prob.templateJava || "");
         
         if (prob.testCases && prob.testCases.length > 0) {
           setTestCases(prob.testCases.map(tc => ({
@@ -236,6 +240,11 @@ export default function CreateProblem() {
   useEffect(() => {
     loadProblemData();
   }, [loadProblemData]);
+
+  useEffect(() => {
+    if (activeTab === "templates") setTemplatesVisited(true);
+    if (activeTab === "tabcontent") setTabcontentVisited(true);
+  }, [activeTab]);
 
   const stepDone = {
     details:    title.trim().length >= 3,
