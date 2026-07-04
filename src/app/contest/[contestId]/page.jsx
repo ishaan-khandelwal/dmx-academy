@@ -1281,7 +1281,8 @@ export default function ContestWorkspace() {
       };
 
       const mappedLang = selectedLanguage.toUpperCase();
-      const wrappedCode = wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
+      const isSchemaDriven = activeQuestion && activeQuestion.parameters && Array.isArray(activeQuestion.parameters) && activeQuestion.parameters.length > 0;
+      const wrappedCode = isSchemaDriven ? currentCode : wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
 
       try {
         const runPromises = activeQuestion.testcases.map(async (tc, index) => {
@@ -1293,6 +1294,7 @@ export default function ContestWorkspace() {
               language: mappedLang,
               code: wrappedCode,
               input: currentInput,
+              problemId: activeQuestion.id,
             }),
             signal: AbortSignal.timeout(30000),
           });
@@ -1355,7 +1357,8 @@ export default function ContestWorkspace() {
 
     const langUpper = selectedLanguage.toUpperCase();
     const mappedLang = ["JAVASCRIPT", "PYTHON", "GO", "CPP", "JAVA"].includes(langUpper) ? langUpper : "CPP";
-    const wrappedCode = wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
+    const isSchemaDriven = activeQuestion && activeQuestion.parameters && Array.isArray(activeQuestion.parameters) && activeQuestion.parameters.length > 0;
+    const wrappedCode = isSchemaDriven ? currentCode : wrapCodeForBackend(activeQuestion.slug || activeQuestion.id, selectedLanguage, currentCode);
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {
       "Content-Type": "application/json",

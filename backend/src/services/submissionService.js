@@ -52,8 +52,22 @@ const submitUserCode = async ({ userId, problemId, language, code, runAll = fals
   let finalSubmission;
 
   try {
+    // Determine if this is a schema-driven problem
+    let paramsList = [];
+    if (problem.parameters) {
+      paramsList = typeof problem.parameters === 'string' 
+        ? JSON.parse(problem.parameters) 
+        : problem.parameters;
+    }
+
+    let executableCode = code;
+    if (Array.isArray(paramsList) && paramsList.length > 0) {
+      const { generateDriverCode } = require('./boilerplateService');
+      executableCode = generateDriverCode(language, problem.functionName || 'solve', paramsList, problem.returnType || 'INT', code);
+    }
+
     // 3. Execute code in sandbox
-    const result = await judgeQueuedSubmission(language, code, problem, problem.testCases, { runAll });
+    const result = await judgeQueuedSubmission(language, executableCode, problem, problem.testCases, { runAll });
 
     // 4. Update submission with execution status
     finalSubmission = await prisma.submission.update({

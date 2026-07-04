@@ -507,7 +507,8 @@ export default function PracticeWorkspace() {
       };
 
       const mappedLang = selectedLanguage.toUpperCase();
-      const wrappedCode = wrapCodeForBackend(problemId, selectedLanguage, code);
+      const isSchemaDriven = dbProblem && dbProblem.parameters && Array.isArray(dbProblem.parameters) && dbProblem.parameters.length > 0;
+      const wrappedCode = isSchemaDriven ? code : wrapCodeForBackend(problemId, selectedLanguage, code);
 
       try {
         const runPromises = problem.testcases.map(async (tc, index) => {
@@ -519,6 +520,7 @@ export default function PracticeWorkspace() {
               language: mappedLang,
               code: wrappedCode,
               input: currentInput,
+              problemId: dbProblem?.id || problemId,
             }),
             signal: AbortSignal.timeout(30000),
           });
@@ -582,7 +584,8 @@ export default function PracticeWorkspace() {
     const code = editorCodes[selectedLanguage] || "";
     const langUpper = selectedLanguage.toUpperCase();
     const mappedLang = ["JAVASCRIPT", "PYTHON", "GO", "CPP", "JAVA"].includes(langUpper) ? langUpper : "CPP";
-    const wrappedCode = wrapCodeForBackend(problemId, selectedLanguage, code);
+    const isSchemaDriven = dbProblem && dbProblem.parameters && Array.isArray(dbProblem.parameters) && dbProblem.parameters.length > 0;
+    const wrappedCode = isSchemaDriven ? code : wrapCodeForBackend(problemId, selectedLanguage, code);
     const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
     const headers = {
       "Content-Type": "application/json",

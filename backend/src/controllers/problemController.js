@@ -273,6 +273,26 @@ const getSingleProblem = async (req, res, next) => {
       });
     }
 
+    // Generate stubs dynamically if schema-driven
+    let paramsList = [];
+    if (problem.parameters) {
+      paramsList = typeof problem.parameters === 'string'
+        ? JSON.parse(problem.parameters)
+        : problem.parameters;
+    }
+
+    if (Array.isArray(paramsList) && paramsList.length > 0) {
+      const { generateBoilerplate } = require('../services/boilerplateService');
+      const functionName = problem.functionName || 'solve';
+      const returnType = problem.returnType || 'INT';
+
+      problem.templateJS = generateBoilerplate('JAVASCRIPT', functionName, paramsList, returnType);
+      problem.templatePython = generateBoilerplate('PYTHON', functionName, paramsList, returnType);
+      problem.templateGo = generateBoilerplate('GO', functionName, paramsList, returnType);
+      problem.templateCPP = generateBoilerplate('CPP', functionName, paramsList, returnType);
+      problem.templateJava = generateBoilerplate('JAVA', functionName, paramsList, returnType);
+    }
+
     // Filter test cases based on user permission (if admin, show all, otherwise only samples)
     const isAdmin = req.user && req.user.role === 'ADMIN';
     if (!isAdmin) {

@@ -48,6 +48,8 @@ templatePython String  @default("")
 templateGo     String  @default("")
 templateCPP    String  @default("")
 templateJava   String  @default("")
+parameters     Json    @default("[]")
+returnType     String  @default("INT")
 createdAt DateTime @default(now())
 updatedAt DateTime @updatedAt
 comparator String @default("tokens")

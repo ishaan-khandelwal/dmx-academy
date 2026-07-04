@@ -140,7 +140,7 @@ const getSingleSubmission = async (req, res, next) => {
  */
 const runCode = async (req, res, next) => {
   try {
-    const { language, code, input } = req.body;
+    const { language, code, input, problemId } = req.body;
 
     if (!language || !code) {
       return res.status(400).json({
@@ -149,8 +149,30 @@ const runCode = async (req, res, next) => {
       });
     }
 
+    let executableCode = code;
+    if (problemId) {
+      const numericId = parseInt(problemId, 10);
+      let problem;
+      if (!isNaN(numericId)) {
+        problem = await prisma.problem.findUnique({ where: { id: numericId } });
+      } else {
+        problem = await prisma.problem.findUnique({ where: { slug: problemId } });
+      }
+
+      if (problem && problem.parameters) {
+        let paramsList = typeof problem.parameters === 'string'
+          ? JSON.parse(problem.parameters)
+          : problem.parameters;
+
+        if (Array.isArray(paramsList) && paramsList.length > 0) {
+          const { generateDriverCode } = require('../services/boilerplateService');
+          executableCode = generateDriverCode(language, problem.functionName || 'solve', paramsList, problem.returnType || 'INT', code);
+        }
+      }
+    }
+
     const { runCustomCode } = require('../services/executionService');
-    const result = await runCustomCode(language, code, input || '');
+    const result = await runCustomCode(language, executableCode, input || '');
 
     res.status(200).json({
       success: true,

@@ -1,0 +1,153 @@
+/**
+ * Boilerplate & Driver Generator Service
+ * Generates stubs and driver codes dynamically from a problem's parameter/return schema.
+ */
+
+// Helper to map DB DataType to python types
+const getPythonType = (type) => {
+  switch (type) {
+    case 'INT': return 'int';
+    case 'FLOAT': return 'float';
+    case 'STRING': return 'str';
+    case 'BOOLEAN': return 'bool';
+    case 'CHAR': return 'str';
+    case 'ARRAY_INT': return 'list[int]';
+    case 'ARRAY_FLOAT': return 'list[float]';
+    case 'ARRAY_STRING': return 'list[str]';
+    case 'MATRIX_INT': return 'list[list[int]]';
+    case 'MATRIX_FLOAT': return 'list[list[float]]';
+    default: return 'any';
+  }
+};
+
+// Helper to map DB DataType to C++ types
+const getCppType = (type) => {
+  switch (type) {
+    case 'INT': return 'int';
+    case 'FLOAT': return 'double';
+    case 'STRING': return 'string';
+    case 'BOOLEAN': return 'bool';
+    case 'CHAR': return 'char';
+    case 'ARRAY_INT': return 'vector<int>';
+    case 'ARRAY_FLOAT': return 'vector<double>';
+    case 'ARRAY_STRING': return 'vector<string>';
+    case 'MATRIX_INT': return 'vector<vector<int>>';
+    case 'MATRIX_FLOAT': return 'vector<vector<double>>';
+    default: return 'auto';
+  }
+};
+
+// Helper to map DB DataType to Java types
+const getJavaType = (type) => {
+  switch (type) {
+    case 'INT': return 'int';
+    case 'FLOAT': return 'double';
+    case 'STRING': return 'String';
+    case 'BOOLEAN': return 'boolean';
+    case 'CHAR': return 'char';
+    case 'ARRAY_INT': return 'int[]';
+    case 'ARRAY_FLOAT': return 'double[]';
+    case 'ARRAY_STRING': return 'String[]';
+    case 'MATRIX_INT': return 'int[][]';
+    case 'MATRIX_FLOAT': return 'double[][]';
+    default: return 'Object';
+  }
+};
+
+// Generate Boilerplate Stub (what the user sees in the editor)
+const generateBoilerplate = (language, functionName, parameters, returnType) => {
+  const langKey = language.toUpperCase();
+  const paramNames = parameters.map(p => p.name).join(', ');
+
+  switch (langKey) {
+    case 'JAVASCRIPT':
+    case 'TYPESCRIPT': {
+      const typeAnnotation = langKey === 'TYPESCRIPT' 
+        ? `: ${parameters.map(p => `${p.name}: any`).join(', ')}`
+        : '';
+      return `// Write your solution here\nfunction ${functionName}(${paramNames}) {\n    // Write your solution logic here\n    return -1;\n}`;
+    }
+
+    case 'PYTHON': {
+      const typedParams = parameters.map(p => `${p.name}: ${getPythonType(p.type)}`).join(', ');
+      return `# Write your solution here\ndef ${functionName}(${typedParams}) -> ${getPythonType(returnType)}:\n    # Write your solution logic here\n    return -1`;
+    }
+
+    case 'CPP': {
+      const typedParams = parameters.map(p => `${getCppType(p.type)} ${p.name}`).join(', ');
+      return `// Write your solution here\n${getCppType(returnType)} ${functionName}(${typedParams}) {\n    // Write your solution logic here\n    return -1;\n}`;
+    }
+
+    case 'JAVA': {
+      const typedParams = parameters.map(p => `${getJavaType(p.type)} ${p.name}`).join(', ');
+      return `// Write your solution here\nclass Solution {\n    public ${getJavaType(returnType)} ${functionName}(${typedParams}) {\n        // Write your solution logic here\n        return -1;\n    }\n}`;
+    }
+
+    case 'GO': {
+      const typedParams = parameters.map(p => `${p.name} ${p.type.includes('ARRAY') ? '[]interface{}' : 'interface{}'}`).join(', ');
+      return `package main\n\n// Write your solution here\nfunc ${functionName}(${typedParams}) int {\n\t// Write your solution logic here\n\treturn -1\n}`;
+    }
+
+    default:
+      return `// Write your solution here\nfunction ${functionName}(${paramNames}) {\n    return -1;\n}`;
+  }
+};
+
+// Generate Driver Code Wrapper (executed on judge backend)
+const generateDriverCode = (language, functionName, parameters, returnType, userCode) => {
+  const langKey = language.toUpperCase();
+  const paramNames = parameters.map(p => p.name).join(', ');
+
+  switch (langKey) {
+    case 'JAVASCRIPT':
+    case 'TYPESCRIPT': {
+      const parsingLines = parameters.map((p, idx) => {
+        if (p.type === 'INT') return `const ${p.name} = parseInt(lines[${idx}]);`;
+        if (p.type === 'FLOAT') return `const ${p.name} = parseFloat(lines[${idx}]);`;
+        if (p.type === 'STRING') return `const ${p.name} = lines[${idx}].replace(/^"(.*)"$/, '$1');`;
+        if (p.type === 'BOOLEAN') return `const ${p.name} = lines[${idx}] === 'true' || lines[${idx}] === '1';`;
+        if (p.type.startsWith('ARRAY') || p.type.startsWith('MATRIX')) return `const ${p.name} = JSON.parse(lines[${idx}]);`;
+        return `const ${p.name} = lines[${idx}];`;
+      }).join('\n    ');
+
+      return `${userCode}\n\n// --- DRIVER CODE (AUTO-GENERATED) ---\nconst fs = require('fs');\n\nfunction main() {\n    const input = fs.readFileSync(0, 'utf-8').trim();\n    if (input) {\n        const lines = input.split(/\\r?\\n/);\n        if (lines.length >= ${parameters.length}) {\n            ${parsingLines}\n            const result = ${functionName}(${paramNames});\n            console.log(typeof result === 'object' ? JSON.stringify(result) : result);\n        }\n    }\n}\nmain();`;
+    }
+
+    case 'PYTHON': {
+      const parsingLines = parameters.map((p, idx) => {
+        if (p.type === 'INT') return `${p.name} = int(lines[${idx}].strip())`;
+        if (p.type === 'FLOAT') return `${p.name} = float(lines[${idx}].strip())`;
+        if (p.type === 'STRING') return `${p.name} = lines[${idx}].strip().strip('"')`;
+        if (p.type === 'BOOLEAN') return `${p.name} = lines[${idx}].strip().lower() in ('true', '1')`;
+        if (p.type.startsWith('ARRAY') || p.type.startsWith('MATRIX')) return `${p.name} = json.loads(lines[${idx}].strip())`;
+        return `${p.name} = lines[${idx}].strip()`;
+      }).join('\n        ');
+
+      return `${userCode}\n\n# --- DRIVER CODE (AUTO-GENERATED) ---\nimport sys\nimport json\n\ndef main():\n    lines = sys.stdin.read().splitlines()\n    if len(lines) >= ${parameters.length}:\n        ${parsingLines}\n        result = ${functionName}(${paramNames})\n        if isinstance(result, (list, dict)):\n            print(json.dumps(result))\n        else:\n            print(result)\n\nif __name__ == '__main__':\n    main()`;
+    }
+
+    case 'CPP': {
+      const parsingDeclarations = parameters.map(p => `${getCppType(p.type)} ${p.name};`).join('\n    ');
+      const readingLines = parameters.map((p, idx) => {
+        if (p.type === 'STRING') {
+          return `getline(cin, ${p.name});`;
+        }
+        if (p.type.startsWith('ARRAY') || p.type.startsWith('MATRIX')) {
+          return `string raw_${p.name};\n    getline(cin, raw_${p.name});\n    ${p.name} = parseVectorInt(raw_${p.name});`;
+        }
+        return `string raw_${p.name};\n    getline(cin, raw_${p.name});\n    ${p.name} = ${p.type === 'INT' ? 'stoi' : 'stod'}(raw_${p.name});`;
+      }).join('\n    ');
+
+      return `#include <iostream>\n#include <string>\n#include <vector>\n#include <sstream>\n#include <algorithm>\n\nusing namespace std;\n\n// Parsing Helper for integer array\nvector<int> parseVectorInt(string str) {\n    vector<int> res;\n    str.erase(remove(str.begin(), str.end(), '['), str.end());\n    str.erase(remove(str.begin(), str.end(), ']'), str.end());\n    stringstream ss(str);\n    string temp;\n    while(getline(ss, temp, ',')) {\n        if(!temp.empty()) res.push_back(stoi(temp));\n    }\n    return res;\n}\n\n${userCode}\n\n// --- DRIVER CODE (AUTO-GENERATED) ---\nint main() {\n    ${parsingDeclarations}\n    ${readingLines}\n    cout << ${functionName}(${paramNames}) << endl;\n    return 0;\n}`;
+    }
+
+    default:
+      // Fallback to JS wrapper
+      return userCode;
+  }
+};
+
+module.exports = {
+  generateBoilerplate,
+  generateDriverCode,
+};
