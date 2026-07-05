@@ -8,7 +8,7 @@ import {
   Play, Send, BookOpen, Terminal,
   CheckCircle2, ChevronRight, Mic, RefreshCw,
   FileText, MessageCircle, ClipboardCheck, Palette, Trash2,
-  Trophy, Clock, Lock, Flag, Volume2
+  Trophy, Clock, Lock, Flag, Volume2, XCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { wrapCodeForBackend } from "@/utils/codeWrapper";
@@ -143,6 +143,8 @@ export default function ContestWorkspace() {
   const [leftWidth, setLeftWidth] = useState(50); // percentage
   const containerRef = useRef(null);
   const [isResizing, setIsResizing] = useState(false);
+  const [consoleHeight, setConsoleHeight] = useState(220); // height in pixels
+  const [isConsoleResizing, setIsConsoleResizing] = useState(false);
 
   // Workspace tabs states
   const [activeLeftTab, setActiveLeftTab] = useState("description"); // description, followup, editorial, solution, evaluation, excalidraw
@@ -290,7 +292,9 @@ export default function ContestWorkspace() {
                 outputFormat: dbProb.outputFormat,
                 constraints: dbProb.constraints,
                 explanation: dbProb.explanation,
-                testcases: dbProb.testCases || [],
+                testcases: (dbProb.testCases || []).filter(tc => tc.isSample).length > 0 
+                  ? (dbProb.testCases || []).filter(tc => tc.isSample) 
+                  : (dbProb.testCases && dbProb.testCases.length > 0 ? [dbProb.testCases[0]] : []),
                 editorTemplates: {
                   javascript: dbProb.templateJS || `// Solve: ${dbProb.title}\nfunction solution() {\n    // Write your code here\n}`,
                   python: dbProb.templatePython || `# Solve: ${dbProb.title}\ndef solution():\n    # Write your code here\n    pass`,
@@ -1070,6 +1074,29 @@ export default function ContestWorkspace() {
     document.removeEventListener("mouseup", stopResizing);
   };
 
+  const startConsoleResizing = (e) => {
+    e.preventDefault();
+    setIsConsoleResizing(true);
+    document.addEventListener("mousemove", resizeConsole);
+    document.addEventListener("mouseup", stopConsoleResizing);
+  };
+
+  const resizeConsole = (e) => {
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const relativeY = containerRect.bottom - e.clientY;
+    // Bound console height (e.g. between 80px and containerHeight - 150px)
+    if (relativeY > 80 && relativeY < containerRect.height - 150) {
+      setConsoleHeight(relativeY);
+    }
+  };
+
+  const stopConsoleResizing = () => {
+    setIsConsoleResizing(false);
+    document.removeEventListener("mousemove", resizeConsole);
+    document.removeEventListener("mouseup", stopConsoleResizing);
+  };
+
   const startDrawing = (e) => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -1403,6 +1430,8 @@ export default function ContestWorkspace() {
         executionTimeMs: data.submission.executionTime ?? 0,
         passedTestCases: judgeResult.passedTestCases ?? (isAccepted ? "All" : "-"),
         totalTestCases: judgeResult.totalTestCases ?? "-",
+        results: judgeResult.results || [],
+        stderr: judgeResult.stderr || "",
       });
 
       if (isAccepted) {
@@ -1423,6 +1452,15 @@ export default function ContestWorkspace() {
         error: err.message || "Could not submit to compiler.",
         logs: [],
       }]);
+      setSubmissionVerdict({
+        verdict: "SUBMISSION_FAILED",
+        passed: false,
+        executionTimeMs: 0,
+        passedTestCases: 0,
+        totalTestCases: activeQuestion?.testcases?.length || 0,
+        results: [],
+        stderr: err.message || "Could not submit to compiler."
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -2177,6 +2215,13 @@ export default function ContestWorkspace() {
             ref={containerRef}
             className="flex flex-1 overflow-hidden relative"
           >
+            {(isResizing || isConsoleResizing) && (
+              <div 
+                className={`fixed inset-0 z-50 bg-transparent select-none pointer-events-auto ${
+                  isResizing ? "cursor-col-resize" : "cursor-row-resize"
+                }`} 
+              />
+            )}
             {/* Left Column Problem Description */}
             <div
               className="flex flex-col h-full overflow-hidden shrink-0"
@@ -2418,7 +2463,20 @@ export default function ContestWorkspace() {
               </div>
 
               {/* Run controls panel */}
-              <div className="flex flex-col border-t" style={{ borderColor: "var(--border-primary)", backgroundColor: "var(--bg-secondary)" }}>
+              <div 
+                className="flex flex-col border-t relative" 
+                style={{ 
+                  borderColor: "var(--border-primary)", 
+                  backgroundColor: "var(--bg-secondary)",
+                  height: `${consoleHeight}px`
+                }}
+              >
+                {/* Drag Handle */}
+                <div 
+                  onMouseDown={startConsoleResizing}
+                  className="absolute top-0 left-0 right-0 h-1.5 cursor-row-resize hover:bg-indigo-500/50 transition-colors z-30"
+                  style={{ transform: "translateY(-50%)" }}
+                />
                 {/* Console tabs headers */}
                 <div className="flex h-10 items-center justify-between px-4 border-b" style={{ borderColor: "var(--border-primary)" }}>
                   <div className="flex space-x-1.5">
@@ -2486,7 +2544,7 @@ export default function ContestWorkspace() {
                 </div>
 
                 {/* Console results logs */}
-                <div className="h-44 overflow-y-auto p-5 font-mono text-xs space-y-4 shadow-inner" style={{ backgroundColor: "var(--bg-input)", color: "var(--text-primary)" }}>
+                <div className="flex-1 overflow-y-auto p-5 font-mono text-xs space-y-4 shadow-inner" style={{ backgroundColor: "var(--bg-input)", color: "var(--text-primary)" }}>
                   {activeConsoleTab === "testcase" && (
                     <div className="space-y-4">
                       {activeQuestion && activeQuestion.testcases.map((tc, idx) => (
@@ -2661,6 +2719,134 @@ export default function ContestWorkspace() {
                   <span>Return to Lobby</span>
                   <ChevronRight size={14} />
                 </Link>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Submission Status Dialog modal */}
+      <AnimatePresence>
+        {submissionVerdict && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" onClick={() => setSubmissionVerdict(null)}>
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="max-w-2xl w-full rounded-3xl border p-6 sm:p-8 shadow-2xl space-y-6 text-left max-h-[85vh] overflow-y-auto"
+              style={{ backgroundColor: "var(--bg-card)", borderColor: submissionVerdict.passed ? "var(--border-accent)" : "rgba(239, 68, 68, 0.3)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b pb-4" style={{ borderColor: "var(--border-primary)" }}>
+                <div className="flex items-center space-x-3">
+                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center text-white shadow-md ${
+                    submissionVerdict.passed 
+                      ? "bg-emerald-500 shadow-emerald-500/25" 
+                      : "bg-rose-500 shadow-rose-500/25"
+                  }`}>
+                    {submissionVerdict.passed ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black font-display text-[var(--text-primary)]">
+                      {submissionVerdict.passed ? "Accepted!" : "Submission failed"}
+                    </h3>
+                    <p className="text-[11px] text-[var(--text-secondary)] font-medium">
+                      Status Verdict: <span className={`font-bold font-mono ${submissionVerdict.passed ? "text-emerald-500" : "text-rose-500"}`}>{submissionVerdict.verdict.replace(/_/g, " ")}</span>
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="text-right">
+                  <div className="text-sm font-black text-[var(--text-primary)] font-mono">
+                    {submissionVerdict.passedTestCases} / {submissionVerdict.totalTestCases} Passed
+                  </div>
+                  <div className="text-[10px] text-[var(--text-muted)] font-semibold">
+                    Time: {submissionVerdict.executionTimeMs} ms
+                  </div>
+                </div>
+              </div>
+
+              {submissionVerdict.stderr && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block">Execution Error Output:</span>
+                  <pre className="p-4 rounded-2xl bg-slate-950 border border-rose-500/10 text-rose-300 font-mono text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap">
+                    {submissionVerdict.stderr}
+                  </pre>
+                </div>
+              )}
+
+              {submissionVerdict.results && submissionVerdict.results.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">Test Case Run Details:</span>
+                  <div className="grid gap-3">
+                    {submissionVerdict.results.map((res, index) => {
+                      const isSample = res.isSample;
+                      const passed = res.verdict === "ACCEPTED" || res.status === "SUCCESS";
+                      return (
+                        <div 
+                          key={index}
+                          className="border rounded-2xl p-4 transition-all"
+                          style={{ 
+                            backgroundColor: "var(--bg-primary)", 
+                            borderColor: passed ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)" 
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-[var(--text-primary)] font-mono">
+                              Test Case #{res.index} {isSample ? <span className="text-indigo-400 text-[10px] ml-1 font-sans">(Sample)</span> : <span className="text-[var(--text-muted)] text-[10px] ml-1 font-sans">(Hidden)</span>}
+                            </span>
+                            
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border uppercase font-mono ${
+                              passed 
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                                : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                            }`}>
+                              {passed ? "Passed" : res.verdict ? res.verdict.replace(/_/g, " ") : "Failed"}
+                            </span>
+                          </div>
+
+                          {/* Show details for sample test cases, hide for background ones */}
+                          {isSample ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] mt-3 pt-3 border-t font-mono" style={{ borderColor: "var(--border-primary)" }}>
+                              <div>
+                                <span className="font-bold text-[var(--text-muted)]">Input:</span>
+                                <pre className="mt-0.5 text-[var(--text-secondary)] overflow-x-auto truncate max-w-xs">{res.input || (activeQuestion?.testcases[res.index - 1]?.input) || ""}</pre>
+                              </div>
+                              <div>
+                                <span className="font-bold text-[var(--text-muted)]">Time:</span>
+                                <div className="mt-0.5 text-[var(--text-secondary)]">{res.executionTimeMs} ms</div>
+                              </div>
+                              {res.stderr ? (
+                                <div className="sm:col-span-2">
+                                  <span className="font-bold text-rose-400">Error:</span>
+                                  <pre className="text-rose-400 mt-0.5 whitespace-pre-wrap">{res.stderr}</pre>
+                                </div>
+                              ) : (
+                                <div className="sm:col-span-2">
+                                  <span className="font-bold text-[var(--text-muted)]">Output:</span>
+                                  <pre className="mt-0.5 text-[var(--text-secondary)] overflow-x-auto truncate max-w-xs">{res.stdout || ""}</pre>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-[var(--text-muted)] mt-2 font-mono italic">
+                              Input/outputs are hidden for background security verification tests.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex space-x-3 justify-end pt-4 border-t" style={{ borderColor: "var(--border-primary)" }}>
+                <button
+                  onClick={() => setSubmissionVerdict(null)}
+                  className="px-5 py-2.5 bg-slate-500/10 hover:bg-slate-500/20 font-bold rounded-full text-xs text-[var(--text-secondary)] cursor-pointer transition-colors"
+                >
+                  Close Report
+                </button>
               </div>
             </motion.div>
           </div>

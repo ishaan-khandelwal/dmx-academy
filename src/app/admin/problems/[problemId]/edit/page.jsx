@@ -486,7 +486,12 @@ export default function CreateProblem() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">Category / Domain</label>
-                        <DarkInput placeholder="e.g. Trees / Dynamic Programming" value={category} onChange={e => setCategory(e.target.value)} />
+                        <DarkSelect value={category} onChange={e => setCategory(e.target.value)}>
+                          <option value="Security">Security</option>
+                          <option value="Algorithms">Algorithms</option>
+                          <option value="Frontend">Frontend</option>
+                          <option value="System Design">System Design</option>
+                        </DarkSelect>
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -497,18 +502,6 @@ export default function CreateProblem() {
                         <Tag size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
                         <DarkInput placeholder="binary-tree, recursion, dfs…" value={tags} onChange={e => setTags(e.target.value)} style={{ paddingLeft: "2rem" }} />
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {[
-                        { v: "EASY",   label: "Easy",   cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" },
-                        { v: "MEDIUM", label: "Medium", cls: "bg-amber-500/10 border-amber-500/30 text-amber-400" },
-                        { v: "HARD",   label: "Hard",   cls: "bg-rose-500/10 border-rose-500/30 text-rose-400" },
-                      ].map(d => (
-                        <button key={d.v} type="button" onClick={() => setDifficulty(d.v)}
-                          className={`px-5 py-2 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${difficulty === d.v ? d.cls : "bg-white/5 border-white/10 text-slate-600 hover:text-slate-400"}`}>
-                          {d.label}
-                        </button>
-                      ))}
                     </div>
                   </motion.div>
                 )}

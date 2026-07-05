@@ -29,6 +29,7 @@ const submitSolution = async (req, res, next) => {
       problemId: pid,
       language,
       code,
+      runAll: true,
     });
 
     res.status(201).json({

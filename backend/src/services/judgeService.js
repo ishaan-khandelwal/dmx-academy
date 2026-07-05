@@ -207,6 +207,7 @@ const judgeSubmission = async (language, code, problemConfig, testCases, options
 
     for (const tcResult of sandboxRes.results) {
       const originalTC = testCases[tcResult.index - 1];
+      const isSample = originalTC ? originalTC.isSample : false;
 
       if (tcResult.status === 'SUCCESS') {
         const isCorrect = compareOutputs(
@@ -220,12 +221,14 @@ const judgeSubmission = async (language, code, problemConfig, testCases, options
           evaluatedResults.push({
             ...tcResult,
             verdict: 'ACCEPTED',
+            isSample,
           });
           passedCount++;
         } else {
           evaluatedResults.push({
             ...tcResult,
             verdict: 'WRONG_ANSWER',
+            isSample,
           });
           if (finalVerdict === 'ACCEPTED') {
             finalVerdict = 'WRONG_ANSWER';
@@ -237,6 +240,7 @@ const judgeSubmission = async (language, code, problemConfig, testCases, options
         evaluatedResults.push({
           ...tcResult,
           verdict: tcResult.status,
+          isSample,
         });
         if (finalVerdict === 'ACCEPTED') {
           finalVerdict = tcResult.status;
