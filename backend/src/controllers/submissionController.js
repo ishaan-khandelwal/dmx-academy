@@ -60,6 +60,12 @@ const getAllSubmissions = async (req, res, next) => {
       whereClause.status = status;
     }
 
+    if (req.user.role !== 'ADMIN') {
+      whereClause.user = {
+        instituteId: req.user.instituteId
+      };
+    }
+
     const submissions = await prisma.submission.findMany({
       where: whereClause,
       include: {
@@ -110,7 +116,7 @@ const getSingleSubmission = async (req, res, next) => {
       where: { id: submissionId },
       include: {
         user: {
-          select: { id: true, username: true },
+          select: { id: true, username: true, instituteId: true },
         },
         problem: {
           select: { id: true, title: true, slug: true },
@@ -122,6 +128,13 @@ const getSingleSubmission = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Submission not found.',
+      });
+    }
+
+    if (req.user.role !== 'ADMIN' && submission.user.instituteId !== req.user.instituteId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to view this submission.',
       });
     }
 

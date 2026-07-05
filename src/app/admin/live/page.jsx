@@ -40,7 +40,10 @@ import {
   BarChart2,
   X,
   ArrowLeft,
+  Share2,
+  Check,
 } from "lucide-react";
+import { ReactionOverlay, ReactionPicker } from "@/components/LiveReactions";
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
@@ -237,6 +240,34 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
 
   const [connectionState, setConnectionState] = useState(room?.state || "disconnected");
   const [isBrowserOffline, setIsBrowserOffline] = useState(false);
+  const [reactions, setReactions] = useState([]);
+
+  const handleReaction = useCallback((emoji) => {
+    const reaction = {
+      id: Date.now() + Math.random(),
+      emoji,
+      username: user?.username,
+      xOffset: (Math.random() - 0.5) * 60,
+    };
+    setReactions((prev) => [...prev, reaction]);
+    
+    if (room && room.state === "connected" && room.localParticipant) {
+      try {
+        const payload = { action: "REACTION", reaction };
+        const encoder = new TextEncoder();
+        room.localParticipant.publishData(encoder.encode(JSON.stringify(payload)), {
+          reliable: true,
+          topic: "raise-hand-actions"
+        });
+      } catch (e) {
+        console.error("Failed to publish REACTION:", e);
+      }
+    }
+    
+    setTimeout(() => {
+      setReactions((prev) => prev.filter((r) => r.id !== reaction.id));
+    }, 3000);
+  }, [user, room]);
 
   useEffect(() => {
     if (!room) return;
@@ -472,6 +503,11 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
           setRaisedHands((prev) => prev.filter((u) => u !== data.username));
         } else if (data.action === "REQUEST_SYNC") {
           sendStateSync();
+        } else if (data.action === "REACTION") {
+          setReactions((prev) => [...prev, data.reaction]);
+          setTimeout(() => {
+            setReactions((prev) => prev.filter((r) => r.id !== data.reaction.id));
+          }, 3000);
         }
       } catch (e) {
         console.error("Error parsing room data:", e);
@@ -485,7 +521,6 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
   }, [room, activeSpeaker, raisedHands, blockedUsers]);
 
 
-  // Fetch leaderboard after each poll ends
   const fetchLeaderboard = async () => {
     if (!session?.id) return;
     try {
@@ -496,14 +531,23 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
       if (data.success) {
         setLeaderboard(data.leaderboard);
         setTotalPolls(data.totalPolls);
+        if (data.lastPollId) {
+          fetchPollResults(data.lastPollId, false);
+        }
       }
     } catch (e) {
       console.warn("Failed to fetch leaderboard:", e);
     }
   };
 
+  useEffect(() => {
+    if (session?.id && authToken) {
+      fetchLeaderboard();
+    }
+  }, [session?.id, authToken]);
+
   // Fetch per-question results overlay
-  const fetchPollResults = async (pollId) => {
+  const fetchPollResults = async (pollId, showOverlay = true) => {
     if (!session?.id) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/livekit/poll/${pollId}/results`, {
@@ -512,9 +556,11 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
       const data = await res.json();
       if (data.success) {
         setPollResultData(data);
-        setShowResultOverlay(true);
-        // Auto-dismiss after 12s
-        setTimeout(() => setShowResultOverlay(false), 12000);
+        if (showOverlay) {
+          setShowResultOverlay(true);
+          // Auto-dismiss after 12s
+          setTimeout(() => setShowResultOverlay(false), 12000);
+        }
       }
     } catch (e) {
       console.warn("Failed to fetch poll results:", e);
@@ -537,7 +583,18 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
   };
 
 
-  // Handle student disconnection
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleShareLink = useCallback(() => {
+    if (!session?.id) return;
+    const shareUrl = `${window.location.origin}/live?sessionId=${session.id}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    });
+  }, [session?.id]);
+
+  // Handle participant connections
   useEffect(() => {
     if (!room) return;
 
@@ -693,6 +750,8 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
                 onClose={() => setShowResultOverlay(false)}
               />
             )}
+
+            <ReactionOverlay reactions={reactions} />
           </div>
 
           {/* Broadcast Control Bar */}
@@ -752,6 +811,19 @@ function BroadcastPanel({ session, onEndSession, authToken }) {
               </button>
 
               <div className="w-px h-8 bg-slate-500/20 mx-2" />
+
+              <ReactionPicker onReact={handleReaction} />
+
+              <div className="w-px h-8 bg-slate-500/20 mx-2" />
+
+              <button
+                onClick={handleShareLink}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all hover:scale-105 cursor-pointer shadow-sm text-[var(--text-primary)] bg-[var(--bg-primary)] border-[var(--border-primary)]"
+                title="Copy share link for students"
+              >
+                {copiedLink ? <Check size={14} className="text-emerald-500" /> : <Share2 size={14} />}
+                {copiedLink ? "Copied" : "Share"}
+              </button>
 
               <button
                 onClick={onEndSession}
@@ -1214,7 +1286,9 @@ export default function AdminLivePage() {
             >
               {batches.length === 0 ? (
                 <span className="text-xs text-[var(--text-muted)] italic col-span-2">
-                  No cohorts found. This session will be public.
+                  {user?.role === "ADMIN" 
+                    ? "No cohorts found. This session will be public."
+                    : "No cohorts found. This session will be available to all students in your institute."}
                 </span>
               ) : (
                 batches.map(b => (

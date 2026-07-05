@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   LiveKitRoom,
@@ -34,11 +34,14 @@ import {
   XCircle,
   X,
   Trophy,
+  Share2,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import LivePollPopup from "@/components/LivePollPopup";
 import LiveChat from "@/components/LiveChat";
 import { SessionLeaderboard, PollResultsOverlay, EndSessionLeaderboard } from "@/components/LiveLeaderboard";
+import { ReactionOverlay, ReactionPicker } from "@/components/LiveReactions";
 
 import { getApiBase } from "@/utils/api";
 
@@ -265,6 +268,34 @@ function VideoPlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [isHostCameraHiddenLocal, setIsHostCameraHiddenLocal] = useState(false);
   const [isStudentCameraHiddenLocal, setIsStudentCameraHiddenLocal] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [reactions, setReactions] = useState([]);
+
+  const handleReaction = useCallback((emoji) => {
+    const reaction = {
+      id: Date.now() + Math.random(),
+      emoji,
+      username: user?.username,
+      xOffset: (Math.random() - 0.5) * 60, // random spread
+    };
+    setReactions((prev) => [...prev, reaction]);
+    sendData({ action: "REACTION", reaction });
+    
+    // Auto cleanup after animation (2.5s)
+    setTimeout(() => {
+      setReactions((prev) => prev.filter((r) => r.id !== reaction.id));
+    }, 3000);
+  }, [user]);
+
+  const handleShareLink = useCallback(() => {
+    if (!session?.id) return;
+    const shareUrl = `${window.location.origin}/live?sessionId=${session.id}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    });
+  }, [session?.id]);
+
 console.log(session)
   const API_BASE_LIVE = getApiBase();
 
@@ -278,11 +309,20 @@ console.log(session)
       if (data.success) {
         setLeaderboard(data.leaderboard);
         setTotalPolls(data.totalPolls);
+        if (data.lastPollId) {
+          fetchPollResults(data.lastPollId, false);
+        }
       }
     } catch (e) { console.warn("Leaderboard fetch failed:", e); }
   };
 
-  const fetchPollResults = async (pollId) => {
+  useEffect(() => {
+    if (session?.id && authToken) {
+      fetchLeaderboard(session.id);
+    }
+  }, [session?.id, authToken]);
+
+  const fetchPollResults = async (pollId, showOverlay = true) => {
     try {
       const res = await fetch(`${API_BASE_LIVE}/api/livekit/poll/${pollId}/results`, {
         headers: { Authorization: `Bearer ${authToken}` },
@@ -290,8 +330,10 @@ console.log(session)
       const data = await res.json();
       if (data.success) {
         setPollResultData(data);
-        setShowPollResult(true);
-        setTimeout(() => setShowPollResult(false), 12000);
+        if (showOverlay) {
+          setShowPollResult(true);
+          setTimeout(() => setShowPollResult(false), 12000);
+        }
       }
     } catch (e) { console.warn("Poll results fetch failed:", e); }
   };
@@ -531,9 +573,13 @@ console.log(session)
         } else if (data.action === "POLL_END") {
           // Poll ended (timer expired or mentor ended early)
           setActivePoll(null);
-          // Fetch results and leaderboard from backend (DB source of truth)
           fetchPollResults(data.pollId);
           fetchLeaderboard(session?.id);
+        } else if (data.action === "REACTION") {
+          setReactions((prev) => [...prev, data.reaction]);
+          setTimeout(() => {
+            setReactions((prev) => prev.filter((r) => r.id !== data.reaction.id));
+          }, 3000);
         }
       } catch (e) {
         console.error("Error parsing room message:", e);
@@ -712,6 +758,25 @@ console.log(session)
           <span>Leaderboard</span>
         </button>
 
+        {/* Share Button */}
+        <button
+          onClick={handleShareLink}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer"
+          style={{
+            backgroundColor: "var(--bg-primary)",
+            borderColor: "var(--border-primary)",
+            color: "var(--text-primary)"
+          }}
+          title="Copy share link"
+          id="viewer-share-btn"
+        >
+          {copiedLink ? <Check size={12} className="text-emerald-500" /> : <Share2 size={12} />}
+          <span>{copiedLink ? "Copied" : "Share"}</span>
+        </button>
+
+        {/* Reaction Picker */}
+        <ReactionPicker onReact={handleReaction} />
+
         {/* Mute Toggle */}
         <button
           onClick={() => setIsMuted(!isMuted)}
@@ -778,6 +843,8 @@ console.log(session)
             </div>
           </div>
         )}
+
+        <ReactionOverlay reactions={reactions} />
 
         {/* Draggable Host Camera */}
         {isHostCameraActive && !isHostCameraHiddenLocal && (
@@ -1083,9 +1150,55 @@ export default function LiveViewerPage() {
     };
   }, []);
 
+  const fetchViewerToken = useCallback(async (roomName) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/livekit/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ roomName }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToken(data.token);
+      } else {
+        setError("Failed to get session access token.");
+      }
+    } catch (e) {
+      setError("Error joining session.");
+    }
+  }, [API_BASE, authToken]);
+
+  const checkActiveSession = useCallback(async () => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const sessionId = searchParams.get('sessionId');
+      const url = sessionId 
+        ? `${API_BASE}/api/livekit/session/active?sessionId=${sessionId}`
+        : `${API_BASE}/api/livekit/session/active`;
+        
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.success && data.session) {
+        setSession(data.session);
+
+        if (authToken) {
+          await fetchViewerToken(data.session.roomName);
+        }
+      }
+    } catch (e) {
+      setError("Unable to connect to server.");
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE, authToken, fetchViewerToken]);
+
   useEffect(() => {
     checkActiveSession();
-  }, [authToken, API_BASE]);
+  }, [checkActiveSession]);
 
   // Set up polling interval to check if session has ended, without refetching token
   useEffect(() => {
@@ -1111,26 +1224,6 @@ export default function LiveViewerPage() {
 
     return () => clearInterval(interval);
   }, [session, API_BASE]);
-
-  const checkActiveSession = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/livekit/session/active`);
-      const data = await res.json();
-
-      if (data.success && data.session) {
-        setSession(data.session);
-
-        // If user is logged in, get a viewer token
-        if (authToken) {
-          await fetchViewerToken(data.session.roomName);
-        }
-      }
-    } catch (e) {
-      setError("Unable to connect to server.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchViewerToken = async (roomName) => {
     try {

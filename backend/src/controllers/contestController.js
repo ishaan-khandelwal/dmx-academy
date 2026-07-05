@@ -140,6 +140,7 @@ const getAllContests = async (req, res, next) => {
       // AND (no batch restriction OR student is enrolled in that batch)
       whereClause = {
         OR: [
+          { instituteId: null },
           { instituteId: studentInstituteId },
           { creator: { instituteId: studentInstituteId } }
         ],
@@ -159,6 +160,7 @@ const getAllContests = async (req, res, next) => {
       const myInstituteId = req.user.instituteId;
       whereClause = {
         OR: [
+          { instituteId: null },
           { instituteId: myInstituteId },
           { creator: { instituteId: myInstituteId } }
         ]
@@ -601,12 +603,19 @@ const getAllParticipationReports = async (req, res, next) => {
 
     const participations = await prisma.contestParticipation.findMany({
       where: isSuperAdmin ? {} : {
-        contest: {
-          OR: [
-            { instituteId: myInstituteId },
-            { creator: { instituteId: myInstituteId } }
-          ]
-        }
+        OR: [
+          {
+            contest: {
+              OR: [
+                { instituteId: myInstituteId },
+                { creator: { instituteId: myInstituteId } }
+              ]
+            }
+          },
+          {
+            user: { instituteId: myInstituteId }
+          }
+        ]
       },
       include: {
         user: {

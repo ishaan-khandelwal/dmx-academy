@@ -156,6 +156,11 @@ const generateToken = async (req, res) => {
 const getActiveSession = async (req, res) => {
   try {
     let whereClause = { isLive: true };
+    const { sessionId } = req.query;
+
+    if (sessionId) {
+      whereClause.id = parseInt(sessionId, 10);
+    }
 
     if (req.user && req.user.role === 'USER') {
       const student = await prisma.user.findUnique({
@@ -618,7 +623,9 @@ const getSessionLeaderboard = async (req, res) => {
       return a.totalTimeMs - b.totalTimeMs;
     }).map((entry, idx) => ({ ...entry, rank: idx + 1 }));
 
-    return res.status(200).json({ success: true, leaderboard, totalPolls: polls.length });
+    const lastPoll = polls[polls.length - 1];
+
+    return res.status(200).json({ success: true, leaderboard, totalPolls: polls.length, lastPollId: lastPoll ? lastPoll.id : null });
   } catch (error) {
     console.error('Error fetching session leaderboard:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch leaderboard.' });

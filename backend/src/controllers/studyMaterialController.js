@@ -21,7 +21,7 @@ const get = async (req, res, next) => {
     const material = await svc.getMaterial(id);
 
     // Scoping validation
-    if (!req.user || !req.user.instituteId || material.instituteId !== req.user.instituteId) {
+    if (req.user?.role !== 'ADMIN' && material.instituteId !== null && material.instituteId !== req.user?.instituteId) {
       return res.status(403).json({ success: false, message: 'You are not authorized to view this material.' });
     }
 
