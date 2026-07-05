@@ -1691,7 +1691,7 @@ export default function ContestWorkspace() {
             <div className="flex justify-between items-center px-4 py-1.5 border-b border-indigo-500/10 bg-indigo-500/5 text-[10px] text-indigo-400 font-mono font-semibold">
               <span>Example / Code Block</span>
             </div>
-            <pre className="p-4 overflow-x-auto text-xs font-mono text-indigo-500 dark:text-indigo-400 bg-indigo-500/5 leading-relaxed">
+            <pre className="p-4 overflow-x-auto text-xs font-mono text-indigo-500 dark:text-indigo-400 bg-indigo-500/5 leading-relaxed whitespace-pre">
               <code>{block.content}</code>
             </pre>
           </div>

@@ -16,7 +16,7 @@ function renderMarkdown(md) {
   if (!md) return "";
   let html = md.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   html = html.replace(/```([\w]*)\n([\s\S]*?)```/g, (_, _lang, code) =>
-    `<div class="bg-[#0d1117] border border-slate-800/80 text-slate-200 p-4 rounded-xl font-mono text-[11px] my-3 overflow-x-auto leading-relaxed"><pre><code>${code.trim()}</code></pre></div>`
+    `<div class="bg-[#0d1117] border border-slate-800/80 text-slate-200 p-4 rounded-xl font-mono text-[11px] my-3 overflow-x-auto leading-relaxed"><pre class="whitespace-pre"><code>${code}</code></pre></div>`
   );
   html = html.replace(/`([^`]+)`/g, '<code class="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[11px] px-1.5 py-0.5 rounded font-mono font-semibold mx-0.5">$1</code>');
   html = html.replace(/^### (.*$)/gim, '<h4 class="text-[11px] font-extrabold uppercase tracking-wider mt-4 mb-2 text-indigo-400">$1</h4>');
@@ -24,9 +24,7 @@ function renderMarkdown(md) {
   html = html.replace(/^# (.*$)/gim, '<h2 class="text-base font-black mt-6 mb-3 pb-1 border-b border-white/10 text-white">$1</h2>');
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-white">$1</strong>');
   html = html.replace(/^[*-] (.*$)/gim, '<li class="flex items-start gap-2 my-1 text-xs text-slate-300"><span class="text-indigo-400">◆</span><span>$1</span></li>');
-  html = html.replace(/\n\n/g, '</p><p class="text-xs leading-relaxed my-2 text-slate-300">');
-  html = html.replace(/\n/g, '<br/>');
-  return `<div class="space-y-1 text-xs leading-relaxed text-slate-300"><p class="text-xs leading-relaxed my-2">${html}</p></div>`;
+  return `<div class="space-y-1 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">${html}</div>`;
 }
 
 
@@ -184,10 +182,10 @@ export default function CreateProblem() {
 
   const stepDone = {
     details:    title.trim().length >= 3,
-    statement:  desc.trim().length >= 10,
+    statement:  desc.trim().length >= 10 && !!inputFmt.trim() && !!outputFmt.trim() && !!constr.trim(),
     templates:  templatesVisited && !!(tmplJS.trim() || tmplPy.trim() || tmplGo.trim() || tmplCPP.trim() || tmplJava.trim()),
-    testcases:  testCases.length > 0 && testCases.some(t => t.isSample && t.expectedOutput.trim()),
-    tabcontent: tabcontentVisited,
+    testcases:  testCases.length > 0 && testCases.some(t => t.isSample) && testCases.every(t => t.expectedOutput.trim()),
+    tabcontent: tabcontentVisited && !!followup.trim() && !!editorial.trim() && !!solution.trim() && !!evaluation.trim(),
   };
 
   const showToast = useCallback((text, type = "error") => {
@@ -203,9 +201,39 @@ export default function CreateProblem() {
   const handlePublish = async () => {
     const errs = {};
     if (title.trim().length < 3) { errs.title = "Title must be at least 3 characters"; setActiveTab("details"); }
-    if (desc.trim().length < 10) { errs.desc = "Description must be at least 10 characters"; }
-    if (!testCases.some(t => t.isSample)) { errs.tc = "At least one sample test case required"; }
-    testCases.forEach((t, i) => { if (!t.expectedOutput.trim()) errs[`tc_${i}`] = `Test Case #${i + 1} needs expected output`; });
+    else if (desc.trim().length < 10 || !inputFmt.trim() || !outputFmt.trim() || !constr.trim()) {
+      if (!desc.trim()) { errs.desc = "Description is required"; }
+      else if (desc.trim().length < 10) { errs.desc = "Description must be at least 10 characters"; }
+      if (!inputFmt.trim()) { errs.inputFmt = "Input format is required"; }
+      if (!outputFmt.trim()) { errs.outputFmt = "Output format is required"; }
+      if (!constr.trim()) { errs.constr = "Constraints are required"; }
+      
+      if (errs.desc) setStatSub("desc");
+      else if (errs.inputFmt) setStatSub("input");
+      else if (errs.outputFmt) setStatSub("output");
+      else if (errs.constr) setStatSub("constr");
+
+      setActiveTab("statement");
+    }
+    else if (testCases.length === 0 || !testCases.some(t => t.isSample) || testCases.some((t, i) => !t.expectedOutput.trim())) {
+      if (testCases.length === 0) { errs.tc = "At least one test case is required"; }
+      if (!testCases.some(t => t.isSample)) { errs.tc = "At least one sample test case required"; }
+      testCases.forEach((t, i) => { if (!t.expectedOutput.trim()) errs[`tc_${i}`] = `Test Case #${i + 1} needs expected output`; });
+      setActiveTab("testcases");
+    }
+    else if (!followup.trim() || !editorial.trim() || !solution.trim() || !evaluation.trim()) {
+      if (!followup.trim()) errs.followup = "Followup is required";
+      if (!editorial.trim()) errs.editorial = "Editorial is required";
+      if (!solution.trim()) errs.solution = "Solution is required";
+      if (!evaluation.trim()) errs.evaluation = "Evaluation is required";
+
+      if (errs.followup) setSub5("followup");
+      else if (errs.editorial) setSub5("editorial");
+      else if (errs.solution) setSub5("solution");
+      else if (errs.evaluation) setSub5("evaluation");
+
+      setActiveTab("tabcontent");
+    }
     setErrors(errs);
     if (Object.keys(errs).length > 0) { showToast("Please fix the highlighted issues before publishing.", "error"); return; }
 
@@ -223,9 +251,9 @@ export default function CreateProblem() {
         slug: slug.trim() || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
         difficulty: ["EASY", "MEDIUM", "HARD"].includes(difficulty.toUpperCase()) ? difficulty.toUpperCase() : "MEDIUM",
         statement: desc.trim(),
-        inputFormat:  inputFmt.trim()  || "Standard input",
-        outputFormat: outputFmt.trim() || "Standard output",
-        constraints:  constr.trim()    || "None",
+        inputFormat:  inputFmt.trim(),
+        outputFormat: outputFmt.trim(),
+        constraints:  constr.trim(),
         explanation: "No explanation provided.",
         followup: followup || "", editorial: editorial || "", solution: solution || "", evaluation: evaluation || "",
         templateJS: tmplJS || "", templatePython: tmplPy || "", templateGo: tmplGo || "",
@@ -463,28 +491,31 @@ export default function CreateProblem() {
                         {statSub === "input" && (
                           <>
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-violet-400">Input Format</label>
+                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-violet-400">Input Format *</label>
                               <MdToolbar taRef={inputFmtRef} setValue={setInputFmt} />
                             </div>
                             <DarkTextarea ref={inputFmtRef} placeholder="Describe the input format clearly…" value={inputFmt} onChange={e => setInputFmt(e.target.value)} rows={10} />
+                            {errors.inputFmt && <p className="text-[10px] text-rose-400 flex items-center gap-1"><AlertCircle size={10} />{errors.inputFmt}</p>}
                           </>
                         )}
                         {statSub === "output" && (
                           <>
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-cyan-400">Output Format</label>
+                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-cyan-400">Output Format *</label>
                               <MdToolbar taRef={outputFmtRef} setValue={setOutputFmt} />
                             </div>
                             <DarkTextarea ref={outputFmtRef} placeholder="Describe the expected output format…" value={outputFmt} onChange={e => setOutputFmt(e.target.value)} rows={10} />
+                            {errors.outputFmt && <p className="text-[10px] text-rose-400 flex items-center gap-1"><AlertCircle size={10} />{errors.outputFmt}</p>}
                           </>
                         )}
                         {statSub === "constr" && (
                           <>
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">Constraints</label>
+                              <label className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">Constraints *</label>
                               <MdToolbar taRef={constraintsRef} setValue={setConstr} />
                             </div>
                             <DarkTextarea ref={constraintsRef} placeholder={"1 ≤ N ≤ 10^5\n-10^9 ≤ A[i] ≤ 10^9"} value={constr} onChange={e => setConstr(e.target.value)} rows={10} />
+                            {errors.constr && <p className="text-[10px] text-rose-400 flex items-center gap-1"><AlertCircle size={10} />{errors.constr}</p>}
                           </>
                         )}
                       </div>
@@ -634,10 +665,10 @@ export default function CreateProblem() {
                     </div>
                     <AnimatePresence mode="wait">
                       {[
-                        { id: "followup",   ref: followupRef,   val: followup,   set: setFollowup,   lbl: "Followup Questions",       clr: "text-indigo-400",  previewCls: "border-indigo-500/20 bg-indigo-500/5" },
-                        { id: "editorial",  ref: editorialRef,  val: editorial,  set: setEditorial,  lbl: "Editorial / Approach",     clr: "text-violet-400",  previewCls: "border-violet-500/20 bg-violet-500/5" },
-                        { id: "solution",   ref: solutionRef,   val: solution,   set: setSolution,   lbl: "Official Solution Code",   clr: "text-emerald-400", previewCls: "border-emerald-500/20 bg-emerald-500/5" },
-                        { id: "evaluation", ref: evaluationRef, val: evaluation, set: setEvaluation, lbl: "Evaluation Criteria",      clr: "text-amber-400",   previewCls: "border-amber-500/20 bg-amber-500/5" },
+                        { id: "followup",   ref: followupRef,   val: followup,   set: setFollowup,   lbl: "Followup Questions *",       clr: "text-indigo-400",  previewCls: "border-indigo-500/20 bg-indigo-500/5" },
+                        { id: "editorial",  ref: editorialRef,  val: editorial,  set: setEditorial,  lbl: "Editorial / Approach *",     clr: "text-violet-400",  previewCls: "border-violet-500/20 bg-violet-500/5" },
+                        { id: "solution",   ref: solutionRef,   val: solution,   set: setSolution,   lbl: "Official Solution Code *",   clr: "text-emerald-400", previewCls: "border-emerald-500/20 bg-emerald-500/5" },
+                        { id: "evaluation", ref: evaluationRef, val: evaluation, set: setEvaluation, lbl: "Evaluation Criteria *",      clr: "text-amber-400",   previewCls: "border-amber-500/20 bg-amber-500/5" },
                       ].filter(s => s.id === sub5).map(s => (
                         <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                           <div className="space-y-2">
@@ -646,6 +677,7 @@ export default function CreateProblem() {
                               <MdToolbar taRef={s.ref} setValue={s.set} />
                             </div>
                             <DarkTextarea ref={s.ref} placeholder="Write in markdown…" value={s.val} onChange={e => s.set(e.target.value)} rows={14} />
+                            {errors[s.id] && <p className="text-[10px] text-rose-400 flex items-center gap-1"><AlertCircle size={10} />{errors[s.id]}</p>}
                           </div>
                           <div className={`rounded-2xl border p-5 overflow-auto text-xs ${s.previewCls}`} style={{ minHeight: "14rem" }}
                             dangerouslySetInnerHTML={{ __html: renderMarkdown(s.val || "*Preview will appear here…*") }} />

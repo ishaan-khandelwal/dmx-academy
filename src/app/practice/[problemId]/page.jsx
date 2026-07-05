@@ -808,69 +808,105 @@ export default function PracticeWorkspace() {
   // String parsing function for left tabs markdown formats
   const renderText = (markdownText) => {
     if (!markdownText) return null;
-    
-    return markdownText.split("\n").map((line, idx) => {
+
+    const processInline = (str) => {
+      const backtickParts = str.split(/`([^`]+)`/g);
+      return backtickParts.flatMap((part, i) => {
+        if (i % 2 === 1) {
+          return (
+            <code key={`code-${i}`} className="px-1.5 py-0.5 rounded font-mono text-xs mx-0.5 text-pink-500 font-semibold bg-slate-500/10 border border-slate-500/20">
+              {part}
+            </code>
+          );
+        }
+        // Bold matches
+        const boldParts = part.split(/\*\*([^*]+)\*\*/);
+        return boldParts.map((sub, j) => {
+          if (j % 2 === 1) {
+            return <strong key={`bold-${i}-${j}`} className="font-bold text-[var(--text-primary)]">{sub}</strong>;
+          }
+          return sub;
+        });
+      });
+    };
+
+    const lines = markdownText.split("\n");
+    const blocks = [];
+    let currentCodeBlock = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmed = line.trim();
-      if (!trimmed) return <div key={idx} className="h-2" />;
-      
-      // Headings
+
+      if (trimmed.startsWith("```")) {
+        if (currentCodeBlock) {
+          blocks.push({ type: "code", content: currentCodeBlock.join("\n"), lang: trimmed.replace("```", "") });
+          currentCodeBlock = null;
+        } else {
+          currentCodeBlock = [];
+        }
+        continue;
+      }
+
+      if (currentCodeBlock !== null) {
+        currentCodeBlock.push(line);
+        continue;
+      }
+
       if (trimmed.startsWith("### ")) {
+        blocks.push({ type: "h3", content: trimmed.replace("### ", "") });
+      } else if (trimmed.startsWith("#### ")) {
+        blocks.push({ type: "h4", content: trimmed.replace("#### ", "") });
+      } else if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
+        blocks.push({ type: "bullet", content: trimmed.replace(/^[\*\-]\s+/, "") });
+      } else if (!trimmed) {
+        blocks.push({ type: "spacer" });
+      } else {
+        blocks.push({ type: "paragraph", content: line });
+      }
+    }
+
+    return blocks.map((block, idx) => {
+      if (block.type === "spacer") {
+        return <div key={idx} className="h-3" />;
+      }
+      if (block.type === "h3") {
         return (
           <h3 key={idx} className="text-xl font-bold font-display mt-6 mb-3 text-[var(--text-primary)] border-b pb-1" style={{ borderColor: "var(--border-primary)" }}>
-            {trimmed.replace("### ", "")}
+            {block.content}
           </h3>
         );
       }
-      if (trimmed.startsWith("#### ")) {
+      if (block.type === "h4") {
         return (
           <h4 key={idx} className="text-sm font-extrabold uppercase mt-5 mb-2 text-[var(--text-primary)] tracking-wide">
-            {trimmed.replace("#### ", "")}
+            {block.content}
           </h4>
         );
       }
-      
-      // Code blocks
-      if (trimmed.startsWith("```")) {
-        return null; // Ignore fences, code parsed below
-      }
-
-      // Check bullet items
-      const isBullet = trimmed.startsWith("* ") || trimmed.startsWith("- ");
-      
-      // Inline styles processor
-      const processInline = (str) => {
-        const backtickParts = str.split(/`([^`]+)`/g);
-        return backtickParts.flatMap((part, i) => {
-          if (i % 2 === 1) {
-            return (
-              <code key={`code-${i}`} className="px-1.5 py-0.5 rounded font-mono text-xs mx-0.5 text-pink-500 font-semibold bg-slate-500/10 border border-slate-500/20">
-                {part}
-              </code>
-            );
-          }
-          // Bold matches
-          const boldParts = part.split(/\*\*([^*]+)\*\*/);
-          return boldParts.map((sub, j) => {
-            if (j % 2 === 1) {
-              return <strong key={`bold-${i}-${j}`} className="font-bold text-[var(--text-primary)]">{sub}</strong>;
-            }
-            return sub;
-          });
-        });
-      };
-
-      if (isBullet) {
+      if (block.type === "bullet") {
         return (
-          <div key={idx} className="flex items-start pl-4 space-x-2 my-1.5">
+          <div key={idx} className="flex items-start pl-4 space-x-2 my-1.5 text-xs sm:text-sm text-[var(--text-secondary)]">
             <span className="text-[var(--text-accent)] mt-1.5 text-[8px]">•</span>
-            <span className="flex-1">{processInline(trimmed.replace(/^[\*\-]\s+/, ""))}</span>
+            <span className="flex-1">{processInline(block.content)}</span>
           </div>
         );
       }
-
+      if (block.type === "code") {
+        return (
+          <div key={idx} className="my-4 rounded-xl border border-slate-800/80 overflow-hidden shadow-2xl">
+            <div className="flex justify-between items-center px-4 py-1.5 border-b border-slate-800/80 bg-[#161b27] text-[10px] text-slate-400 font-mono font-semibold">
+              <span>Code Block</span>
+            </div>
+            <pre className="p-4 overflow-x-auto text-xs font-mono text-slate-200 bg-[#0d1117] leading-relaxed whitespace-pre">
+              <code>{block.content}</code>
+            </pre>
+          </div>
+        );
+      }
       return (
         <p key={idx} className="mb-2.5 text-xs sm:text-sm leading-relaxed text-[var(--text-secondary)]">
-          {processInline(line)}
+          {processInline(block.content)}
         </p>
       );
     });

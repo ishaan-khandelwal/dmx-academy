@@ -20,7 +20,7 @@ const loginSchema = z.object({
 // Problem schemas
 const testCaseSchema = z.object({
   input: z.string().default(''),
-  expectedOutput: z.string().default(''),
+  expectedOutput: z.string().min(1, 'Expected output is required'),
   isSample: z.boolean().default(false),
 });
 
@@ -32,10 +32,10 @@ const problemSchema = z.object({
   outputFormat: z.string().min(1, 'Output format is required'),
   constraints: z.string().min(1, 'Constraints are required'),
   explanation: z.string().min(1, 'Explanation is required'),
-  followup: z.string().optional().default(''),
-  editorial: z.string().optional().default(''),
-  solution: z.string().optional().default(''),
-  evaluation: z.string().optional().default(''),
+  followup: z.string().min(1, 'Followup content is required'),
+  editorial: z.string().min(1, 'Editorial content is required'),
+  solution: z.string().min(1, 'Solution content is required'),
+  evaluation: z.string().min(1, 'Evaluation criteria is required'),
   templateJS: z.string().optional().default(''),
   templatePython: z.string().optional().default(''),
   templateGo: z.string().optional().default(''),
