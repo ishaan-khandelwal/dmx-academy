@@ -117,7 +117,10 @@ export default function AdminProblemsPage() {
   const canDeleteProblem = (problem) => {
     if (!problem.isDbProblem) return false;
     if (user?.role === "ADMIN") return true;
-    return problem.instituteId && Number(problem.instituteId) === Number(user?.instituteId);
+    if (user?.role === "INSTITUTE_ADMIN" || user?.role === "MENTOR") {
+      return !problem.instituteId || Number(problem.instituteId) === Number(user?.instituteId);
+    }
+    return false;
   };
 
   const tabProblems = allProblems.filter((p) => {
@@ -510,7 +513,8 @@ export default function AdminProblemsPage() {
                             className="font-extrabold"
                             style={{ color: "var(--text-primary)" }}
                           >
-                            {problem.testCases?.length ??
+                            {problem.testCasesCount ??
+                              problem.testCases?.length ??
                               problem.tests?.length ??
                               "—"}
                           </span>

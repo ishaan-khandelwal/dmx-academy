@@ -91,9 +91,9 @@ const updateProblem = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Problem not found.' });
     }
 
-    // Permission check: Non-super admins can only update their own institute's problems
+    // Permission check: Non-super admins can only update their own institute's problems or global problems
     if (req.user && req.user.role !== 'ADMIN') {
-      if (!problemExists.instituteId || problemExists.instituteId !== req.user.instituteId) {
+      if (problemExists.instituteId && problemExists.instituteId !== req.user.instituteId) {
         return res.status(403).json({
           success: false,
           message: 'You are not authorized to update this problem.'
@@ -177,9 +177,9 @@ const deleteProblem = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Problem not found.' });
     }
 
-    // Permission check: Non-super admins can only delete their own institute's problems
+    // Permission check: Non-super admins can only delete their own institute's problems or global problems
     if (req.user && req.user.role !== 'ADMIN') {
-      if (!problemExists.instituteId || problemExists.instituteId !== req.user.instituteId) {
+      if (problemExists.instituteId && problemExists.instituteId !== req.user.instituteId) {
         return res.status(403).json({
           success: false,
           message: 'You are not authorized to delete this problem.'
@@ -236,14 +236,27 @@ const getAllProblems = async (req, res, next) => {
         difficulty: true,
         createdAt: true,
         instituteId: true,
+        _count: {
+          select: { testCases: true }
+        }
       },
       orderBy: { id: 'desc' },
     });
 
+    const problemsWithCount = problems.map((p) => ({
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      difficulty: p.difficulty,
+      createdAt: p.createdAt,
+      instituteId: p.instituteId,
+      testCasesCount: p._count?.testCases || 0,
+    }));
+
     res.status(200).json({
       success: true,
-      count: problems.length,
-      problems,
+      count: problemsWithCount.length,
+      problems: problemsWithCount,
     });
   } catch (error) {
     next(error);

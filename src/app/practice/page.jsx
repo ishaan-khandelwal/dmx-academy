@@ -114,7 +114,7 @@ export default function PracticeCatalogPage() {
               desc: "Solve this algorithmic exercise from the database.",
               time: "20 min",
               tags: ["Database", "Dynamic"],
-              testcases: []
+              testcases: new Array(p.testCasesCount || 0)
             };
           });
 
