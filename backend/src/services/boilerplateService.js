@@ -214,6 +214,9 @@ vector<vector<int>> parseMatrixInt(string str) {
     }
 
     case 'JAVA': {
+      if (userCode.includes('class Main') || userCode.includes('public static void main')) {
+        return userCode;
+      }
       const parsingDeclarations = parameters.map(p => `${getJavaType(p.type)} ${p.name};`).join('\n        ');
       const readingLines = parameters.map((p, idx) => {
         if (p.type === 'INT') return `${p.name} = Integer.parseInt(sc.nextLine().trim());`;
@@ -238,6 +241,82 @@ vector<vector<int>> parseMatrixInt(string str) {
 `;
 
       return `${userCode}\n\n// --- DRIVER CODE (AUTO-GENERATED) ---\nimport java.util.*;\n\npublic class Main {\n    ${parseHelper}\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        try {\n            ${parsingDeclarations}\n            ${readingLines}\n            Solution solver = new Solution();\n            System.out.println(solver.${functionName}(${paramNames}));\n        } catch (Exception e) {\n            e.printStackTrace();\n        }\n    }\n}`;
+    }
+
+    case 'GO': {
+      if (userCode.includes('func main()')) {
+        return userCode;
+      }
+
+      // Remove package main if present (we will write our own package main header with merged imports)
+      let goUserCode = userCode.replace(/^\s*package\s+main/g, '');
+
+      // Parse user imports and merge with driver imports to avoid duplicates/failures
+      const importRegex = /import\s+(?:"[^"]+"|\((?:[^)]|\n)*\))/g;
+      const userImports = [];
+      let match;
+      while ((match = importRegex.exec(goUserCode)) !== null) {
+        const block = match[0];
+        const pkgs = block.match(/"[^"]+"/g) || [];
+        userImports.push(...pkgs);
+      }
+      goUserCode = goUserCode.replace(importRegex, '');
+
+      const driverPkgs = ['"fmt"', '"os"', '"bufio"', '"strings"', '"strconv"'];
+      const allPkgs = Array.from(new Set([...driverPkgs, ...userImports]));
+
+      const parsingDeclarations = parameters.map(p => {
+        if (p.type === 'INT') return `var ${p.name} int`;
+        if (p.type === 'FLOAT') return `var ${p.name} float64`;
+        if (p.type === 'STRING') return `var ${p.name} string`;
+        if (p.type === 'BOOLEAN') return `var ${p.name} bool`;
+        if (p.type === 'ARRAY_INT') return `var ${p.name} []int`;
+        return `var ${p.name} string`;
+      }).join('\n    ');
+
+      const readingLines = parameters.map((p, idx) => {
+        let readLine = `raw_${p.name}, _ := reader.ReadString('\\n')\n    raw_${p.name} = strings.TrimSpace(raw_${p.name})`;
+        if (p.type === 'INT') {
+          return `${readLine}\n    val_${p.name}, _ := strconv.Atoi(raw_${p.name})\n    ${p.name} = val_${p.name}`;
+        }
+        if (p.type === 'FLOAT') {
+          return `${readLine}\n    val_${p.name}, _ := strconv.ParseFloat(raw_${p.name}, 64)\n    ${p.name} = val_${p.name}`;
+        }
+        if (p.type === 'STRING') {
+          return `${readLine}\n    ${p.name} = strings.Trim(raw_${p.name}, "\\\"")`;
+        }
+        if (p.type === 'BOOLEAN') {
+          return `${readLine}\n    ${p.name} = raw_${p.name} == "true" || raw_${p.name} == "1"`;
+        }
+        if (p.type === 'ARRAY_INT') {
+          return `${readLine}\n    ${p.name} = parseVectorInt(raw_${p.name})`;
+        }
+        return `${readLine}\n    ${p.name} = raw_${p.name}`;
+      }).join('\n    ');
+
+      const parseHelper = `
+func parseVectorInt(str string) []int {
+    str = strings.ReplaceAll(str, "[", "")
+    str = strings.ReplaceAll(str, "]", "")
+    str = strings.TrimSpace(str)
+    if len(str) == 0 {
+        return []int{}
+    }
+    parts := strings.Split(str, ",")
+    var res []int
+    for _, p := range parts {
+        val, err := strconv.Atoi(strings.TrimSpace(p))
+        if err == nil {
+            res = append(res, val)
+        }
+    }
+    return res
+}
+`;
+
+      const importsBlock = `import (\n    ${allPkgs.join('\n    ')}\n)`;
+
+      return `package main\n\n${importsBlock}\n\n${goUserCode}\n\n// --- DRIVER CODE (AUTO-GENERATED) ---\n${parseHelper}\n\nfunc main() {\n    reader := bufio.NewReader(os.Stdin)\n    ${parsingDeclarations}\n    ${readingLines}\n    result := ${functionName}(${paramNames})\n    fmt.Println(result)\n}`;
     }
 
     default:
