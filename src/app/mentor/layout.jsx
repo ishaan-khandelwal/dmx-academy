@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { 
-  LayoutDashboard, Trophy, LogOut, 
-  Menu, X, ChevronLeft, ChevronRight, GraduationCap, ArrowLeftRight, BookOpen,
-  PlusCircle, Code, Radio, AlertTriangle, Brain, FileText, Settings, Calendar
+import {
+  LayoutDashboard, PlusCircle, Trophy, LogOut,
+  Menu, X, ChevronLeft, ChevronRight, ShieldAlert, ArrowLeftRight, Code, Radio, AlertTriangle, List,
+  Users, Layers, Brain, FileText, Settings, Calendar, GraduationCap, BookOpen
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -140,32 +140,42 @@ export default function MentorLayout({ children }) {
     isSuperAdmin && {
       label: "Institutes & Admins",
       href: "/admin/institutes",
-      icon: Settings
+      icon: ShieldAlert
     },
     isInstAdmin && {
       label: "Manage Batches",
       href: "/admin/batches",
-      icon: ArrowLeftRight
+      icon: Layers
     },
     isInstAdmin && {
       label: "Manage People",
       href: "/admin/people",
-      icon: ArrowLeftRight
+      icon: Users
     },
     isBatchMgr && {
       label: "My Batches",
       href: "/admin/batch-manager",
-      icon: ArrowLeftRight
+      icon: Layers
     },
-    {
+    (isBatchMgr || isInstAdmin || isMentor) && {
       label: "AI Viva",
       href: "/mentor/viva/questions",
       icon: Brain
     },
-    {
+    (isBatchMgr || isInstAdmin || isMentor) && {
       label: "Study Materials",
       href: "/mentor/viva/materials",
       icon: FileText
+    },
+    isSuperAdmin && {
+      label: "AI Settings",
+      href: "/admin/viva/ai-settings",
+      icon: Settings
+    },
+    (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {
+      label: "All Contests",
+      href: "/admin/contests",
+      icon: Trophy
     },
     (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {
       label: "Create Contest",
@@ -173,8 +183,8 @@ export default function MentorLayout({ children }) {
       icon: PlusCircle
     },
     (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {
-      label: "Create Problem",
-      href: "/admin/problems/new",
+      label: "All Problems",
+      href: "/admin/problems",
       icon: Code
     },
     (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {
@@ -183,9 +193,9 @@ export default function MentorLayout({ children }) {
       icon: Radio
     },
     {
-      label: "Public Arena",
+      label: "Public Lobby",
       href: "/contest",
-      icon: Trophy
+      icon: List
     },
     {
       label: "Course Catalog",

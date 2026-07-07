@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, PlusCircle, Trophy, LogOut,
   Menu, X, ChevronLeft, ChevronRight, ShieldAlert, ArrowLeftRight, Code, Radio, AlertTriangle, List,
-  Users, Layers, Brain, FileText, Settings, Calendar
+  Users, Layers, Brain, FileText, Settings, Calendar, BookOpen
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -202,6 +202,11 @@ export default function AdminLayout({ children }) {
       label: "Public Lobby",
       href: "/contest",
       icon: List
+    },
+    {
+      label: "Course Catalog",
+      href: "/courses",
+      icon: BookOpen
     }
   ].filter(Boolean);
   const isLiveImmersive = pathname === "/admin/live" && activeSession;

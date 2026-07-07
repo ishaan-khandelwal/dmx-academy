@@ -38,9 +38,9 @@ Generate exactly ${maxCount} viva questions based on the material above.
 Requirements for each question:
 - The question must be derived from the material above, not from general knowledge.
 - Vary the difficulty across questions: EASY, MEDIUM, and HARD.
-- expectedAnswer must be 2-3 sentences drawn from the material.
-- keywords = 5-8 essential terms a correct answer MUST include (comma-separated).
-- Use a mix of types: Definition, Conceptual, Comparison, Scenario-Based, Application, Coding-Oriented.
+- expectedAnswer must be 1 concise sentence drawn from the material (keep it very brief).
+- keywords = 3-5 essential terms (comma-separated).
+- Use a mix of types: Definition, Conceptual, Scenario-Based, Application.
 
 Return ONLY a JSON object with a single key "questions" containing an array of objects. Format:
 {
