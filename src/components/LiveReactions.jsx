@@ -64,7 +64,7 @@ export function ReactionPicker({ onReact }) {
             initial={{ opacity: 0, y: 10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 p-2 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl z-50"
+            className="absolute bottom-full mb-2 right-0 origin-bottom-right flex items-center gap-1.5 p-2 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl z-50"
           >
             {EMOJIS.map((emoji, idx) => (
               <button
