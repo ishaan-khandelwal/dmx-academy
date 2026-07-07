@@ -96,7 +96,7 @@ const retryExtraction = async (id) => {
  * Generate questions from a material's extracted text.
  * Returns generated question drafts (NOT saved to DB yet — user reviews first).
  */
-const generateFromMaterial = async (id, count = 10) => {
+const generateFromMaterial = async (id, count = 10, existingQuestions = []) => {
   const m = await getMaterial(id);
   if (m.processingStatus !== 'COMPLETED') {
     throw new Error(`Material is not ready yet (status: ${m.processingStatus}). Please wait for processing to complete.`);
@@ -104,7 +104,7 @@ const generateFromMaterial = async (id, count = 10) => {
   if (!m.extractedText || m.extractedText.trim().length < 50) {
     throw new Error('No text could be extracted from this document.');
   }
-  return generateQuestions(m.extractedText, m.subject, count);
+  return generateQuestions(m.extractedText, m.subject, count, existingQuestions);
 };
 
 /**

@@ -391,20 +391,52 @@ export default function AIAllInOneVivaPage() {
 
   const handleGenerateQuestions = async () => {
     setGenerating(true); setGenError("");
+    setDraftQuestions([]); // clear old before starting
+
+    const BATCH_SIZE = 1;
+    let accumulatedQuestions = [];
+
     try {
-      const res = await fetch(`${API_BASE}/api/viva/materials/${activeMaterial.id}/generate`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify({ count: genCount })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setDraftQuestions(data.questions.map((q, idx) => ({ ...q, _id: idx, _approved: true, _editing: false })));
-      } else {
-        setGenError(data.message || "Failed to generate questions.");
+      while (accumulatedQuestions.length < genCount) {
+        const currentCount = Math.min(BATCH_SIZE, genCount - accumulatedQuestions.length);
+        
+        const res = await fetch(`${API_BASE}/api/viva/materials/${activeMaterial.id}/generate`, {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify({ 
+            count: currentCount,
+            existingQuestions: accumulatedQuestions.map(q => q.questionText)
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok && data.success) {
+          const newQs = Array.isArray(data.questions) ? data.questions.filter(q => q && q.questionText) : [];
+          if (newQs.length === 0) throw new Error("AI returned empty result.");
+          
+          const formatted = newQs.map((q, idx) => ({ 
+            ...q, 
+            _id: accumulatedQuestions.length + idx, 
+            _approved: true, 
+            _editing: false 
+          }));
+          
+          accumulatedQuestions = [...accumulatedQuestions, ...formatted];
+          
+          // Truncate if the AI over-generated
+          if (accumulatedQuestions.length > genCount) {
+            accumulatedQuestions = accumulatedQuestions.slice(0, genCount);
+          }
+          
+          // Update state progressively so user sees them appear
+          setDraftQuestions(accumulatedQuestions);
+        } else {
+          throw new Error(data.message || "Failed to generate questions.");
+        }
       }
-    } catch {
-      setGenError("Network error generating questions.");
+    } catch (err) {
+      setGenError(err.message === "Failed to fetch" ? "Network error generating questions." : err.message);
     } finally {
       setGenerating(false);
     }
@@ -976,6 +1008,13 @@ export default function AIAllInOneVivaPage() {
                   </div>
                 </div>
               ))}
+              
+              {generating && (
+                <div className="p-5 rounded-2xl border border-slate-800/40 bg-[#111625]/50 flex items-center justify-center space-x-3">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+                  <span className="text-sm font-medium text-slate-400">Generating question {draftQuestions.length + 1} of {genCount}...</span>
+                </div>
+              )}
             </div>
           </div>
         )}

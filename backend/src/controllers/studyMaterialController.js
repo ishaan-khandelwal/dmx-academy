@@ -91,7 +91,8 @@ const generate = async (req, res, next) => {
     }
 
     const count = Math.min(parseInt(req.body.count) || 10, 30);
-    const questions = await svc.generateFromMaterial(id, count);
+    const existingQuestions = Array.isArray(req.body.existingQuestions) ? req.body.existingQuestions : [];
+    const questions = await svc.generateFromMaterial(id, count, existingQuestions);
     res.json({ success: true, count: questions.length, questions });
   } catch (err) {
     if (err.message && !err.code) return res.status(400).json({ success: false, message: err.message });
