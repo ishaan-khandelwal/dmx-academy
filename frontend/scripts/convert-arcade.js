@@ -129,8 +129,8 @@ const fallbackContent = {
     {
       id: "match_js_02",
       track: "JavaScript",
-      term: "Promise",
-      definition: "An object representing the eventual completion or failure of an asynchronous operation."
+      "term": "Promise",
+      "definition": "An object representing the eventual completion or failure of an asynchronous operation."
     },
     {
       id: "match_js_03",
@@ -143,6 +143,18 @@ const fallbackContent = {
       track: "JavaScript",
       term: "Prototype",
       definition: "An object template from which other objects inherit methods and properties."
+    },
+    {
+      id: "match_js_05",
+      track: "JavaScript",
+      term: "Hoisting",
+      definition: "JavaScript's behavior of moving declarations to the top of their current scope before execution."
+    },
+    {
+      id: "match_js_06",
+      track: "JavaScript",
+      term: "Callback",
+      definition: "A function passed as an argument to another function to be executed later."
     },
     // React.js Code Match
     {
@@ -169,6 +181,18 @@ const fallbackContent = {
       term: "Props",
       definition: "Read-only values passed from a parent component down to its child."
     },
+    {
+      id: "match_react_05",
+      track: "React.js",
+      term: "useEffect",
+      definition: "A hook used to perform side effects in functional components, like data fetching."
+    },
+    {
+      id: "match_react_06",
+      track: "React.js",
+      term: "Context",
+      definition: "A way to pass data through the component tree without manually passing props at every level."
+    },
     // Node.js Code Match
     {
       id: "match_node_01",
@@ -194,6 +218,18 @@ const fallbackContent = {
       term: "Streams",
       definition: "Unix-like interfaces to transfer chunked data incrementally instead of loading it entirely."
     },
+    {
+      id: "match_node_05",
+      track: "Node.js",
+      term: "NPM",
+      definition: "The default package manager for Node.js used to install and manage project dependencies."
+    },
+    {
+      id: "match_node_06",
+      track: "Node.js",
+      term: "Middleware",
+      definition: "Functions that have access to the request, response, and the next function in the cycle."
+    },
     // MongoDB Code Match
     {
       id: "match_mongo_01",
@@ -218,6 +254,18 @@ const fallbackContent = {
       track: "MongoDB",
       term: "Index",
       definition: "A data structure built on fields to speed up queries and sort operations."
+    },
+    {
+      id: "match_mongo_05",
+      track: "MongoDB",
+      term: "Document",
+      definition: "A record in a MongoDB collection, structured as key-value pairs similar to JSON."
+    },
+    {
+      id: "match_mongo_06",
+      track: "MongoDB",
+      term: "Mongoose",
+      definition: "An Object Data Modeling (ODM) library for MongoDB that provides a schema-based solution."
     }
   ],
   debug: [
