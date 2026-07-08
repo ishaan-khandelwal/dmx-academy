@@ -370,12 +370,16 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
   // Sync editor initial code on level changes
   useEffect(() => {
     setUserCode(LEVELS[currentLevelIdx].defaultCode);
-    setIsSuccess(completedLevels.includes(LEVELS[currentLevelIdx].level));
     setShowHint(false);
     setTerminalLogs([
       { text: `[SYSTEM] Loaded workspace: '${LEVELS[currentLevelIdx].file}' (${LEVELS[currentLevelIdx].language})`, type: "system" },
       { text: `[SANDBOX] Compilation mode set to ${LEVELS[currentLevelIdx].language}. Ready for testing.`, type: "info" }
     ]);
+  }, [currentLevelIdx]);
+
+  // Sync success status on level or completedLevels changes
+  useEffect(() => {
+    setIsSuccess(completedLevels.includes(LEVELS[currentLevelIdx].level));
   }, [currentLevelIdx, completedLevels]);
 
   const addTerminalLog = (text, type = "info") => {

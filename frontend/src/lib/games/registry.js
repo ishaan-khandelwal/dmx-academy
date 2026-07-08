@@ -5,7 +5,6 @@ import CodeFillIn from "@/components/games/CodeFillIn";
 import SqlDojo from "@/components/games/SqlDojo";
 import QuizBlitz from "@/components/games/QuizBlitz";
 import CodeMatch from "@/components/games/CodeMatch";
-import DebugRush from "@/components/games/DebugRush";
 
 export const gamesRegistry = [
   {
@@ -29,17 +28,6 @@ export const gamesRegistry = [
     component: CodeMatch,
     status: "live",
     totalLevels: 6
-  },
-  {
-    slug: "debug-rush",
-    title: "Debug Rush",
-    track: "Arcade",
-    difficulty: "Advanced",
-    description: "Scan code blocks inside a simulated terminal window and click the buggy line. Speed and lives (hearts) control your high score!",
-    estimatedMinutes: 12,
-    component: DebugRush,
-    status: "live",
-    totalLevels: 5
   },
   {
     slug: "flex-dojo",

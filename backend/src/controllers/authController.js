@@ -369,6 +369,130 @@ const deleteInstituteAdmin = async (req, res, next) => {
   }
 };
 
+/**
+ * Update an institute admin
+ */
+const updateInstituteAdmin = async (req, res, next) => {
+  try {
+    // Only Super Admins can update admins
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Super Admins can update Institute Admins.',
+      });
+    }
+
+    const { id } = req.params;
+    const adminId = parseInt(id, 10);
+
+    if (isNaN(adminId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Admin ID.',
+      });
+    }
+
+    const userToUpdate = await prisma.user.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!userToUpdate) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found.',
+      });
+    }
+
+    if (userToUpdate.role !== 'INSTITUTE_ADMIN') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only Institute Admins can be updated via this endpoint.',
+      });
+    }
+
+    const { username, email, password, instituteName } = req.body;
+
+    const updateData = {};
+
+    // Validate and update username
+    if (username && username.trim()) {
+      const trimmedUsername = username.trim();
+      if (trimmedUsername !== userToUpdate.username) {
+        const existingUsername = await prisma.user.findUnique({
+          where: { username: trimmedUsername },
+        });
+        if (existingUsername) {
+          return res.status(400).json({
+            success: false,
+            message: 'Username already in use.',
+          });
+        }
+        updateData.username = trimmedUsername;
+      }
+    }
+
+    // Validate and update email
+    if (email && email.trim()) {
+      const formattedEmail = email.trim().toLowerCase();
+      if (formattedEmail !== userToUpdate.email) {
+        const existingEmail = await prisma.user.findUnique({
+          where: { email: formattedEmail },
+        });
+        if (existingEmail) {
+          return res.status(400).json({
+            success: false,
+            message: 'Email already in use.',
+          });
+        }
+        updateData.email = formattedEmail;
+      }
+    }
+
+    // Validate and update password
+    if (password && password.trim()) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password.trim(), salt);
+    }
+
+    // Handle institute name update
+    if (instituteName && instituteName.trim()) {
+      const trimmedInstituteName = instituteName.trim();
+      let institute = await prisma.institute.findUnique({
+        where: { name: trimmedInstituteName },
+      });
+
+      if (!institute) {
+        institute = await prisma.institute.create({
+          data: { name: trimmedInstituteName },
+        });
+      }
+      updateData.instituteId = institute.id;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: adminId },
+      data: updateData,
+      include: {
+        institute: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Institute Admin updated successfully.',
+      user: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        institute: updatedUser.institute,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -377,4 +501,5 @@ module.exports = {
   addInstituteAdmin,
   getInstituteAdmins,
   deleteInstituteAdmin,
+  updateInstituteAdmin,
 };

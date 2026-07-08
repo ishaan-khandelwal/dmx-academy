@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ShieldAlert, Plus, Users, School, Mail, Key, UserPlus, 
-  X, CheckCircle2, AlertCircle, Calendar, ShieldCheck, Ban, Eye, EyeOff
+  X, CheckCircle2, AlertCircle, Calendar, ShieldCheck, Ban, Eye, EyeOff, Edit
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -27,6 +27,15 @@ export default function InstitutesPage() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
   const [modalSuccess, setModalSuccess] = useState("");
+
+  // Edit modal states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [adminToEdit, setAdminToEdit] = useState(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editConfirmPassword, setEditConfirmPassword] = useState("");
+  const [editInstituteName, setEditInstituteName] = useState("");
 
   // Block states
   const [blockLoading, setBlockLoading] = useState(null); // id of institute being blocked
@@ -194,6 +203,75 @@ export default function InstitutesPage() {
     }
   };
 
+  const handleEditClick = (admin) => {
+    setAdminToEdit(admin);
+    setEditUsername(admin.username || "");
+    setEditEmail(admin.email || "");
+    setEditPassword("");
+    setEditConfirmPassword("");
+    setEditInstituteName(admin.institute?.name || "");
+    setModalError("");
+    setModalSuccess("");
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditAdminSubmit = async (e) => {
+    e.preventDefault();
+    setModalError("");
+    setModalSuccess("");
+    setModalLoading(true);
+
+    if (editPassword && editPassword !== editConfirmPassword) {
+      setModalError("Passwords do not match.");
+      setModalLoading(false);
+      return;
+    }
+
+    try {
+      const hasRealToken = token && !token.startsWith("demo-") && !token.startsWith("local-");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(hasRealToken
+          ? { Authorization: `Bearer ${token}` }
+          : { "x-bypass-auth": "true", "x-bypass-role": "ADMIN" }),
+      };
+
+      const body = {
+        username: editUsername,
+        email: editEmail,
+        instituteName: editInstituteName,
+      };
+      if (editPassword) {
+        body.password = editPassword;
+      }
+
+      const res = await fetch(`${API_BASE}/api/auth/institute-admin/${adminToEdit.id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setModalSuccess(data.message || "Institute Admin updated successfully.");
+        // Reload table
+        fetchAdmins();
+        // Close modal after delay
+        setTimeout(() => {
+          setIsEditModalOpen(false);
+          setModalSuccess("");
+          setAdminToEdit(null);
+        }, 1500);
+      } else {
+        setModalError(data.message || "Failed to update Institute Admin.");
+      }
+    } catch (err) {
+      setModalError("Server connection failed.");
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
   if (!user || user.role !== "ADMIN") {
     return null; // Prevents render flash while redirecting
   }
@@ -311,6 +389,13 @@ export default function InstitutesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEditClick(adm)}
+                          className="flex items-center gap-1 text-[10px] font-black uppercase text-emerald-500 hover:text-emerald-600 transition-colors cursor-pointer border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1.5 rounded-xl hover:bg-emerald-500/10"
+                        >
+                          <Edit size={10} />
+                          Edit
+                        </button>
                         <button
                           onClick={() => handleToggleBlock(adm)}
                           disabled={blockLoading === adm.institute?.id}
@@ -501,6 +586,177 @@ export default function InstitutesPage() {
                     className="px-5 py-2.5 rounded-2xl bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white text-xs font-black uppercase transition-all shadow-lg hover:scale-[1.02] cursor-pointer"
                   >
                     {modalLoading ? "Creating..." : "Create Admin"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-3xl border shadow-2xl overflow-hidden"
+              style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-primary)" }}
+            >
+              {/* Modal Header */}
+              <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b" style={{ borderColor: "var(--border-primary)" }}>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-xl bg-[var(--bg-badge)] text-[var(--text-accent)]">
+                    <UserPlus size={16} />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider" style={{ color: "var(--text-primary)" }}>
+                    Edit Institute Admin
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleEditAdminSubmit} className="p-6 space-y-4">
+                {modalError && (
+                  <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-semibold">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{modalError}</span>
+                  </div>
+                )}
+                {modalSuccess && (
+                  <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-semibold">
+                    <CheckCircle2 size={14} className="shrink-0" />
+                    <span>{modalSuccess}</span>
+                  </div>
+                )}
+
+                {/* Username Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                    Username
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      placeholder="e.g. iitd_admin"
+                      className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                      style={{ borderColor: "var(--border-primary)" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Email Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="e.g. admin@iitd.ac.in"
+                      className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                      style={{ borderColor: "var(--border-primary)" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Password Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                    New Password (Optional)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder="Leave blank to keep current password"
+                      className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 pr-11 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                      style={{ borderColor: "var(--border-primary)" }}
+                    />
+                    <button type="button" onClick={() => setShowPassword(v => !v)}
+                      className="absolute right-3 top-3 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm Password */}
+                {editPassword && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                      Confirm New Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        required
+                        value={editConfirmPassword}
+                        onChange={(e) => setEditConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 pr-11 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                        style={{ borderColor: editConfirmPassword && editConfirmPassword !== editPassword ? "var(--rose-500, #f43f5e)" : "var(--border-primary)" }}
+                      />
+                      <button type="button" onClick={() => setShowConfirmPassword(v => !v)}
+                        className="absolute right-3 top-3 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+                        {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                    {editConfirmPassword && editConfirmPassword !== editPassword && (
+                      <p className="text-[10px] text-rose-500 font-bold">Passwords do not match</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Institute Name Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
+                    Institute Name
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={editInstituteName}
+                      onChange={(e) => setEditInstituteName(e.target.value)}
+                      placeholder="e.g. IIT Delhi"
+                      className="w-full bg-[var(--bg-primary)] border rounded-2xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-[var(--border-accent)] transition-all placeholder:text-[var(--text-muted)]"
+                      style={{ borderColor: "var(--border-primary)" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="px-4 py-2.5 rounded-2xl border text-xs font-bold transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                    style={{ borderColor: "var(--border-primary)", color: "var(--text-secondary)" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={modalLoading}
+                    className="px-5 py-2.5 rounded-2xl bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white text-xs font-black uppercase transition-all shadow-lg hover:scale-[1.02] cursor-pointer"
+                  >
+                    {modalLoading ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </form>
