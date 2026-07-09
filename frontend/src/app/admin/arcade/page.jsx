@@ -7,24 +7,10 @@ import {
   RefreshCw, ChevronDown, ChevronUp, Save, X, AlertCircle,
   BookOpen, Code, Terminal, Layers, Search
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { getApiBase, buildAuthHeaders } from "@/utils/api";
 
 // ─── Storage helpers ────────────────────────────────────────────────────────────
-const STORAGE_KEY = "arcade_custom_questions";
-
-function loadCustom() {
-  if (typeof window === "undefined") return { quiz: [], match: [], debug: [], fillin: [] };
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { quiz: [], match: [], debug: [], fillin: [] };
-  } catch {
-    return { quiz: [], match: [], debug: [], fillin: [] };
-  }
-}
-
-function saveCustom(data) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
 function genId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -542,6 +528,9 @@ function QuestionCard({ q, type, onEdit, onDelete }) {
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ArcadeQuestionsPage() {
+  const { token, user } = useAuth();
+  const API_BASE = getApiBase();
+
   const [customData, setCustomData] = useState({ quiz: [], match: [], debug: [], fillin: [] });
   const [activeType, setActiveType] = useState("quiz");
   const [showForm, setShowForm] = useState(false);
@@ -551,10 +540,59 @@ export default function ArcadeQuestionsPage() {
   const [notification, setNotification] = useState(null);
   const [search, setSearch] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchQuestions = useCallback(async () => {
+    if (!token || !user) return;
+    setLoading(true);
+    try {
+      const headers = buildAuthHeaders(token, user);
+      const res = await fetch(`${API_BASE}/api/arcade/questions`, { headers });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        const quiz = json.data.filter(q => q.type === "quiz");
+        const match = json.data.filter(q => q.type === "match");
+        const fillin = json.data.filter(q => q.type === "fillin");
+        const debug = json.data.filter(q => q.type === "debug");
+
+        setCustomData({
+          quiz: quiz.map(q => ({
+            ...q,
+            option_a: q.optionA,
+            option_b: q.optionB,
+            option_c: q.optionC,
+            option_d: q.optionD,
+            correct_option: q.correctOption,
+            time_limit: q.timeLimit
+          })),
+          match: match,
+          fillin: fillin.map(q => ({
+            ...q,
+            option_a: q.optionA,
+            option_b: q.optionB,
+            option_c: q.optionC,
+            option_d: q.optionD,
+            correct_option: q.correctOption,
+            blanks: q.blanks || [{ placeholder: "____", option_a: q.optionA, option_b: q.optionB, option_c: q.optionC, option_d: q.optionD, answer: q.correctOption }]
+          })),
+          debug: debug.map(q => ({
+            ...q,
+            code: q.defaultCode,
+            explanation: q.instructions,
+            buggy_lines: q.buggyLines || [{ line_number: "", line_content: "" }]
+          }))
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch questions:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, user, API_BASE]);
 
   useEffect(() => {
-    setCustomData(loadCustom());
-  }, []);
+    fetchQuestions();
+  }, [fetchQuestions]);
 
   const notify = (msg, type = "success") => {
     setNotification({ msg, type });
@@ -571,7 +609,6 @@ export default function ArcadeQuestionsPage() {
   const openEditForm = (q) => {
     setEditingId(q.id);
     const f = { ...EMPTY_FORMS[activeType] };
-    // Map stored fillin options array back to form fields
     if (activeType === "fillin" && q.options) {
       setForm({
         ...f, ...q,
@@ -598,48 +635,119 @@ export default function ArcadeQuestionsPage() {
     setFormError(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const err = validateForm(activeType, form);
     if (err) { setFormError(err); return; }
 
-    const updated = loadCustom();
-    let entry = {
-      ...form,
-      level: Number(form.level) || 1
-    };
+    setLoading(true);
+    try {
+      let body = {};
+      if (activeType === "quiz") {
+        body = {
+          type: "quiz",
+          track: form.track,
+          question: form.question,
+          code: form.code,
+          optionA: form.option_a,
+          optionB: form.option_b,
+          optionC: form.option_c,
+          optionD: form.option_d,
+          correctOption: form.correct_option,
+          explanation: form.explanation,
+          timeLimit: Number(form.time_limit),
+          level: Number(form.level)
+        };
+      } else if (activeType === "match") {
+        body = {
+          type: "match",
+          track: form.track,
+          term: form.term,
+          definition: form.definition,
+          level: Number(form.level)
+        };
+      } else if (activeType === "fillin") {
+        const mainBlank = form.blanks?.[0] || { placeholder: "____", option_a: form.option_a, option_b: form.option_b, option_c: form.option_c, option_d: form.option_d, answer: form.correct_option };
+        body = {
+          type: "fillin",
+          track: form.lang,
+          title: form.title,
+          code: form.code,
+          optionA: mainBlank.option_a || form.option_a,
+          optionB: mainBlank.option_b || form.option_b,
+          optionC: mainBlank.option_c || form.option_c,
+          optionD: mainBlank.option_d || form.option_d,
+          correctOption: mainBlank.answer || form.correct_option || form.answer,
+          hint: form.hint,
+          level: Number(form.level),
+          blanks: form.blanks || null
+        };
+      } else if (activeType === "debug") {
+        body = {
+          type: "debug",
+          track: form.track,
+          title: form.title,
+          defaultCode: form.code,
+          instructions: form.explanation,
+          hint: form.hint || "",
+          buggyLines: form.buggy_lines || null,
+          level: Number(form.level)
+        };
+      }
 
-    // Normalize fillin: store options as array + lang info
-    if (activeType === "fillin") {
-      entry = {
-        ...entry,
-        options: [form.option_a, form.option_b, form.option_c, form.option_d],
-        blank: "____",
-      };
-      delete entry.option_a; delete entry.option_b;
-      delete entry.option_c; delete entry.option_d;
+      const headers = buildAuthHeaders(token, user);
+      let res;
+      if (editingId) {
+        res = await fetch(`${API_BASE}/api/arcade/questions/${editingId}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(body)
+        });
+      } else {
+        res = await fetch(`${API_BASE}/api/arcade/questions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body)
+        });
+      }
+
+      const json = await res.json();
+      if (json.success) {
+        notify(editingId ? "Question updated successfully." : "Question added to the pool!");
+        closeForm();
+        fetchQuestions();
+      } else {
+        setFormError(json.message || "Failed to save question.");
+      }
+    } catch (e) {
+      console.error(e);
+      setFormError("Server error occurred.");
+    } finally {
+      setLoading(false);
     }
-
-    if (editingId) {
-      updated[activeType] = updated[activeType].map(q => q.id === editingId ? { ...q, ...entry, id: editingId } : q);
-      notify("Question updated successfully.");
-    } else {
-      entry.id = genId(activeType === "quiz" ? "custom_q" : activeType === "match" ? "custom_m" : activeType === "debug" ? "custom_d" : "custom_f");
-      updated[activeType] = [...updated[activeType], entry];
-      notify("Question added to the pool!");
-    }
-
-    saveCustom(updated);
-    setCustomData(updated);
-    closeForm();
   };
 
-  const handleDelete = (id) => {
-    const updated = loadCustom();
-    updated[activeType] = updated[activeType].filter(q => q.id !== id);
-    saveCustom(updated);
-    setCustomData(updated);
-    setDeleteConfirm(null);
-    notify("Question removed.", "error");
+  const handleDelete = async (id) => {
+    setLoading(true);
+    try {
+      const headers = buildAuthHeaders(token, user);
+      const res = await fetch(`${API_BASE}/api/arcade/questions/${id}`, {
+        method: "DELETE",
+        headers
+      });
+      const json = await res.json();
+      if (json.success) {
+        notify("Question removed.", "error");
+        setDeleteConfirm(null);
+        fetchQuestions();
+      } else {
+        notify(json.message || "Failed to delete question.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      notify("Server error occurred.", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const activeGameType = GAME_TYPES.find(g => g.key === activeType);

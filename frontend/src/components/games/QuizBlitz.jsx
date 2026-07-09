@@ -6,7 +6,8 @@ import {
   Trophy, RotateCcw, Play, Clock, Zap, Star, AlertCircle, Volume2, VolumeX
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import arcadeData from "@/data/learning-arcade-content.json";
+import { useAuth } from "@/context/AuthContext";
+import { getApiBase, buildAuthHeaders } from "@/utils/api";
 
 // Web Audio API Retro Synth Sounds
 const playSynthSound = (type, soundEnabled) => {
@@ -88,6 +89,9 @@ const playSynthSound = (type, soundEnabled) => {
 };
 
 export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
+  const { token, user } = useAuth();
+  const API_BASE = getApiBase();
+
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [qIdx, setQIdx] = useState(0);
@@ -102,6 +106,9 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
   const [results, setResults] = useState([]); // Array of { correct: boolean, id: string }
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  const [questionsPool, setQuestionsPool] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const timerRef = useRef(null);
 
   const [currentLevel, setCurrentLevel] = useState(1);
@@ -109,39 +116,44 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
   // Available tracks in our content pool
   const tracks = ["JavaScript", "React.js", "Node.js", "MongoDB"];
 
-  const getLevelsForTrack = (track) => {
-    const builtIn = arcadeData.quiz || [];
-    let custom = [];
-    try {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) custom = JSON.parse(raw)?.quiz || [];
-    } catch (e) { console.error(e); }
+  useEffect(() => {
+    const fetchPool = async () => {
+      if (!token || !user) return;
+      try {
+        const headers = buildAuthHeaders(token, user);
+        const res = await fetch(`${API_BASE}/api/arcade/questions?type=quiz`, { headers });
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const normalized = json.data.map((q, idx) => ({
+            ...q,
+            option_a: q.optionA,
+            option_b: q.optionB,
+            option_c: q.optionC,
+            option_d: q.optionD,
+            correct_option: q.correctOption,
+            time_limit: q.timeLimit,
+            level: q.level || Math.floor(idx / 5) + 1
+          }));
+          setQuestionsPool(normalized);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPool();
+  }, [token, user, API_BASE]);
 
-    const allQuestions = [
-      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
-      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 })),
-    ];
-    const pool = allQuestions.filter(q => q.track === track);
+  const getLevelsForTrack = (track) => {
+    const pool = questionsPool.filter(q => q.track === track);
     const lvls = [...new Set(pool.map(q => q.level))].sort((a, b) => a - b);
     return lvls.length > 0 ? lvls : [1];
   };
 
   // Select questions using localStorage tracking for non-repeating items
   const loadGameQuestions = (track, levelNum) => {
-    const builtIn = arcadeData.quiz || [];
-
-    // Merge custom questions from the arcade manager
-    let custom = [];
-    try {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) custom = JSON.parse(raw)?.quiz || [];
-    } catch (e) { console.error(e); }
-
-    const allQuestions = [
-      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
-      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 })),
-    ];
-    const pool = allQuestions.filter(q => q.track === track && q.level === levelNum);
+    const pool = questionsPool.filter(q => q.track === track && q.level === levelNum);
     if (pool.length === 0) return [];
 
     // Shuffle and slice 5 questions (shortened to make levels crisp)
@@ -293,7 +305,12 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
             exit={{ opacity: 0, scale: 0.95 }}
             className="flex flex-col items-center justify-center p-8 md:p-12 text-center h-[70vh] space-y-8"
           >
-            {!selectedTrack ? (
+            {loading ? (
+              <div className="flex flex-col items-center gap-3">
+                <RefreshCw size={24} className="animate-spin text-purple-400" />
+                <p className="text-xs text-purple-300/60 font-mono">Syncing question pool from database...</p>
+              </div>
+            ) : !selectedTrack ? (
               <>
                 <div className="space-y-3">
                   <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">

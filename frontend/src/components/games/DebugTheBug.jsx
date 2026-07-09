@@ -8,11 +8,15 @@ import {
   Heart, RotateCcw, ShieldCheck, Flame, BookOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import arcadeData from "@/data/learning-arcade-content.json";
+import { useAuth } from "@/context/AuthContext";
+import { getApiBase, buildAuthHeaders } from "@/utils/api";
 
 const DEFAULT_LEVELS = [];
 
 export default function DebugTheBug({ onProgressChange, savedProgress, onBack }) {
+  const { token, user } = useAuth();
+  const API_BASE = getApiBase();
+
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [phase, setPhase] = useState("lobby"); // lobby, playing, finished
@@ -36,7 +40,36 @@ export default function DebugTheBug({ onProgressChange, savedProgress, onBack })
     { text: "[SANDBOX] Workspace initialized. Select target compile track to start.", type: "system" }
   ]);
   const [isRunning, setIsRunning] = useState(false);
+
+  const [debugPool, setDebugPool] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const editorRef = useRef(null);
+
+  useEffect(() => {
+    const fetchPool = async () => {
+      if (!token || !user) return;
+      try {
+        const headers = buildAuthHeaders(token, user);
+        const res = await fetch(`${API_BASE}/api/arcade/questions?type=debug`, { headers });
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const normalized = json.data.map((q, idx) => ({
+            ...q,
+            language: q.track || "JavaScript",
+            buggy_lines: q.buggyLines || [{ line_number: "", line_content: "" }],
+            level: q.level || Math.floor(idx / 5) + 1
+          }));
+          setDebugPool(normalized);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPool();
+  }, [token, user, API_BASE]);
 
   const addTerminalLog = (text, type = "info") => {
     setTerminalLogs(prev => [...prev.slice(-4), { text, type }]);
@@ -69,46 +102,16 @@ export default function DebugTheBug({ onProgressChange, savedProgress, onBack })
   };
 
   const getLevelsForTrack = (track) => {
-    const hardcoded = DEFAULT_LEVELS.filter(l => l.language === track || (track === "React.js" && l.language === "React.js"));
-    const builtIn = arcadeData.debug || [];
-    
-    let custom = [];
-    try {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) custom = JSON.parse(raw)?.debug || [];
-    } catch (e) { console.error(e); }
-    
-    const allQuestions = [
-      ...hardcoded.map((q, idx) => ({ ...q, level: q.level || idx + 1 })),
-      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
-      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 }))
-    ];
-    
-    const pool = allQuestions.filter(q => q.track === track || q.language === track);
+    const pool = debugPool.filter(q => q.track === track || q.language === track);
     const lvls = [...new Set(pool.map(q => q.level))].sort((a, b) => a - b);
     return lvls.length > 0 ? lvls : [1];
   };
 
   const getQuestionsForTrackAndLevel = (track, lvlNum) => {
-    const hardcoded = DEFAULT_LEVELS.filter(l => l.language === track || (track === "React.js" && l.language === "React.js"));
-    const builtIn = arcadeData.debug || [];
-    
-    let custom = [];
-    try {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) custom = JSON.parse(raw)?.debug || [];
-    } catch (e) { console.error(e); }
-    
-    const allQuestions = [
-      ...hardcoded.map((q, idx) => ({ ...q, level: q.level || idx + 1 })),
-      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
-      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 }))
-    ];
-    
-    return allQuestions
-      .filter(q => q.track === track || q.language === track)
+    const pool = debugPool.filter(q => q.track === track || q.language === track);
+    return pool
       .filter(q => q.level === lvlNum)
-      .map((q, idx) => normaliseDebugQuestion(q, track, lvlNum));
+      .map(q => normaliseDebugQuestion(q, track, lvlNum));
   };
 
   // Synth audio player
@@ -291,6 +294,27 @@ export default function DebugTheBug({ onProgressChange, savedProgress, onBack })
         // Use custom validation function if available (for DEFAULT_LEVELS)
         if (typeof activeQuestion.validate === "function") {
           validationResult = await activeQuestion.validate(userCode);
+        } else if (activeQuestion.validateCode) {
+          try {
+            const runner = new Function("code", `
+              try {
+                ${activeQuestion.validateCode}
+              } catch (e) {
+                return { success: false, error: e.message };
+              }
+            `);
+            validationResult = await runner(userCode);
+            if (validationResult === true || (validationResult && validationResult.success)) {
+              validationResult = { success: true };
+            } else {
+              validationResult = {
+                success: false,
+                error: (validationResult && validationResult.error) || "Validation check failed."
+              };
+            }
+          } catch (e) {
+            validationResult = { success: false, error: `Compilation error: ${e.message}` };
+          }
         } else {
           // Smart generic validation logic for database / custom framed questions:
           // Checks if the user has modified/corrected the buggy lines.
@@ -435,7 +459,12 @@ export default function DebugTheBug({ onProgressChange, savedProgress, onBack })
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)] z-20" />
         <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,10,36,0)_97%,rgba(18,10,36,0.3)_98%)] bg-[size:100%_4px] opacity-35 z-20" />
         
-        {!selectedTrack ? (
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 relative z-30">
+            <RefreshCw size={24} className="animate-spin text-purple-400" />
+            <p className="text-xs text-purple-300/60 font-mono">Syncing debugger levels from database...</p>
+          </div>
+        ) : !selectedTrack ? (
           <>
             <div className="space-y-3 relative z-30">
               <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">

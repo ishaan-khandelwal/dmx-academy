@@ -7,7 +7,9 @@ import {
   Clock, Zap, Target, Play
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import arcadeData from "@/data/learning-arcade-content.json";
+import { useAuth } from "@/context/AuthContext";
+import { getApiBase, buildAuthHeaders } from "@/utils/api";
+import { RefreshCw } from "lucide-react";
 
 const STORAGE_KEY = "game_progress_code-fill-in";
 const POINTS_PER_CORRECT = 100;
@@ -64,55 +66,7 @@ function shuffle(arr) {
   return arr;
 }
 
-// Built-in questions from JSON data
-const getBuiltInFillins = () => arcadeData.fillin || [];
-
-function getLevelsForLang(lang) {
-  const builtIn = getBuiltInFillins();
-  let custom = [];
-  try {
-    if (typeof window !== "undefined") {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        custom = (parsed?.fillin || []).map(q => ({ ...q, _custom: true }));
-      }
-    }
-  } catch (e) { console.error(e); }
-
-  const allQuestions = [
-    ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
-    ...custom.map(q => ({ ...q, level: Number(q.level) || 1 })),
-  ];
-  const pool = allQuestions.filter(q => q.lang === lang);
-  const lvls = [...new Set(pool.map(q => q.level))].sort((a, b) => a - b);
-  return lvls.length > 0 ? lvls : [1];
-}
-
-function loadGameQuestions(lang, levelNum) {
-  const builtIn = getBuiltInFillins();
-  let custom = [];
-  try {
-    if (typeof window !== "undefined") {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        custom = (parsed?.fillin || []).map(q => ({ ...q, _custom: true }));
-      }
-    }
-  } catch (e) { console.error(e); }
-
-  const allQuestions = [
-    ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
-    ...custom.map(q => ({ ...q, level: Number(q.level) || 1 })),
-  ];
-  const pool = allQuestions.filter(q => q.lang === lang && q.level === levelNum);
-  if (pool.length === 0) return [];
-
-  // Shuffle and slice at most 5 questions for this level
-  const shuffled = [...pool].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, 5).map(normaliseBlanks);
-}
+// Database-backed level and question loading is now handled inside the component body.
 
 // ─── Render code with all blanks highlighted ───────────────────────────────────
 function renderMultiBlankCode(code, blanks, answers, phase) {
@@ -160,10 +114,58 @@ function renderMultiBlankCode(code, blanks, answers, phase) {
 }
 
 export default function CodeFillIn({ onProgressChange, savedProgress, onBack }) {
+  const { token, user } = useAuth();
+  const API_BASE = getApiBase();
+
+  const [fillinPool, setFillinPool] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const [selectedLang, setSelectedLang] = useState(null);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [questions, setQuestions] = useState([]);
   const [qIdx, setQIdx] = useState(0);
+
+  useEffect(() => {
+    const fetchPool = async () => {
+      if (!token || !user) return;
+      try {
+        const headers = buildAuthHeaders(token, user);
+        const res = await fetch(`${API_BASE}/api/arcade/questions?type=fillin`, { headers });
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const normalized = json.data.map((q, idx) => ({
+            ...q,
+            lang: q.track, // Map track back to lang
+            option_a: q.optionA,
+            option_b: q.optionB,
+            option_c: q.optionC,
+            option_d: q.optionD,
+            correct_option: q.correctOption,
+            level: q.level || Math.floor(idx / 5) + 1
+          }));
+          setFillinPool(normalized);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPool();
+  }, [token, user, API_BASE]);
+
+  const getLevelsForLang = (lang) => {
+    const pool = fillinPool.filter(q => q.lang === lang);
+    const lvls = [...new Set(pool.map(q => q.level))].sort((a, b) => a - b);
+    return lvls.length > 0 ? lvls : [1];
+  };
+
+  const loadGameQuestions = (lang, levelNum) => {
+    const pool = fillinPool.filter(q => q.lang === lang && q.level === levelNum);
+    if (pool.length === 0) return [];
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 5).map(normaliseBlanks);
+  };
 
   // Multi-blank state:
   // blankIdx = index of the currently active blank within the question
@@ -311,7 +313,12 @@ export default function CodeFillIn({ onProgressChange, savedProgress, onBack }) 
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)] z-20" />
         <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,10,36,0)_97%,rgba(18,10,36,0.3)_98%)] bg-[size:100%_4px] opacity-35 z-20" />
         
-        {!selectedLang ? (
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 relative z-30">
+            <RefreshCw size={24} className="animate-spin text-purple-400" />
+            <p className="text-xs text-purple-300/60 font-mono">Syncing fill-in questions from database...</p>
+          </div>
+        ) : !selectedLang ? (
           <>
             <div className="space-y-3 relative z-30">
               <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">

@@ -313,6 +313,7 @@ model Institute {
   vivaQuestions  VivaQuestion[]
   studyMaterials StudyMaterial[]
   vivas          Viva[]
+  arcadeQuestions ArcadeQuestion[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -347,4 +348,44 @@ model Batch {
   students    User[]    @relation("BatchStudents")
   contests    Contest[]
   liveSessions LiveSession[]
+}
+
+model ArcadeQuestion {
+  id           Int        @id @default(autoincrement())
+  type         String     // "quiz", "match", "fillin", "debug"
+  track        String     // e.g. "JavaScript", "React.js", "Python", "SQL"
+  title        String     @default("")
+  level        Int        @default(1)
+  
+  // Common content fields
+  question     String     @default("") @db.Text
+  code         String     @default("") @db.Text
+  optionA      String     @default("")
+  optionB      String     @default("")
+  optionC      String     @default("")
+  optionD      String     @default("")
+  correctOption String     @default("")
+  explanation  String     @default("") @db.Text
+  timeLimit    Int        @default(20)
+  
+  term         String     @default("")
+  definition   String     @default("") @db.Text
+  
+  blank        String     @default("____")
+  hint         String     @default("") @db.Text
+  
+  // Debug / complex fields
+  file         String     @default("")
+  instructions String     @default("") @db.Text
+  defaultCode  String     @default("") @db.Text
+  validateCode String     @default("") @db.Text
+  buggyLines   Json?      // for debug line numbers/content [{ line_number, line_content }]
+  blanks       Json?      // for multi-blank fillins [{ placeholder, option_a..d, answer }]
+
+  // Tenant scoping
+  instituteId  Int?
+  institute    Institute? @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }

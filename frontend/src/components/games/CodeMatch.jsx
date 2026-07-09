@@ -5,7 +5,8 @@ import {
   ArrowLeft, Trophy, RotateCcw, Play, Clock, Zap, Star, AlertCircle, Volume2, VolumeX, Grid
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import arcadeData from "@/data/learning-arcade-content.json";
+import { useAuth } from "@/context/AuthContext";
+import { getApiBase, buildAuthHeaders } from "@/utils/api";
 
 // Web Audio API Retro Chimes
 const playSynthSound = (type, soundEnabled) => {
@@ -90,6 +91,9 @@ const playSynthSound = (type, soundEnabled) => {
 };
 
 export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
+  const { token, user } = useAuth();
+  const API_BASE = getApiBase();
+
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [cards, setCards] = useState([]);
   const [selectedIndices, setSelectedIndices] = useState([]);
@@ -105,48 +109,50 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [moves, setMoves] = useState(0);
 
+  const [matchPool, setMatchPool] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const timerRef = useRef(null);
   const tracks = ["JavaScript", "React.js", "Node.js", "MongoDB"];
 
-  const getLevelsForTrack = (track) => {
-    const builtIn = arcadeData.match || [];
-    let custom = [];
-    try {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) custom = JSON.parse(raw)?.match || [];
-    } catch (e) { console.error(e); }
+  useEffect(() => {
+    const fetchPool = async () => {
+      if (!token || !user) return;
+      try {
+        const headers = buildAuthHeaders(token, user);
+        const res = await fetch(`${API_BASE}/api/arcade/questions?type=match`, { headers });
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const normalized = json.data.map((p, idx) => ({
+            ...p,
+            level: p.level || Math.floor(idx / 6) + 1
+          }));
+          setMatchPool(normalized);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPool();
+  }, [token, user, API_BASE]);
 
-    const allPairs = [
-      ...builtIn.map((p, idx) => ({ ...p, level: p.level || Math.floor(idx / 6) + 1 })),
-      ...custom.map(p => ({ ...p, _custom: true, level: Number(p.level) || 1 })),
-    ];
-    const pool = allPairs.filter(p => p.track === track);
+  const getLevelsForTrack = (track) => {
+    const pool = matchPool.filter(p => p.track === track);
     const lvls = [...new Set(pool.map(p => p.level))].sort((a, b) => a - b);
     return lvls.length > 0 ? lvls : [1];
   };
 
   // localStorage tracking for non-repeating matches
   const loadMatchPairs = (track, levelNum) => {
-    const builtIn = arcadeData.match || [];
-
-    // Merge custom pairs from the arcade manager
-    let custom = [];
-    try {
-      const raw = localStorage.getItem("arcade_custom_questions");
-      if (raw) custom = JSON.parse(raw)?.match || [];
-    } catch (e) { console.error(e); }
-
-    const allPairs = [
-      ...builtIn.map((p, idx) => ({ ...p, level: p.level || Math.floor(idx / 6) + 1 })),
-      ...custom.map(p => ({ ...p, _custom: true, level: Number(p.level) || 1 })),
-    ];
-    const levelPairs = allPairs.filter(p => p.track === track && p.level === levelNum);
+    const levelPairs = matchPool.filter(p => p.track === track && p.level === levelNum);
     if (levelPairs.length === 0) return [];
 
     // Memory matching grids require exactly 6 pairs (12 cards).
     // If a custom level has fewer than 6, we pad it with other pairs from the same track.
     if (levelPairs.length < 6) {
-      const others = allPairs.filter(p => p.track === track && p.level !== levelNum);
+      const others = matchPool.filter(p => p.track === track && p.level !== levelNum);
       const padded = [...levelPairs, ...others].slice(0, 6);
       return padded;
     }
@@ -354,7 +360,12 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
             exit={{ opacity: 0, scale: 0.95 }}
             className="flex flex-col items-center justify-center p-8 md:p-12 text-center h-[70vh] space-y-8"
           >
-            {!selectedTrack ? (
+            {loading ? (
+              <div className="flex flex-col items-center gap-3">
+                <RefreshCw size={24} className="animate-spin text-purple-400" />
+                <p className="text-xs text-purple-300/60 font-mono">Syncing match pairs from database...</p>
+              </div>
+            ) : !selectedTrack ? (
               <>
                 <div className="space-y-3">
                   <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
