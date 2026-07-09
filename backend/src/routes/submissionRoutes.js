@@ -6,14 +6,14 @@ const {
   getSingleSubmission,
   runCode,
 } = require('../controllers/submissionController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, fetchUserIfExists } = require('../middleware/authMiddleware');
 const { submissionLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
 // Publicly view submissions
-router.get('/', getAllSubmissions);
-router.get('/:id', getSingleSubmission);
+router.get('/', fetchUserIfExists, getAllSubmissions);
+router.get('/:id', fetchUserIfExists, getSingleSubmission);
 
 // Submit code directly (accepts code, language, problemId in body)
 router.post('/', protect, submissionLimiter, submitSolutionDirect);

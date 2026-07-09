@@ -8,253 +8,21 @@ import {
   Heart, RotateCcw, ShieldCheck, Flame, BookOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import arcadeData from "@/data/learning-arcade-content.json";
 
-const LEVELS = [
-  {
-    level: 1,
-    title: "1. Sum of Evens",
-    language: "JavaScript",
-    file: "sum_evens.js",
-    instructions: "Fix the function to filter and sum only the even numbers in the array. Watch out for assignments inside conditional clauses, and ensure the return statement sits correctly after checking all numbers!",
-    hint: "Use the triple-equals operator `===` for strict comparison, and move the `return` statement out of the loop body so it doesn't terminate early.",
-    defaultCode: `function sumOfEvens(arr) {
-  let sum = 0;
-  for (let i = 0; i < arr.length; i++) {
-    // There are 2 bugs in this block!
-    if (arr[i] % 2 = 0) {
-      sum += arr[i];
-      return sum;
-    }
-  }
-}`,
-    validate: (code) => {
-      try {
-        const fullCode = `${code}\nreturn sumOfEvens;`;
-        const testFn = new Function(fullCode)();
-        
-        if (typeof testFn !== "function") {
-          return { success: false, error: "Function sumOfEvens is not defined or not a function." };
-        }
+const DEFAULT_LEVELS = [];
 
-        const tests = [
-          { input: [[1, 2, 3, 4]], expected: 6 },
-          { input: [[1, 3, 5]], expected: 0 },
-          { input: [[2, 4, 6, 8]], expected: 20 },
-          { input: [[]], expected: 0 },
-        ];
+export default function DebugTheBug({ onProgressChange, savedProgress, onBack }) {
+  const [selectedTrack, setSelectedTrack] = useState(null);
+  const [currentLevel, setCurrentLevel] = useState(1);
+  const [phase, setPhase] = useState("lobby"); // lobby, playing, finished
 
-        for (let i = 0; i < tests.length; i++) {
-          const result = testFn(...tests[i].input);
-          if (result !== tests[i].expected) {
-            return {
-              success: false,
-              error: `Test ${i + 1} Failed: sumOfEvens(${JSON.stringify(tests[i].input[0])}) expected ${tests[i].expected}, but got ${result}`
-            };
-          }
-        }
-        return { success: true };
-      } catch (err) {
-        return { success: false, error: err.message };
-      }
-    }
-  },
-  {
-    level: 2,
-    title: "2. Palindrome Checker",
-    language: "Python",
-    file: "palindrome.py",
-    instructions: "Fix this Python function to check if a string is a palindrome (ignoring casing and spaces). In Python, strings are immutable, and the slice step requires proper step syntax!",
-    hint: "In Python, string replacement returns a new string and does not modify the original string in place. Also, reversing a string with slices uses a negative step: `[::-1]`.",
-    defaultCode: `def is_palindrome(s):
-    # Clean the string (remove spaces)
-    s.replace(" ", "")
-    
-    # Check if string matches its reverse
-    return s == s[::1]`,
-    validate: (code) => {
-      const hasAssignment = /s\s*=\s*s\.replace/.test(code) || /s\s*=\s*[a-zA-Z0-9_.]*replace/.test(code);
-      const hasLower = /\.lower\(\)/.test(code) || /\.casefold\(\)/.test(code);
-      const hasReverseSlice = /s\[::-1\]/.test(code);
+  const [levelQuestions, setLevelQuestions] = useState([]);
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+  const [activeQuestion, setActiveQuestion] = useState(null);
 
-      if (!hasAssignment) {
-        return {
-          success: false,
-          error: "Syntax check failed! Python strings are immutable. Doing `s.replace(' ', '')` does not update `s`. You must reassign it: `s = s.replace(...)`."
-        };
-      }
-      
-      if (!hasLower) {
-        return {
-          success: false,
-          error: "Validation error! To ignore casing, convert the string to lowercase using `.lower()` before checking palindrome status."
-        };
-      }
-
-      if (!hasReverseSlice) {
-        return {
-          success: false,
-          error: "Algorithm error! Reversing string with slicing in Python is written as `s[::-1]`. Your current syntax `s[::1]` traverses forward!"
-        };
-      }
-
-      return { success: true };
-    }
-  },
-  {
-    level: 3,
-    title: "3. Active Customer Spend",
-    language: "SQL",
-    file: "customers.sql",
-    instructions: "Fix the SQL query to retrieve names and total spends of active customers who spent more than $100. Correct the filter clause and query logic operators!",
-    hint: "Use the `WHERE` clause for row filtering (instead of `HAVING`, which aggregates groups). Additionally, the standard SQL conjunction operator is the keyword `AND` rather than `&&`.",
-    defaultCode: `SELECT name, total_spent
-FROM customers
-HAVING status = 'active'
-&& total_spent > 100;`,
-    validate: (code) => {
-      const cleaned = code.toLowerCase().replace(/\s+/g, " ").trim();
-      
-      if (cleaned.includes("having status")) {
-        return {
-          success: false,
-          error: "SQL Execution Error: `HAVING` is used to filter aggregated groups. To filter individual records before group aggregation, use the `WHERE` clause."
-        };
-      }
-      
-      if (!cleaned.includes("where status = 'active'") && !cleaned.includes("where status='active'")) {
-        return {
-          success: false,
-          error: "Data verification failed: Query doesn't fetch active users correctly. Ensure query includes `WHERE status = 'active'`."
-        };
-      }
-      
-      if (cleaned.includes("&&")) {
-        return {
-          success: false,
-          error: "Syntax Error: In standard SQL, the conjunction operator is the word `AND`. The double ampersand `&&` is non-standard."
-        };
-      }
-
-      if (!cleaned.includes("and total_spent > 100") && !cleaned.includes("and total_spent>100")) {
-        return {
-          success: false,
-          error: "Data verification failed: Filter condition for total spent spent is missing or incorrect. It must check `total_spent > 100`."
-        };
-      }
-
-      return { success: true };
-    }
-  },
-  {
-    level: 4,
-    title: "4. Stale Count Hook",
-    language: "JavaScript",
-    file: "useAutoIncrement.js",
-    instructions: "Fix the React custom hook. It should auto-increment `count` by 1 every second. But it's stuck because of a stale closure in the interval, and it creates memory leaks because it never cleans up the timer!",
-    hint: "Use a functional state updater inside `setCount(prev => prev + 1)` so the interval hook references the freshest state without closures. Also return a cleanup function `() => clearInterval(...)` inside the `useEffect` callback.",
-    defaultCode: `import { useState, useEffect } from "react";
-
-export function useAutoIncrement() {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setCount(count + 1);
-    }, 1000);
-  }, []);
-
-  return count;
-}`,
-    validate: (code) => {
-      const hasCleanup = /return\s+(\(\)\s*=>\s*|function\(\)\s*\{?\s*)clearInterval\(/.test(code);
-      const hasFunctionalUpdate = /setCount\(\s*(\w+)\s*=>\s*\1\s*\+\s*1\s*\)/.test(code) || 
-                                  /setCount\(\s*function\s*\(\s*(\w+)\s*\)\s*\{\s*return\s+\1\s*\+\s*1\s*;?\s*\}\s*\)/.test(code);
-
-      if (!hasFunctionalUpdate) {
-        return {
-          success: false,
-          error: "Hook state test failed! Because the dependency array `[]` is empty, `count` inside the setInterval closure remains locked at `0`. Use functional updates: `setCount(prev => prev + 1)`."
-        };
-      }
-
-      if (!hasCleanup) {
-        return {
-          success: false,
-          error: "Resource leak detected! The interval is never cleared when the component unmounts. Return a cleanup function inside `useEffect`, e.g., `return () => clearInterval(id);`."
-        };
-      }
-
-      return { success: true };
-    }
-  },
-  {
-    level: 5,
-    title: "5. Parallel Mapping",
-    language: "JavaScript",
-    file: "fetch_users.js",
-    instructions: "Fix this async function. It is intended to fetch profile data for multiple userIds concurrently and return the array of results. Right now, it returns an array of unresolved Promises instead of the fetched data!",
-    hint: "An `async` function inside `.map()` returns a Promise. This yields an array of Promises. Use `await Promise.all(...)` to await all promises in parallel before returning.",
-    defaultCode: `async function fetchAllUserData(userIds, fetchFunc) {
-  // Map ids to async fetch calls
-  const data = userIds.map(async (id) => {
-    return await fetchFunc(id);
-  });
-  
-  return data;
-}`,
-    validate: (code) => {
-      try {
-        const fullCode = `${code}\nreturn fetchAllUserData;`;
-        const testFn = new Function(fullCode)();
-        
-        if (typeof testFn !== "function") {
-          return { success: false, error: "Function fetchAllUserData is not defined or not a function." };
-        }
-
-        const mockFetch = async (id) => {
-          return { id, data: `user_${id}` };
-        };
-
-        const resultPromise = testFn([101, 102, 103], mockFetch);
-        
-        if (!(resultPromise instanceof Promise)) {
-          return {
-            success: false,
-            error: "Logical Error: The function must return a Promise that resolves to the array of fetched users."
-          };
-        }
-
-        return resultPromise.then((results) => {
-          if (!Array.isArray(results)) {
-            return { success: false, error: "Logical Error: The resolved value is not an array." };
-          }
-          if (results.length !== 3) {
-            return { success: false, error: `Logical Error: Expected 3 records, got ${results.length}.` };
-          }
-          if (results[0] instanceof Promise) {
-            return {
-              success: false,
-              error: "Execution Failure: You returned `data`, which is an array of unresolved Promises! Use `await Promise.all(data)` to wait for all parallel fetches to finish."
-            };
-          }
-          if (results[0].data !== "user_101") {
-            return { success: false, error: "Logical Error: The fetched user details are incorrect." };
-          }
-          return { success: true };
-        }).catch((err) => {
-          return { success: false, error: `Execution Error: ${err.message}` };
-        });
-      } catch (err) {
-        return { success: false, error: err.message };
-      }
-    }
-  }
-];
-
-export default function DebugTheBug({ onProgressChange, savedProgress }) {
-  const [currentLevelIdx, setCurrentLevelIdx] = useState(0);
   const [userCodes, setUserCodes] = useState({});
-  const [userCode, setUserCode] = useState(LEVELS[0].defaultCode);
+  const [userCode, setUserCode] = useState("");
   const [completedLevels, setCompletedLevels] = useState([]);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -265,12 +33,83 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
   
   const [terminalLogs, setTerminalLogs] = useState([
     { text: "[SYSTEM] Booting Debugger sandbox v2.1.0...", type: "system" },
-    { text: "[SANDBOX] Workspace initialized. Select compile target to start.", type: "system" }
+    { text: "[SANDBOX] Workspace initialized. Select target compile track to start.", type: "system" }
   ]);
   const [isRunning, setIsRunning] = useState(false);
-
-  const currentLevel = LEVELS[currentLevelIdx];
   const editorRef = useRef(null);
+
+  const addTerminalLog = (text, type = "info") => {
+    setTerminalLogs(prev => [...prev.slice(-4), { text, type }]);
+  };
+
+  const tracks = ["JavaScript", "React.js", "Node.js", "MongoDB", "Python", "SQL"];
+
+  // Helper normalizer
+  const normaliseDebugQuestion = (q, trackName, lvlNum) => {
+    const buggy_lines = Array.isArray(q.buggy_lines)
+      ? q.buggy_lines
+      : [
+          {
+            line_number: q.buggy_line_number,
+            line_content: q.buggy_line_content
+          }
+        ].filter(b => b.line_number);
+
+    return {
+      ...q,
+      level: Number(q.level) || lvlNum,
+      title: q.title || `Debug ${q.file || 'Code'}`,
+      language: q.language || q.track === "React.js" ? "JavaScript" : q.track || trackName,
+      file: q.file || (q.track === "SQL" ? "query.sql" : q.track === "Python" ? "main.py" : "script.js"),
+      instructions: q.instructions || `Fix the buggy lines in this ${q.track || trackName} file. Spot the logic or syntax errors, edit the code, and run test cases to confirm.`,
+      hint: q.hint || q.explanation || "Correct the logic errors on the flagged lines.",
+      defaultCode: q.code || q.defaultCode || "",
+      buggy_lines: buggy_lines
+    };
+  };
+
+  const getLevelsForTrack = (track) => {
+    const hardcoded = DEFAULT_LEVELS.filter(l => l.language === track || (track === "React.js" && l.language === "React.js"));
+    const builtIn = arcadeData.debug || [];
+    
+    let custom = [];
+    try {
+      const raw = localStorage.getItem("arcade_custom_questions");
+      if (raw) custom = JSON.parse(raw)?.debug || [];
+    } catch (e) { console.error(e); }
+    
+    const allQuestions = [
+      ...hardcoded.map((q, idx) => ({ ...q, level: q.level || idx + 1 })),
+      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
+      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 }))
+    ];
+    
+    const pool = allQuestions.filter(q => q.track === track || q.language === track);
+    const lvls = [...new Set(pool.map(q => q.level))].sort((a, b) => a - b);
+    return lvls.length > 0 ? lvls : [1];
+  };
+
+  const getQuestionsForTrackAndLevel = (track, lvlNum) => {
+    const hardcoded = DEFAULT_LEVELS.filter(l => l.language === track || (track === "React.js" && l.language === "React.js"));
+    const builtIn = arcadeData.debug || [];
+    
+    let custom = [];
+    try {
+      const raw = localStorage.getItem("arcade_custom_questions");
+      if (raw) custom = JSON.parse(raw)?.debug || [];
+    } catch (e) { console.error(e); }
+    
+    const allQuestions = [
+      ...hardcoded.map((q, idx) => ({ ...q, level: q.level || idx + 1 })),
+      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
+      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 }))
+    ];
+    
+    return allQuestions
+      .filter(q => q.track === track || q.language === track)
+      .filter(q => q.level === lvlNum)
+      .map((q, idx) => normaliseDebugQuestion(q, track, lvlNum));
+  };
 
   // Synth audio player
   const playRetroSound = useCallback((type) => {
@@ -349,56 +188,71 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
     }
   }, [audioEnabled]);
 
-  // Load progress on mount
+  // Load progress and user codes on mount
   useEffect(() => {
     if (savedProgress) {
       setCompletedLevels(savedProgress.completedLevels || []);
       setStreak(savedProgress.streak || 0);
-      
-      let loadedCodes = {};
-      try {
-        const storedCodes = localStorage.getItem("arcade_debug_bug_codes");
-        if (storedCodes) {
-          loadedCodes = JSON.parse(storedCodes);
-          setUserCodes(loadedCodes);
-        }
-      } catch (e) {
-        console.error(e);
+    }
+    try {
+      const storedCodes = localStorage.getItem("arcade_debug_bug_codes");
+      if (storedCodes) {
+        setUserCodes(JSON.parse(storedCodes));
       }
-
-      const lastCompleted = savedProgress.completedLevels || [];
-      if (lastCompleted.length > 0) {
-        const nextLevel = LEVELS.findIndex(l => !lastCompleted.includes(l.level));
-        if (nextLevel !== -1) {
-          setCurrentLevelIdx(nextLevel);
-          setUserCode(loadedCodes[nextLevel] !== undefined ? loadedCodes[nextLevel] : LEVELS[nextLevel].defaultCode);
-        } else {
-          setCurrentLevelIdx(LEVELS.length - 1);
-          setUserCode(loadedCodes[LEVELS.length - 1] !== undefined ? loadedCodes[LEVELS.length - 1] : LEVELS[LEVELS.length - 1].defaultCode);
-        }
-      }
+    } catch (e) {
+      console.error(e);
     }
   }, [savedProgress]);
 
-  // Sync editor initial code on level changes
-  useEffect(() => {
-    const savedCode = userCodes[currentLevelIdx];
-    setUserCode(savedCode !== undefined ? savedCode : LEVELS[currentLevelIdx].defaultCode);
+  const handleLoadLevel = (track, lvlNum) => {
+    const questions = getQuestionsForTrackAndLevel(track, lvlNum);
+    if (questions.length === 0) {
+      alert(`Could not load level ${lvlNum} for track ${track}`);
+      return;
+    }
+    setSelectedTrack(track);
+    setCurrentLevel(lvlNum);
+    setLevelQuestions(questions);
+    setCurrentQuestionIdx(0);
+    
+    const q = questions[0];
+    setActiveQuestion(q);
+    
+    const codeKey = `${track}_${lvlNum}_q${q.id || 0}`;
+    const savedCode = userCodes[codeKey];
+    setUserCode(savedCode !== undefined ? savedCode : q.defaultCode);
+    
+    setIsSuccess(false); // Reset completion status on entering level
+    setLives(3);
+    setIsDead(false);
     setShowHint(false);
     setTerminalLogs([
-      { text: `[SYSTEM] Loaded workspace: '${LEVELS[currentLevelIdx].file}' (${LEVELS[currentLevelIdx].language})`, type: "system" },
-      { text: `[SANDBOX] Compilation mode set to ${LEVELS[currentLevelIdx].language}. Ready for testing.`, type: "info" }
+      { text: `[SYSTEM] Loaded workspace: '${q.file}' (${q.language})`, type: "system" },
+      { text: `[SANDBOX] Compilation mode set to ${q.language}. Ready for testing.`, type: "info" }
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLevelIdx]);
+    setPhase("playing");
+  };
 
-  // Sync success status on level or completedLevels changes
-  useEffect(() => {
-    setIsSuccess(completedLevels.includes(LEVELS[currentLevelIdx].level));
-  }, [currentLevelIdx, completedLevels]);
-
-  const addTerminalLog = (text, type = "info") => {
-    setTerminalLogs(prev => [...prev.slice(-4), { text, type }]);
+  const handleNextQuestion = () => {
+    const nextIdx = currentQuestionIdx + 1;
+    if (nextIdx < levelQuestions.length) {
+      setCurrentQuestionIdx(nextIdx);
+      const q = levelQuestions[nextIdx];
+      setActiveQuestion(q);
+      
+      const codeKey = `${selectedTrack}_${currentLevel}_q${q.id || nextIdx}`;
+      const savedCode = userCodes[codeKey];
+      setUserCode(savedCode !== undefined ? savedCode : q.defaultCode);
+      
+      setIsSuccess(false);
+      setLives(3);
+      setIsDead(false);
+      setShowHint(false);
+      setTerminalLogs([
+        { text: `[SYSTEM] Loaded next workspace: '${q.file}' (${q.language})`, type: "system" },
+        { text: `[SANDBOX] Ready for compilation.`, type: "info" }
+      ]);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -409,7 +263,13 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
       const newValue = value.substring(0, selectionStart) + "  " + value.substring(selectionEnd);
       setUserCode(newValue);
       
-      // Keep selection position
+      const codeKey = `${selectedTrack}_${currentLevel}_q${activeQuestion.id || currentQuestionIdx}`;
+      const updated = { ...userCodes, [codeKey]: newValue };
+      setUserCodes(updated);
+      try {
+        localStorage.setItem("arcade_debug_bug_codes", JSON.stringify(updated));
+      } catch (err) { console.error(err); }
+
       setTimeout(() => {
         if (editorRef.current) {
           editorRef.current.selectionStart = editorRef.current.selectionEnd = selectionStart + 2;
@@ -426,38 +286,75 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
 
     setTimeout(async () => {
       try {
-        const validationResult = await currentLevel.validate(userCode);
+        let validationResult = { success: true };
+        
+        // Use custom validation function if available (for DEFAULT_LEVELS)
+        if (typeof activeQuestion.validate === "function") {
+          validationResult = await activeQuestion.validate(userCode);
+        } else {
+          // Smart generic validation logic for database / custom framed questions:
+          // Checks if the user has modified/corrected the buggy lines.
+          const userLines = userCode.split("\n");
+          const buggyLines = activeQuestion.buggy_lines || [];
+          
+          for (const bug of buggyLines) {
+            const lineIdx = Number(bug.line_number) - 1;
+            if (lineIdx < 0 || lineIdx >= userLines.length) continue;
+            
+            const currentUserLine = userLines[lineIdx].trim();
+            const originalBuggyLine = (bug.line_content || "").trim();
+            
+            if (originalBuggyLine && currentUserLine === originalBuggyLine) {
+              validationResult = {
+                success: false,
+                error: `Validation Failed: The bug at line ${bug.line_number} ("${bug.line_content}") has not been corrected.`
+              };
+              break;
+            }
+            if (!currentUserLine && originalBuggyLine) {
+              validationResult = {
+                success: false,
+                error: `Validation Failed: Line ${bug.line_number} is empty. Please correct the statement instead of deleting it.`
+              };
+              break;
+            }
+          }
+        }
 
         if (validationResult.success) {
           setIsSuccess(true);
           playRetroSound("success");
           addTerminalLog(`[SUCCESS] Compilation successful! All test matches passed.`, "success");
 
-          if (!completedLevels.includes(currentLevel.level)) {
-            const updated = [...completedLevels, currentLevel.level];
-            setCompletedLevels(updated);
-            const newStreak = streak + 1;
-            setStreak(newStreak);
+          const isLastQuestion = currentQuestionIdx === levelQuestions.length - 1;
+          if (isLastQuestion) {
+            const levelKey = `debug_the_bug_${selectedTrack.toLowerCase()}_level_${currentLevel}`;
+            if (!completedLevels.includes(levelKey)) {
+              const updated = [...completedLevels, levelKey];
+              setCompletedLevels(updated);
+              const newStreak = streak + 1;
+              setStreak(newStreak);
 
-            if (onProgressChange) {
-              onProgressChange({
-                completedLevels: updated,
-                streak: newStreak,
-                completedAt: updated.length === LEVELS.length ? new Date().toISOString() : null
-              });
-            }
+              if (onProgressChange) {
+                onProgressChange({
+                  completedLevels: updated,
+                  streak: newStreak
+                });
+              }
 
-            if (updated.length === LEVELS.length) {
-              playRetroSound("victory");
-              addTerminalLog(`[VICTORY] You completed the Dojo Grid! Level 100 Code Master.`, "success");
+              const trackLevels = getLevelsForTrack(selectedTrack);
+              if (updated.filter(lvl => lvl.startsWith(`debug_the_bug_${selectedTrack.toLowerCase()}_`)).length === trackLevels.length) {
+                playRetroSound("victory");
+                addTerminalLog(`[VICTORY] You completed the Dojo Grid! Level 100 Code Master.`, "success");
+              }
             }
           }
         } else {
-          // Failure flow
           playRetroSound("fail");
           addTerminalLog(`[FAIL] ${validationResult.error}`, "error");
           
-          if (!completedLevels.includes(currentLevel.level)) {
+          const levelKey = `debug_the_bug_${selectedTrack.toLowerCase()}_level_${currentLevel}`;
+          if (!completedLevels.includes(levelKey)) {
             const newLives = lives - 1;
             setLives(newLives);
             playRetroSound("heart-loss");
@@ -480,10 +377,15 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
 
   const resetWorkspace = () => {
     playRetroSound("click");
-    setUserCode(currentLevel.defaultCode);
-    setIsSuccess(completedLevels.includes(currentLevel.level));
+    setUserCode(activeQuestion.defaultCode);
+    const levelKey = `debug_the_bug_${selectedTrack.toLowerCase()}_level_${currentLevel}`;
+    if (!completedLevels.includes(levelKey)) {
+      setIsSuccess(false);
+    }
+    
+    const codeKey = `${selectedTrack}_${currentLevel}_q${activeQuestion.id || currentQuestionIdx}`;
     const updated = { ...userCodes };
-    delete updated[currentLevelIdx];
+    delete updated[codeKey];
     setUserCodes(updated);
     try {
       localStorage.setItem("arcade_debug_bug_codes", JSON.stringify(updated));
@@ -497,9 +399,11 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
     playRetroSound("success");
     setLives(3);
     setIsDead(false);
-    setUserCode(currentLevel.defaultCode);
+    setUserCode(activeQuestion.defaultCode);
+    
+    const codeKey = `${selectedTrack}_${currentLevel}_q${activeQuestion.id || currentQuestionIdx}`;
     const updated = { ...userCodes };
-    delete updated[currentLevelIdx];
+    delete updated[codeKey];
     setUserCodes(updated);
     try {
       localStorage.setItem("arcade_debug_bug_codes", JSON.stringify(updated));
@@ -525,15 +429,139 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
   const lineCount = userCode.split("\n").length;
   const lineNumbers = Array.from({ length: Math.max(1, lineCount) }, (_, i) => i + 1);
 
+  if (phase === "lobby") {
+    return (
+      <div className="min-h-[70vh] w-full bg-[#0a0714] border border-purple-500/20 rounded-3xl overflow-hidden font-mono text-[#E8E6E1] flex flex-col items-center justify-center p-8 md:p-12 text-center relative select-none">
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)] z-20" />
+        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,10,36,0)_97%,rgba(18,10,36,0.3)_98%)] bg-[size:100%_4px] opacity-35 z-20" />
+        
+        {!selectedTrack ? (
+          <>
+            <div className="space-y-3 relative z-30">
+              <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
+                Mode: Debug the Bug
+              </span>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
+                Bug Hunter IDE
+              </h2>
+              <p className="text-xs text-purple-300/50 max-w-md mx-auto">
+                Repair syntax, logical and runtime errors directly in an interactive code compiler. Select your track to launch!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-2xl relative z-30 mt-8">
+              {tracks.map((track) => {
+                const totalLvs = getLevelsForTrack(track).length;
+                return (
+                  <button
+                    key={track}
+                    onClick={() => setSelectedTrack(track)}
+                    className="relative p-5 rounded-2xl border border-purple-500/25 bg-gradient-to-br from-[#1a0e30]/40 to-[#0e071e]/70 text-center hover:scale-[1.03] transition-all cursor-pointer hover:border-purple-400 group overflow-hidden shadow-lg"
+                  >
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
+                    <span className="text-xs font-bold text-purple-400/60 uppercase">Track</span>
+                    <h4 className="text-lg font-black text-white group-hover:text-[#7CFFB2] transition-colors">{track}</h4>
+                    <div className="flex items-center justify-center gap-1 mt-3 text-[10px] text-purple-300/40">
+                      <span>{totalLvs} Level{totalLvs > 1 ? 's' : ''}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-8 relative z-30"
+              >
+                <ArrowLeft size={14} /> Back to Hub Lobby
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="space-y-3 relative z-30">
+              <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
+                Track: {selectedTrack}
+              </span>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
+                Select Level
+              </h2>
+              <p className="text-xs text-purple-300/50 max-w-md mx-auto">
+                Solve files sequentially. Correct errors to compile successfully and unlock the next level!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-lg relative z-30 mt-8">
+              {getLevelsForTrack(selectedTrack).map((lvl) => {
+                const isUnlocked = lvl === 1 || (completedLevels || []).includes(`debug_the_bug_${selectedTrack.toLowerCase()}_level_${lvl - 1}`);
+                const isCompleted = (completedLevels || []).includes(`debug_the_bug_${selectedTrack.toLowerCase()}_level_${lvl}`);
+                return (
+                  <button
+                    key={lvl}
+                    disabled={!isUnlocked}
+                    onClick={() => handleLoadLevel(selectedTrack, lvl)}
+                    className={`relative p-5 rounded-2xl border flex flex-col items-center justify-center transition-all ${
+                      isUnlocked
+                        ? "bg-purple-950/20 border-purple-500/30 hover:border-[#7CFFB2] hover:scale-105 cursor-pointer text-white"
+                        : "bg-[#180f2d]/40 border-purple-950/20 text-purple-500/20 cursor-not-allowed"
+                    }`}
+                  >
+                    <span className="text-xs font-bold uppercase tracking-wider mb-2">Lvl {lvl}</span>
+                    {isCompleted ? (
+                      <span className="text-[9px] font-bold text-[#7CFFB2] bg-[#7CFFB2]/10 border border-[#7CFFB2]/20 px-2 py-0.5 rounded uppercase">Cleared</span>
+                    ) : isUnlocked ? (
+                      <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded uppercase">Play</span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-purple-500/10 uppercase">Locked</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setSelectedTrack(null)}
+              className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-8 relative z-30"
+            >
+              <ArrowLeft size={14} /> Back to Tracks Selection
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  if (!activeQuestion) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 text-center p-8 bg-[#0a0714] border border-purple-500/20 rounded-3xl relative select-none">
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)] z-20" />
+        <h2 className="text-lg font-black text-white relative z-30">No Question Loaded</h2>
+        <p className="text-xs text-purple-300/40 max-w-xs leading-relaxed relative z-30">
+          Select another track or level.
+        </p>
+        <button
+          onClick={() => setPhase("lobby")}
+          className="relative z-30 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 border border-violet-400 hover:scale-102 transition-all cursor-pointer font-bold text-xs"
+        >
+          Back to Lobby
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="text-[#E8E6E1] bg-[#160D2A]/60 backdrop-blur-md p-1 md:p-4 rounded-3xl border border-purple-500/15 space-y-6 select-none shadow-2xl relative overflow-hidden">
       
       {/* Game Bar - Header */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-[#22123C]/50 border border-purple-500/20 shadow-lg">
         <div className="flex items-center space-x-3">
-          <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30">
-            <Trophy size={18} className="text-purple-400" />
-          </div>
+          <button
+            onClick={() => setPhase("lobby")}
+            className="p-2 rounded-xl bg-purple-950/40 hover:bg-purple-900/40 border border-purple-500/25 transition-colors cursor-pointer text-purple-300 hover:text-white"
+          >
+            <ArrowLeft size={14} />
+          </button>
           <div>
             <h2 className="text-md font-black font-display text-white tracking-tight flex items-center gap-2 uppercase font-mono">
               Debug the Bug
@@ -541,7 +569,7 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
                 v2.1
               </span>
             </h2>
-            <p className="text-[10px] text-purple-300/50 font-sans">Solve the code errors and learn programming syntax</p>
+            <p className="text-[10px] text-purple-300/50 font-sans">Solve code errors and compile successfully inside our sandbox IDE</p>
           </div>
         </div>
 
@@ -585,16 +613,16 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
 
       {/* Grid selector of levels */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-        {LEVELS.map((lvl, index) => {
-          const isLvlCompleted = completedLevels.includes(lvl.level);
-          const isLvlActive = currentLevelIdx === index;
+        {getLevelsForTrack(selectedTrack).map((lvl) => {
+          const isLvlCompleted = completedLevels.includes(`debug_the_bug_${selectedTrack.toLowerCase()}_level_${lvl}`);
+          const isLvlActive = currentLevel === lvl;
           return (
             <button
-              key={lvl.level}
+              key={lvl}
               onClick={() => {
                 if (isDead) return;
                 playRetroSound("click");
-                setCurrentLevelIdx(index);
+                handleLoadLevel(selectedTrack, lvl);
               }}
               className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border shrink-0 cursor-pointer ${
                 isLvlActive
@@ -605,7 +633,7 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
               }`}
             >
               {isLvlCompleted ? <CheckCircle2 size={12} className="text-[#7CFFB2] fill-[#7CFFB2]/10" /> : null}
-              <span>{lvl.level}. {lvl.title.split(". ")[1]}</span>
+              <span>Level {lvl}</span>
             </button>
           );
         })}
@@ -621,11 +649,13 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
             {/* Level Title banner */}
             <div className="flex items-center justify-between border-b border-purple-500/10 pb-4">
               <div>
-                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-purple-300/50">Level {currentLevel.level} Objective</span>
-                <h3 className="text-md font-bold font-mono text-white tracking-tight">{currentLevel.title}</h3>
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-purple-300/50">
+                  Level {currentLevel} • File {currentQuestionIdx + 1} of {levelQuestions.length}
+                </span>
+                <h3 className="text-md font-bold font-mono text-white tracking-tight">{activeQuestion.title}</h3>
               </div>
               <span className="text-[9px] font-bold font-mono uppercase px-2 py-0.5 rounded border border-purple-500/30 bg-purple-950/30 text-purple-300">
-                {currentLevel.language}
+                {activeQuestion.language}
               </span>
             </div>
 
@@ -633,7 +663,7 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
             <div className="space-y-3">
               <div className="flex items-start space-x-2 text-xs text-purple-200/70 leading-relaxed">
                 <BookOpen size={15} className="text-purple-400 shrink-0 mt-0.5" />
-                <p>{currentLevel.instructions}</p>
+                <p>{activeQuestion.instructions}</p>
               </div>
             </div>
 
@@ -648,7 +678,7 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
                   <div className="font-bold flex items-center gap-1.5 uppercase font-mono mb-1 tracking-wider text-purple-400 text-[9px]">
                     <Sparkles size={11} /> Hint Decrypted
                   </div>
-                  <p>{currentLevel.hint}</p>
+                  <p>{activeQuestion.hint}</p>
                 </motion.div>
               ) : (
                 <button
@@ -656,95 +686,67 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
                     playRetroSound("click");
                     setShowHint(true);
                   }}
-                  className="w-full py-2.5 rounded-xl border border-dashed border-purple-500/25 hover:bg-purple-950/30 text-purple-300/80 hover:text-white text-[11px] font-bold tracking-wide uppercase transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer font-mono"
+                  className="w-full py-2.5 rounded-xl border border-purple-500/30 hover:border-purple-400 bg-purple-950/20 hover:bg-purple-900/30 text-xs font-mono font-bold text-purple-300 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   <HelpCircle size={13} />
-                  <span>Decrypt Hint Node</span>
+                  <span>Decrypt Compiler Hint</span>
                 </button>
               )}
             </div>
           </div>
           
-          {/* Progress Overview Card */}
-          <div className="bg-[#24133F]/35 border border-purple-500/20 rounded-3xl p-5 md:p-6 space-y-4 shadow-2xl">
-            <h4 className="text-xs font-black text-white tracking-wide uppercase font-mono flex items-center gap-2">
-              <ShieldCheck size={14} className="text-purple-400" />
-              <span>Grid Decryption Status</span>
-            </h4>
-            
-            <div className="grid grid-cols-5 gap-2 pt-2">
-              {LEVELS.map((l) => {
-                const finished = completedLevels.includes(l.level);
-                return (
-                  <div 
-                    key={l.level} 
-                    className={`h-2 rounded-full ${
-                      finished 
-                        ? "bg-[#7CFFB2]" 
-                        : currentLevelIdx === l.level - 1 
-                        ? "bg-purple-500 animate-pulse" 
-                        : "bg-purple-950/40 border border-purple-950"
-                    }`}
-                  />
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-purple-300/40 font-mono">
-              Complete all 5 core modules to unlock the Code Master title badge.
-            </p>
-          </div>
+          {/* Bug Recovery Sandbox Reboot */}
+          {isDead && (
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="p-6 rounded-3xl border border-rose-500/30 bg-rose-950/25 flex flex-col items-center justify-center text-center space-y-4 shadow-xl"
+            >
+              <AlertTriangle size={28} className="text-rose-400 animate-pulse" />
+              <div>
+                <h4 className="text-xs font-black uppercase text-rose-300 font-mono">Sandbox Defeated</h4>
+                <p className="text-[11px] text-rose-300/60 leading-normal mt-1 max-w-[200px]">The compilation workspace has crashed due to health exhaustion.</p>
+              </div>
+              <button
+                onClick={reviveSystem}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 font-mono"
+              >
+                <RotateCcw size={12} /> Reboot Compiler
+              </button>
+            </motion.div>
+          )}
         </div>
 
-        {/* Right pane: VS Code style editor workspace + Terminal console */}
-        <div className="lg:col-span-3 space-y-6 flex flex-col justify-start">
-          
-          {/* Terminal / Code Editor card */}
-          <div className="bg-[#1C0F32]/50 border border-purple-500/20 rounded-3xl overflow-hidden shadow-2xl relative flex flex-col min-h-[460px]">
+        {/* Right pane: Code Editor terminal workspace */}
+        <div className="lg:col-span-3">
+          <div className="flex flex-col rounded-3xl border border-purple-500/20 bg-[#0c0516] shadow-2xl overflow-hidden min-h-[440px]">
             
-            {/* IDE tab header bar */}
-            <div className="flex items-center justify-between bg-purple-950/30 border-b border-purple-500/10 px-4 py-2">
+            {/* Tab header bar */}
+            <div className="bg-[#190a2a]/60 px-4 py-3 border-b border-purple-500/10 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <FileCode size={13} className="text-purple-400" />
-                <span className="text-[11px] font-mono text-purple-300 font-semibold">
-                  {currentLevel.file}
+                <FolderOpen size={13} className="text-purple-400" />
+                <span className="text-[10px] text-purple-300/60 font-semibold font-mono">WORKSPACE:</span>
+                <span className="text-[10px] px-2 py-0.5 bg-purple-950/50 text-purple-300 font-bold border border-purple-900/40 rounded-md font-mono flex items-center gap-1">
+                  <FileCode size={11} />
+                  {activeQuestion.file}
                 </span>
-                <span className="h-1 w-1 rounded-full bg-purple-500/30" />
               </div>
-              <div className="flex space-x-1">
-                <span className="h-2 w-2 rounded-full border border-purple-950 bg-rose-500/50" />
-                <span className="h-2 w-2 rounded-full border border-purple-950 bg-amber-500/50" />
-                <span className="h-2 w-2 rounded-full border border-purple-950 bg-emerald-500/50" />
-              </div>
+              <span className={`text-[9px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${getLanguageColor(activeQuestion.language)} font-mono`}>
+                {activeQuestion.language}
+              </span>
             </div>
 
-            {/* Interactive Editor Window */}
-            <div className="relative flex-grow flex items-stretch font-mono text-[12px] bg-purple-950/20 min-h-[220px]">
-              {isDead ? (
-                /* Dead system screen overlay */
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/90 text-center p-6 space-y-4">
-                  <AlertTriangle size={36} className="text-rose-500" />
-                  <h3 className="text-md font-bold text-white uppercase tracking-wider font-mono">System Core Overloaded</h3>
-                  <p className="text-[11px] text-purple-300/50 max-w-sm font-sans">
-                    You have run out of system health nodes due to runtime compiler errors. Reboot system diagnostics to try again.
-                  </p>
-                  <button
-                    onClick={reviveSystem}
-                    className="px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 border border-purple-400 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 font-mono shadow-[0_0_10px_rgba(168,85,247,0.4)]"
-                  >
-                    <RotateCcw size={13} />
-                    <span>Reboot Diagnostics</span>
-                  </button>
-                </div>
-              ) : null}
-
-              {/* Gutter Line numbers */}
-              <div className="w-10 bg-purple-950/15 border-r border-purple-500/10 text-right pr-2.5 py-4 text-purple-300/30 select-none text-[11px] font-semibold leading-6">
-                {lineNumbers.map(num => (
+            {/* Simulated code editor wrapper */}
+            <div className="flex-grow flex relative font-mono text-sm leading-6">
+              
+              {/* Line numbers column */}
+              <div className="w-10 shrink-0 text-right pr-3 select-none text-[10px] text-purple-400/20 border-r border-purple-500/5 py-4 bg-[#0a0412] font-mono leading-6">
+                {lineNumbers.map((num) => (
                   <div key={num}>{num}</div>
                 ))}
               </div>
 
-              {/* The textarea input */}
+              {/* Editable Textarea overlaying formatted display */}
               <textarea
                 ref={editorRef}
                 value={userCode}
@@ -752,7 +754,8 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
                   if (!isDead && !isSuccess) {
                     const val = e.target.value;
                     setUserCode(val);
-                    const updated = { ...userCodes, [currentLevelIdx]: val };
+                    const codeKey = `${selectedTrack}_${currentLevel}_q${activeQuestion.id || currentQuestionIdx}`;
+                    const updated = { ...userCodes, [codeKey]: val };
                     setUserCodes(updated);
                     try {
                       localStorage.setItem("arcade_debug_bug_codes", JSON.stringify(updated));
@@ -811,23 +814,47 @@ export default function DebugTheBug({ onProgressChange, savedProgress }) {
 
               <div className="flex gap-2">
                 {isSuccess ? (
-                  currentLevelIdx < LEVELS.length - 1 ? (
-                    <button
-                      onClick={() => {
-                        playRetroSound("click");
-                        setCurrentLevelIdx(prev => prev + 1);
-                      }}
-                      className="px-4 py-2 rounded-xl text-xs text-white bg-purple-600 hover:bg-purple-500 border border-purple-400 hover:scale-102 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)] transition-all cursor-pointer font-bold flex items-center gap-1.5 font-mono"
-                    >
-                      <span>Next Level</span>
-                      <ArrowRight size={13} />
-                    </button>
-                  ) : (
-                    <div className="px-4 py-2 rounded-xl text-xs text-[#7CFFB2] bg-[#7CFFB2]/5 border border-[#7CFFB2]/20 font-bold flex items-center gap-1.5 font-mono">
-                      <ShieldCheck size={13} />
-                      <span>Code Master Confirmed!</span>
-                    </div>
-                  )
+                  (() => {
+                    const isLastQuestion = currentQuestionIdx === levelQuestions.length - 1;
+                    if (!isLastQuestion) {
+                      return (
+                        <button
+                          onClick={() => {
+                            playRetroSound("click");
+                            handleNextQuestion();
+                          }}
+                          className="px-4 py-2 rounded-xl text-xs text-white bg-purple-600 hover:bg-purple-500 border border-purple-400 hover:scale-102 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)] transition-all cursor-pointer font-bold flex items-center gap-1.5 font-mono"
+                        >
+                          <span>Next File / Question</span>
+                          <ArrowRight size={13} />
+                        </button>
+                      );
+                    }
+
+                    const nextLvl = currentLevel + 1;
+                    const trackLevels = getLevelsForTrack(selectedTrack);
+                    const hasNextLvl = trackLevels.includes(nextLvl);
+                    if (hasNextLvl) {
+                      return (
+                        <button
+                          onClick={() => {
+                            playRetroSound("click");
+                            handleLoadLevel(selectedTrack, nextLvl);
+                          }}
+                          className="px-4 py-2 rounded-xl text-xs text-white bg-purple-600 hover:bg-purple-500 border border-purple-400 hover:scale-102 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)] transition-all cursor-pointer font-bold flex items-center gap-1.5 font-mono"
+                        >
+                          <span>Proceed to Level {nextLvl}</span>
+                          <ArrowRight size={13} />
+                        </button>
+                      );
+                    }
+                    return (
+                      <div className="px-4 py-2 rounded-xl text-xs text-[#7CFFB2] bg-[#7CFFB2]/5 border border-[#7CFFB2]/20 font-bold flex items-center gap-1.5 font-mono">
+                        <ShieldCheck size={13} />
+                        <span>Code Master Confirmed!</span>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <button
                     onClick={runCodeTests}

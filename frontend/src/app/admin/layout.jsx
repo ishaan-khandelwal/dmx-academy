@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, PlusCircle, Trophy, LogOut,
   Menu, X, ChevronLeft, ChevronRight, ShieldAlert, ArrowLeftRight, Code, Radio, AlertTriangle, List,
-  Users, Layers, Brain, FileText, Settings, Calendar, BookOpen
+  Users, Layers, Brain, FileText, Settings, Calendar, BookOpen, Gamepad2
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
@@ -197,6 +197,11 @@ export default function AdminLayout({ children }) {
       label: "Go Live",
       href: "/admin/live",
       icon: Radio
+    },
+    (isSuperAdmin || isInstAdmin || isBatchMgr || isMentor) && {
+      label: "Arcade Questions",
+      href: "/admin/arcade",
+      icon: Gamepad2
     },
     {
       label: "Public Lobby",

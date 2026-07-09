@@ -104,56 +104,61 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
 
   const timerRef = useRef(null);
 
+  const [currentLevel, setCurrentLevel] = useState(1);
+
   // Available tracks in our content pool
   const tracks = ["JavaScript", "React.js", "Node.js", "MongoDB"];
 
-  // Select questions using localStorage tracking for non-repeating items
-  const loadGameQuestions = (track) => {
-    const allQuestions = arcadeData.quiz || [];
+  const getLevelsForTrack = (track) => {
+    const builtIn = arcadeData.quiz || [];
+    let custom = [];
+    try {
+      const raw = localStorage.getItem("arcade_custom_questions");
+      if (raw) custom = JSON.parse(raw)?.quiz || [];
+    } catch (e) { console.error(e); }
+
+    const allQuestions = [
+      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
+      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 })),
+    ];
     const pool = allQuestions.filter(q => q.track === track);
-    if (pool.length === 0) return [];
-
-    const seenKey = `arcade_seen_quiz_${track}`;
-    let seenIds = [];
-    try {
-      const stored = localStorage.getItem(seenKey);
-      if (stored) seenIds = JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-
-    // Filter unseen
-    let unseen = pool.filter(q => !seenIds.includes(q.id));
-
-    // Reset pool tracker if exhausted or very small
-    if (unseen.length < Math.min(10, pool.length)) {
-      seenIds = [];
-      unseen = [...pool];
-    }
-
-    // Shuffle and slice 10 questions
-    const shuffled = [...unseen].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 10);
-
-    // Save newly seen IDs
-    const newlySeen = [...seenIds, ...selected.map(q => q.id)];
-    try {
-      localStorage.setItem(seenKey, JSON.stringify(newlySeen));
-    } catch (e) {
-      console.error(e);
-    }
-
-    return selected;
+    const lvls = [...new Set(pool.map(q => q.level))].sort((a, b) => a - b);
+    return lvls.length > 0 ? lvls : [1];
   };
 
-  const handleStartGame = (track) => {
+  // Select questions using localStorage tracking for non-repeating items
+  const loadGameQuestions = (track, levelNum) => {
+    const builtIn = arcadeData.quiz || [];
+
+    // Merge custom questions from the arcade manager
+    let custom = [];
+    try {
+      const raw = localStorage.getItem("arcade_custom_questions");
+      if (raw) custom = JSON.parse(raw)?.quiz || [];
+    } catch (e) { console.error(e); }
+
+    const allQuestions = [
+      ...builtIn.map((q, idx) => ({ ...q, level: q.level || Math.floor(idx / 5) + 1 })),
+      ...custom.map(q => ({ ...q, _custom: true, level: Number(q.level) || 1 })),
+    ];
+    const pool = allQuestions.filter(q => q.track === track && q.level === levelNum);
+    if (pool.length === 0) return [];
+
+    // Shuffle and slice 5 questions (shortened to make levels crisp)
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 5);
+  };
+
+
+  const handleStartGame = (track, levelNum) => {
     playSynthSound("click", soundEnabled);
-    const selectedQuestions = loadGameQuestions(track);
+    const selectedQuestions = loadGameQuestions(track, levelNum);
     if (selectedQuestions.length === 0) {
-      alert("No questions found for this track. Please check the Excel content file.");
+      alert(`No questions found for Level ${levelNum} in ${track}.`);
       return;
     }
     setSelectedTrack(track);
+    setCurrentLevel(levelNum);
     setQuestions(selectedQuestions);
     setQIdx(0);
     setScore(0);
@@ -232,7 +237,8 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
       // Persist progress to local storage
       const finalAccuracy = Math.round((results.filter(r => r.correct).length / questions.length) * 100);
       const existingLevels = savedProgress?.completedLevels || [];
-      const updatedLevels = [...new Set([...existingLevels, `quiz_${selectedTrack.toLowerCase()}`])];
+      const levelKey = `quiz_${selectedTrack.toLowerCase()}_level_${currentLevel}`;
+      const updatedLevels = [...new Set([...existingLevels, levelKey])];
       onProgressChange({
         completedLevels: updatedLevels,
         highScore: Math.max(savedProgress?.highScore || 0, score),
@@ -287,43 +293,97 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
             exit={{ opacity: 0, scale: 0.95 }}
             className="flex flex-col items-center justify-center p-8 md:p-12 text-center h-[70vh] space-y-8"
           >
-            <div className="space-y-3">
-              <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
-                Mode: Quiz Blitz
-              </span>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
-                Select Your Arena
-              </h2>
-              <p className="text-xs text-purple-300/50 max-w-md mx-auto">
-                Answer 10 fast-paced questions against the clock. Build your streak multiplier for ultimate bonuses. Non-repeating replays!
-              </p>
-            </div>
+            {!selectedTrack ? (
+              <>
+                <div className="space-y-3">
+                  <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
+                    Mode: Quiz Blitz
+                  </span>
+                  <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
+                    Speed Trivia Core
+                  </h2>
+                  <p className="text-xs text-purple-300/50 max-w-md mx-auto">
+                    Select a track to launch your level progress. Solve timed questions, maintain your streak, and unlock the next stages!
+                  </p>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
-              {tracks.map((track) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
+                  {tracks.map((track) => {
+                    const totalLvs = getLevelsForTrack(track).length;
+                    return (
+                      <button
+                        key={track}
+                        onClick={() => setSelectedTrack(track)}
+                        className="relative p-5 rounded-2xl border border-purple-500/25 bg-gradient-to-br from-[#1a0e30]/40 to-[#0e071e]/70 text-left hover:scale-[1.03] transition-all cursor-pointer hover:border-purple-400 group overflow-hidden shadow-lg"
+                      >
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
+                        <span className="text-xs font-bold text-purple-400/60 uppercase">Track</span>
+                        <h4 className="text-lg font-black text-white group-hover:text-[#7CFFB2] transition-colors">{track}</h4>
+                        <div className="flex items-center gap-1 mt-3 text-[10px] text-purple-300/40">
+                          <span>{totalLvs} Level{totalLvs > 1 ? 's' : ''} available</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <button
-                  key={track}
-                  onClick={() => handleStartGame(track)}
-                  className={`relative p-5 rounded-2xl border border-purple-500/25 bg-gradient-to-br from-[#1a0e30]/40 to-[#0e071e]/70 text-left hover:scale-[1.03] transition-all cursor-pointer hover:border-purple-400 group overflow-hidden shadow-lg`}
+                  onClick={onBack}
+                  className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-4"
                 >
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
-                  <span className="text-xs font-bold text-purple-400/60 uppercase">Track</span>
-                  <h4 className="text-lg font-black text-white group-hover:text-[#7CFFB2] transition-colors">{track}</h4>
-                  <div className="flex items-center gap-1 mt-3 text-[10px] text-purple-300/40">
-                    <span>10 Levels</span>
-                    <span>•</span>
-                    <span>20s timer</span>
-                  </div>
+                  <ArrowLeft size={14} /> Back to Hub Lobby
                 </button>
-              ))}
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
+                    Track: {selectedTrack}
+                  </span>
+                  <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
+                    Select Level
+                  </h2>
+                  <p className="text-xs text-purple-300/50 max-w-md mx-auto">
+                    Complete levels sequentially. Clear one level to unlock the next!
+                  </p>
+                </div>
 
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-4"
-            >
-              <ArrowLeft size={14} /> Back to Hub Lobby
-            </button>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-lg">
+                  {getLevelsForTrack(selectedTrack).map((lvl) => {
+                    const isUnlocked = lvl === 1 || (savedProgress?.completedLevels || []).includes(`quiz_${selectedTrack.toLowerCase()}_level_${lvl - 1}`);
+                    const isCompleted = (savedProgress?.completedLevels || []).includes(`quiz_${selectedTrack.toLowerCase()}_level_${lvl}`);
+                    return (
+                      <button
+                        key={lvl}
+                        disabled={!isUnlocked}
+                        onClick={() => handleStartGame(selectedTrack, lvl)}
+                        className={`relative p-5 rounded-2xl border flex flex-col items-center justify-center transition-all ${
+                          isUnlocked
+                            ? "bg-purple-950/20 border-purple-500/30 hover:border-[#7CFFB2] hover:scale-105 cursor-pointer text-white"
+                            : "bg-[#180f2d]/40 border-purple-950/20 text-purple-500/20 cursor-not-allowed"
+                        }`}
+                      >
+                        <span className="text-xs font-bold uppercase tracking-wider mb-2">Lvl {lvl}</span>
+                        {isCompleted ? (
+                          <span className="text-[9px] font-bold text-[#7CFFB2] bg-[#7CFFB2]/10 border border-[#7CFFB2]/20 px-2 py-0.5 rounded uppercase">Cleared</span>
+                        ) : isUnlocked ? (
+                          <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded uppercase">Play</span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-purple-500/10 uppercase">Locked</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setSelectedTrack(null)}
+                  className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-4"
+                >
+                  <ArrowLeft size={14} /> Back to Tracks Selection
+                </button>
+              </>
+            )}
           </motion.div>
         )}
 
@@ -340,10 +400,10 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
             <div className="flex items-center justify-between border-b border-purple-500/15 pb-4">
               <div className="flex items-center space-x-3">
                 <span className="text-xs font-black uppercase text-purple-400 tracking-wider">
-                  {selectedTrack}
+                  {selectedTrack} — Level {currentLevel}
                 </span>
                 <span className="text-[10px] font-bold text-[#7CFFB2] border border-[#7CFFB2]/20 px-2 py-0.5 rounded bg-[#7CFFB2]/5 uppercase">
-                  Q {qIdx + 1}/10
+                  Q {qIdx + 1}/{questions.length}
                 </span>
               </div>
 
@@ -448,7 +508,7 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
                     onClick={handleNextQuestion}
                     className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white flex items-center gap-1.5 self-end shrink-0 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)] transition-all cursor-pointer"
                   >
-                    <span>{qIdx + 1 === questions.length ? "Finish Blitz" : "Next Level"}</span>
+                    <span>{qIdx + 1 === questions.length ? "Finish Blitz" : "Next Question"}</span>
                     <ArrowRight size={13} />
                   </button>
                 </div>
@@ -487,7 +547,7 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
                 QUIZ BLITZ COMPLETE
               </h2>
               <p className="text-xs text-purple-300/40 font-mono mt-1 uppercase">
-                Track: {selectedTrack}
+                Track: {selectedTrack} — Level {currentLevel}
               </p>
             </div>
 
@@ -510,18 +570,34 @@ export default function QuizBlitz({ onProgressChange, savedProgress, onBack }) {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3 pt-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+              {(() => {
+                const nextLvl = currentLevel + 1;
+                const trackLevels = getLevelsForTrack(selectedTrack);
+                const hasNextLvl = trackLevels.includes(nextLvl);
+                if (hasNextLvl) {
+                  return (
+                    <button
+                      onClick={() => handleStartGame(selectedTrack, nextLvl)}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition-all cursor-pointer flex items-center gap-2 hover:shadow-[0_0_12px_rgba(16,185,129,0.3)] font-mono"
+                    >
+                      <Play size={13} /> Proceed to Level {nextLvl}
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <button
-                onClick={() => handleStartGame(selectedTrack)}
-                className="px-5 py-2.5 rounded-xl border border-purple-500/25 bg-[#1b0d35]/30 text-purple-300 hover:text-white hover:border-purple-400 text-xs font-bold transition-all cursor-pointer flex items-center gap-2"
+                onClick={() => handleStartGame(selectedTrack, currentLevel)}
+                className="px-5 py-2.5 rounded-xl border border-purple-500/25 bg-[#1b0d35]/30 text-purple-300 hover:text-white hover:border-purple-400 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 font-mono"
               >
-                <RotateCcw size={13} /> Replay Track
+                <RotateCcw size={13} /> Replay Level {currentLevel}
               </button>
               <button
                 onClick={() => setPhase("lobby")}
-                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition-all cursor-pointer flex items-center gap-2 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition-all cursor-pointer flex items-center gap-2 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)] font-mono"
               >
-                <Play size={13} /> Play Other Track
+                <Play size={13} /> Levels Selection
               </button>
             </div>
 

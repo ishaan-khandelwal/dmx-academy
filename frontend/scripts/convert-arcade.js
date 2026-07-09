@@ -751,7 +751,281 @@ const fallbackContent = {
       code: "db.orders.aggregate([\n  {\n    $lookup: {\n      from: 'customers',\n      localField: 'customer_id',\n      foreignField: 'id',\n      as: 'details'\n    }\n  }\n]);",
       buggy_line_number: 6,
       buggy_line_content: "      foreignField: 'id',",
-      explanation: "MongoDB default document IDs are stored in the `_id` field. The join foreignField should typically reference `_id` rather than `id` unless there is a custom identifier column."
+    }
+  ],
+  fillin: [
+    // Python Fill-in
+    {
+      id: "fillin_py_01",
+      lang: "Python",
+      title: "For Loop Range",
+      code: "for i ____ range(5):\n    print(i)",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["in", "on", "at", "through"],
+          answer: "in"
+        }
+      ],
+      hint: "Iterates from 0 to 4 using a helper function."
+    },
+    {
+      id: "fillin_py_02",
+      lang: "Python",
+      title: "Define Function",
+      code: "____ greet(name):\n    return f\"Hello {name}\"",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["def", "function", "func", "define"],
+          answer: "def"
+        }
+      ],
+      hint: "Keyword to declare a functional block in Python."
+    },
+    {
+      id: "fillin_py_03",
+      lang: "Python",
+      title: "List Comprehension",
+      code: "squares = [x**2 ____ x ____ numbers]",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["for", "in", "each", "with"],
+          answer: "for"
+        },
+        {
+          placeholder: "____2",
+          options: ["in", "of", "from", "at"],
+          answer: "in"
+        }
+      ],
+      hint: "Creates a new list using inline iteration."
+    },
+    {
+      id: "fillin_py_04",
+      lang: "Python",
+      title: "Class Definition",
+      code: "____ Dog(Animal):\n    def __init__(self): pass",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["class", "struct", "object", "type"],
+          answer: "class"
+        }
+      ],
+      hint: "Declares object blueprint structures."
+    },
+    {
+      id: "fillin_py_05",
+      lang: "Python",
+      title: "File Context Manager",
+      code: "____ open('data.txt') ____ f:\n    content = f.read()",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["with", "using", "open", "try"],
+          answer: "with"
+        },
+        {
+          placeholder: "____2",
+          options: ["as", "into", "to", "for"],
+          answer: "as"
+        }
+      ],
+      hint: "Ensures proper cleanups of resource file streams."
+    },
+    // JavaScript Fill-in
+    {
+      id: "fillin_js_01",
+      lang: "JavaScript",
+      title: "Array Mapping",
+      code: "const squares = arr.____(x => x * x);",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["map", "forEach", "filter", "reduce"],
+          answer: "map"
+        }
+      ],
+      hint: "Transforms every element in an array and returns the new array."
+    },
+    {
+      id: "fillin_js_02",
+      lang: "JavaScript",
+      title: "Asynchronous Operations",
+      code: "____ function getData() {\n  const res = ____ fetch('/api');\n}",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["async", "await", "promise", "defer"],
+          answer: "async"
+        },
+        {
+          placeholder: "____2",
+          options: ["await", "async", "then", "yield"],
+          answer: "await"
+        }
+      ],
+      hint: "Enables promise syntax to look like synchronous code blocks."
+    },
+    {
+      id: "fillin_js_03",
+      lang: "JavaScript",
+      title: "Variable Declaration",
+      code: "____ { name, age } = user;",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["const", "let", "var", "function"],
+          answer: "const"
+        }
+      ],
+      hint: "Extracts fields directly using Object destructuring syntax."
+    },
+    {
+      id: "fillin_js_04",
+      lang: "JavaScript",
+      title: "Lexical Closure",
+      code: "function make() {\n  let count = 0;\n  ____ ____() {\n    count++;\n  };\n}",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["return", "export", "yield", "break"],
+          answer: "return"
+        },
+        {
+          placeholder: "____2",
+          options: ["function", "const", "class", "arrow"],
+          answer: "function"
+        }
+      ],
+      hint: "Returns an inner function encapsulating the lexical state."
+    },
+    {
+      id: "fillin_js_05",
+      lang: "JavaScript",
+      title: "Object Keys Iterator",
+      code: "____.____(user).forEach(k => console.log(k));",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["Object", "Array", "JSON", "Reflect"],
+          answer: "Object"
+        },
+        {
+          placeholder: "____2",
+          options: ["keys", "values", "entries", "getOwnPropertyNames"],
+          answer: "keys"
+        }
+      ],
+      hint: "Extracts an array of enumerable keys directly from an object."
+    },
+    // SQL Fill-in
+    {
+      id: "fillin_sql_01",
+      lang: "SQL",
+      title: "Select Statement",
+      code: "____ * ____ users ____ age > 18;",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["SELECT", "GET", "FETCH", "SHOW"],
+          answer: "SELECT"
+        },
+        {
+          placeholder: "____2",
+          options: ["FROM", "IN", "ON", "UNDER"],
+          answer: "FROM"
+        },
+        {
+          placeholder: "____3",
+          options: ["WHERE", "HAVING", "GROUP", "ORDER"],
+          answer: "WHERE"
+        }
+      ],
+      hint: "Retrieves filtered records matching criteria."
+    },
+    {
+      id: "fillin_sql_02",
+      lang: "SQL",
+      title: "Group By Aggregate",
+      code: "SELECT count(*), role FROM users ____ ____ role;",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["GROUP", "ORDER", "SORT", "FILTER"],
+          answer: "GROUP"
+        },
+        {
+          placeholder: "____2",
+          options: ["BY", "ON", "FOR", "WITH"],
+          answer: "BY"
+        }
+      ],
+      hint: "Aggregates matching rows matching category key."
+    },
+    {
+      id: "fillin_sql_03",
+      lang: "SQL",
+      title: "Inner Join",
+      code: "SELECT * FROM orders a ____ ____ customers b ____ a.cid = b.id;",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["INNER", "LEFT", "RIGHT", "OUTER"],
+          answer: "INNER"
+        },
+        {
+          placeholder: "____2",
+          options: ["JOIN", "UNION", "MERGE", "LINK"],
+          answer: "JOIN"
+        },
+        {
+          placeholder: "____3",
+          options: ["ON", "USING", "WHERE", "AND"],
+          answer: "ON"
+        }
+      ],
+      hint: "Retrieves matching rows found in both reference tables."
+    },
+    {
+      id: "fillin_sql_04",
+      lang: "SQL",
+      title: "Update Query",
+      code: "____ users ____ status = 'active' WHERE id = 5;",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["UPDATE", "SET", "ALTER", "INSERT"],
+          answer: "UPDATE"
+        },
+        {
+          placeholder: "____2",
+          options: ["SET", "TO", "UPDATE", "WITH"],
+          answer: "SET"
+        }
+      ],
+      hint: "Modifies attributes inside existing table rows."
+    },
+    {
+      id: "fillin_sql_05",
+      lang: "SQL",
+      title: "Insert Statement",
+      code: "____ users (name) ____ ('Alice');",
+      blanks: [
+        {
+          placeholder: "____",
+          options: ["INSERT INTO", "ADD TO", "APPEND", "INSERT"],
+          answer: "INSERT INTO"
+        },
+        {
+          placeholder: "____2",
+          options: ["VALUES", "VALUE", "SET", "DATA"],
+          answer: "VALUES"
+        }
+      ],
+      hint: "Adds new rows to tables."
     }
   ]
 };
@@ -781,7 +1055,8 @@ try {
   const parsedData = {
     quiz: [],
     match: [],
-    debug: []
+    debug: [],
+    fillin: []
   };
 
   // 1. Parse Quiz Sheet
@@ -856,8 +1131,40 @@ try {
     console.warn("[WARNING] 'Debug' sheet not found in the workbook.");
   }
 
+  // 4. Parse Fillin Sheet
+  if (workbook.Sheets["Fillin"]) {
+    const sheet = workbook.Sheets["Fillin"];
+    const rows = xlsx.utils.sheet_to_json(sheet);
+    rows.forEach((row, i) => {
+      if (!row.id || !row.lang || !row.title || !row.code) {
+        console.warn(`[WARNING] Fillin Sheet Row ${i + 2}: Missing required fields. Skipping.`);
+        return;
+      }
+      let blanks = [];
+      try {
+        blanks = row.blanks ? JSON.parse(row.blanks) : [];
+      } catch (e) {
+        blanks = [{
+          placeholder: "____",
+          options: [row.option_a, row.option_b, row.option_c, row.option_d].filter(Boolean),
+          answer: row.answer
+        }];
+      }
+      parsedData.fillin.push({
+        id: String(row.id).trim(),
+        lang: String(row.lang).trim(),
+        title: String(row.title).trim(),
+        code: String(row.code).replace(/\r\n/g, "\n").trim(),
+        blanks: blanks,
+        hint: row.hint ? String(row.hint).trim() : ""
+      });
+    });
+  } else {
+    console.warn("[WARNING] 'Fillin' sheet not found in the workbook.");
+  }
+
   // Double check if any sheet was populated. If workbook sheet names existed but are empty, use fallbacks for empty arrays
-  if (parsedData.quiz.length === 0 && parsedData.match.length === 0 && parsedData.debug.length === 0) {
+  if (parsedData.quiz.length === 0 && parsedData.match.length === 0 && parsedData.debug.length === 0 && parsedData.fillin.length === 0) {
     console.log("Workbook sheets found but they contained no valid rows. Using fallback content instead.");
     Object.assign(parsedData, fallbackContent);
   } else {
@@ -865,6 +1172,7 @@ try {
     if (parsedData.quiz.length === 0) parsedData.quiz = fallbackContent.quiz;
     if (parsedData.match.length === 0) parsedData.match = fallbackContent.match;
     if (parsedData.debug.length === 0) parsedData.debug = fallbackContent.debug;
+    if (parsedData.fillin.length === 0) parsedData.fillin = fallbackContent.fillin;
   }
 
   if (!fs.existsSync(OUTPUT_DIR)) {
@@ -873,7 +1181,7 @@ try {
 
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(parsedData, null, 2), "utf8");
   console.log(`Successfully parsed Excel and saved content to "${OUTPUT_PATH}".`);
-  console.log(`Summary: ${parsedData.quiz.length} quizzes, ${parsedData.match.length} matching pairs, ${parsedData.debug.length} debug snippets.`);
+  console.log(`Summary: ${parsedData.quiz.length} quizzes, ${parsedData.match.length} matching pairs, ${parsedData.debug.length} debug snippets, ${parsedData.fillin.length} fillin questions.`);
 } catch (error) {
   console.error("Error parsing Excel workbook:", error);
   console.log("Falling back to writing default content to prevent build failures.");

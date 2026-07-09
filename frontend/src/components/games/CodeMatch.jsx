@@ -96,6 +96,8 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
   const [phase, setPhase] = useState("lobby"); // lobby, playing, checking, finished
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  const [currentLevel, setCurrentLevel] = useState(1);
+
   // Stats
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -106,50 +108,59 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
   const timerRef = useRef(null);
   const tracks = ["JavaScript", "React.js", "Node.js", "MongoDB"];
 
-  // localStorage tracking for non-repeating matches
-  const loadMatchPairs = (track) => {
-    const allPairs = arcadeData.match || [];
+  const getLevelsForTrack = (track) => {
+    const builtIn = arcadeData.match || [];
+    let custom = [];
+    try {
+      const raw = localStorage.getItem("arcade_custom_questions");
+      if (raw) custom = JSON.parse(raw)?.match || [];
+    } catch (e) { console.error(e); }
+
+    const allPairs = [
+      ...builtIn.map((p, idx) => ({ ...p, level: p.level || Math.floor(idx / 6) + 1 })),
+      ...custom.map(p => ({ ...p, _custom: true, level: Number(p.level) || 1 })),
+    ];
     const pool = allPairs.filter(p => p.track === track);
-    if (pool.length === 0) return [];
-
-    const seenKey = `arcade_seen_match_${track}`;
-    let seenIds = [];
-    try {
-      const stored = localStorage.getItem(seenKey);
-      if (stored) seenIds = JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-
-    // Filter unseen
-    let unseen = pool.filter(p => !seenIds.includes(p.id));
-
-    // Reset pool tracker if exhausted or very small
-    if (unseen.length < Math.min(6, pool.length)) {
-      seenIds = [];
-      unseen = [...pool];
-    }
-
-    // Shuffle and slice 6 pairs
-    const shuffled = [...unseen].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 6);
-
-    // Save newly seen IDs
-    const newlySeen = [...seenIds, ...selected.map(p => p.id)];
-    try {
-      localStorage.setItem(seenKey, JSON.stringify(newlySeen));
-    } catch (e) {
-      console.error(e);
-    }
-
-    return selected;
+    const lvls = [...new Set(pool.map(p => p.level))].sort((a, b) => a - b);
+    return lvls.length > 0 ? lvls : [1];
   };
 
-  const handleStartGame = (track) => {
+  // localStorage tracking for non-repeating matches
+  const loadMatchPairs = (track, levelNum) => {
+    const builtIn = arcadeData.match || [];
+
+    // Merge custom pairs from the arcade manager
+    let custom = [];
+    try {
+      const raw = localStorage.getItem("arcade_custom_questions");
+      if (raw) custom = JSON.parse(raw)?.match || [];
+    } catch (e) { console.error(e); }
+
+    const allPairs = [
+      ...builtIn.map((p, idx) => ({ ...p, level: p.level || Math.floor(idx / 6) + 1 })),
+      ...custom.map(p => ({ ...p, _custom: true, level: Number(p.level) || 1 })),
+    ];
+    const levelPairs = allPairs.filter(p => p.track === track && p.level === levelNum);
+    if (levelPairs.length === 0) return [];
+
+    // Memory matching grids require exactly 6 pairs (12 cards).
+    // If a custom level has fewer than 6, we pad it with other pairs from the same track.
+    if (levelPairs.length < 6) {
+      const others = allPairs.filter(p => p.track === track && p.level !== levelNum);
+      const padded = [...levelPairs, ...others].slice(0, 6);
+      return padded;
+    }
+
+    const shuffled = [...levelPairs].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 6);
+  };
+
+
+  const handleStartGame = (track, levelNum) => {
     playSynthSound("click", soundEnabled);
-    const selectedPairs = loadMatchPairs(track);
+    const selectedPairs = loadMatchPairs(track, levelNum);
     if (selectedPairs.length < 6) {
-      alert("At least 6 term/definition pairs are required for this track. Please check the content json.");
+      alert(`No concept pairs found for Level ${levelNum} in ${track}.`);
       return;
     }
 
@@ -178,6 +189,7 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
     const shuffledCards = cardList.sort(() => 0.5 - Math.random());
 
     setSelectedTrack(track);
+    setCurrentLevel(levelNum);
     setCards(shuffledCards);
     setSelectedIndices([]);
     setScore(0);
@@ -258,7 +270,8 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
 
         // Persist progress to local storage
         const existingLevels = savedProgress?.completedLevels || [];
-        const updatedLevels = [...new Set([...existingLevels, `match_${selectedTrack.toLowerCase()}`])];
+        const levelKey = `match_${selectedTrack.toLowerCase()}_level_${currentLevel}`;
+        const updatedLevels = [...new Set([...existingLevels, levelKey])];
         onProgressChange({
           completedLevels: updatedLevels,
           highScore: Math.max(savedProgress?.highScore || 0, finalScore),
@@ -341,43 +354,97 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
             exit={{ opacity: 0, scale: 0.95 }}
             className="flex flex-col items-center justify-center p-8 md:p-12 text-center h-[70vh] space-y-8"
           >
-            <div className="space-y-3">
-              <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
-                Mode: Code Match
-              </span>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
-                Concepts Match
-              </h2>
-              <p className="text-xs text-purple-300/50 max-w-md mx-auto">
-                A classic memory-flip term matching game. Click the cards to match 6 code terms with their definitions. Speed and accuracy net highest score.
-              </p>
-            </div>
+            {!selectedTrack ? (
+              <>
+                <div className="space-y-3">
+                  <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
+                    Mode: Code Match
+                  </span>
+                  <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
+                    Concepts Match
+                  </h2>
+                  <p className="text-xs text-purple-300/50 max-w-md mx-auto">
+                    Select a track to launch your level progress. Match 6 code terms with their definitions under the grid context!
+                  </p>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
-              {tracks.map((track) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
+                  {tracks.map((track) => {
+                    const totalLvs = getLevelsForTrack(track).length;
+                    return (
+                      <button
+                        key={track}
+                        onClick={() => setSelectedTrack(track)}
+                        className="relative p-5 rounded-2xl border border-purple-500/25 bg-gradient-to-br from-[#1a0e30]/40 to-[#0e071e]/70 text-left hover:scale-[1.03] transition-all cursor-pointer hover:border-purple-400 group overflow-hidden shadow-lg"
+                      >
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
+                        <span className="text-xs font-bold text-purple-400/60 uppercase">Track</span>
+                        <h4 className="text-lg font-black text-white group-hover:text-[#7CFFB2] transition-colors">{track}</h4>
+                        <div className="flex items-center gap-1 mt-3 text-[10px] text-purple-300/40">
+                          <span>{totalLvs} Level{totalLvs > 1 ? 's' : ''} available</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <button
-                  key={track}
-                  onClick={() => handleStartGame(track)}
-                  className="relative p-5 rounded-2xl border border-purple-500/25 bg-gradient-to-br from-[#1a0e30]/40 to-[#0e071e]/70 text-left hover:scale-[1.03] transition-all cursor-pointer hover:border-purple-400 group overflow-hidden shadow-lg"
+                  onClick={onBack}
+                  className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-4"
                 >
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all" />
-                  <span className="text-xs font-bold text-purple-400/60 uppercase">Track</span>
-                  <h4 className="text-lg font-black text-white group-hover:text-[#7CFFB2] transition-colors">{track}</h4>
-                  <div className="flex items-center gap-1 mt-3 text-[10px] text-purple-300/40">
-                    <span>12 Cards (6 Pairs)</span>
-                    <span>•</span>
-                    <span>No Timer Limit</span>
-                  </div>
+                  <ArrowLeft size={14} /> Back to Hub Lobby
                 </button>
-              ))}
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <span className="text-[10px] font-bold tracking-widest text-[#7CFFB2] border border-[#7CFFB2]/20 bg-[#7CFFB2]/5 px-3 py-1 rounded-full uppercase">
+                    Track: {selectedTrack}
+                  </span>
+                  <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 uppercase tracking-tight">
+                    Select Level
+                  </h2>
+                  <p className="text-xs text-purple-300/50 max-w-md mx-auto">
+                    Complete levels sequentially. Match all pairs to unlock the next level.
+                  </p>
+                </div>
 
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-4"
-            >
-              <ArrowLeft size={14} /> Back to Hub Lobby
-            </button>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-lg">
+                  {getLevelsForTrack(selectedTrack).map((lvl) => {
+                    const isUnlocked = lvl === 1 || (savedProgress?.completedLevels || []).includes(`match_${selectedTrack.toLowerCase()}_level_${lvl - 1}`);
+                    const isCompleted = (savedProgress?.completedLevels || []).includes(`match_${selectedTrack.toLowerCase()}_level_${lvl}`);
+                    return (
+                      <button
+                        key={lvl}
+                        disabled={!isUnlocked}
+                        onClick={() => handleStartGame(selectedTrack, lvl)}
+                        className={`relative p-5 rounded-2xl border flex flex-col items-center justify-center transition-all ${
+                          isUnlocked
+                            ? "bg-purple-950/20 border-purple-500/30 hover:border-[#7CFFB2] hover:scale-105 cursor-pointer text-white"
+                            : "bg-[#180f2d]/40 border-purple-950/20 text-purple-500/20 cursor-not-allowed"
+                        }`}
+                      >
+                        <span className="text-xs font-bold uppercase tracking-wider mb-2">Lvl {lvl}</span>
+                        {isCompleted ? (
+                          <span className="text-[9px] font-bold text-[#7CFFB2] bg-[#7CFFB2]/10 border border-[#7CFFB2]/20 px-2 py-0.5 rounded uppercase">Cleared</span>
+                        ) : isUnlocked ? (
+                          <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded uppercase">Play</span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-purple-500/10 uppercase">Locked</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setSelectedTrack(null)}
+                  className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors cursor-pointer mt-4"
+                >
+                  <ArrowLeft size={14} /> Back to Tracks Selection
+                </button>
+              </>
+            )}
           </motion.div>
         )}
 
@@ -394,7 +461,7 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
             <div className="flex items-center justify-between border-b border-purple-500/15 pb-4 mb-6">
               <div className="flex items-center space-x-3">
                 <span className="text-xs font-black uppercase text-purple-400 tracking-wider">
-                  {selectedTrack}
+                  {selectedTrack} — Level {currentLevel}
                 </span>
                 <span className="text-[10px] font-bold text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded bg-cyan-500/5 uppercase flex items-center gap-1">
                   <Clock size={11} /> {getFormatTime(elapsedTime)}
@@ -491,7 +558,7 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
                 CODE MATCH COMPLETE
               </h2>
               <p className="text-xs text-purple-300/40 font-mono mt-1 uppercase">
-                Track: {selectedTrack}
+                Track: {selectedTrack} — Level {currentLevel}
               </p>
             </div>
 
@@ -512,18 +579,34 @@ export default function CodeMatch({ onProgressChange, savedProgress, onBack }) {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3 pt-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+              {(() => {
+                const nextLvl = currentLevel + 1;
+                const trackLevels = getLevelsForTrack(selectedTrack);
+                const hasNextLvl = trackLevels.includes(nextLvl);
+                if (hasNextLvl) {
+                  return (
+                    <button
+                      onClick={() => handleStartGame(selectedTrack, nextLvl)}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition-all cursor-pointer flex items-center gap-2 hover:shadow-[0_0_12px_rgba(16,185,129,0.3)] font-mono"
+                    >
+                      <Play size={13} /> Proceed to Level {nextLvl}
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <button
-                onClick={() => handleStartGame(selectedTrack)}
-                className="px-5 py-2.5 rounded-xl border border-purple-500/25 bg-[#1b0d35]/30 text-purple-300 hover:text-white hover:border-purple-400 text-xs font-bold transition-all cursor-pointer flex items-center gap-2"
+                onClick={() => handleStartGame(selectedTrack, currentLevel)}
+                className="px-5 py-2.5 rounded-xl border border-purple-500/25 bg-[#1b0d35]/30 text-purple-300 hover:text-white hover:border-purple-400 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 font-mono"
               >
-                <RotateCcw size={13} /> Replay Track
+                <RotateCcw size={13} /> Replay Level {currentLevel}
               </button>
               <button
                 onClick={() => setPhase("lobby")}
-                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition-all cursor-pointer flex items-center gap-2 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition-all cursor-pointer flex items-center gap-2 hover:shadow-[0_0_12px_rgba(168,85,247,0.3)] font-mono"
               >
-                <Play size={13} /> Play Other Track
+                <Play size={13} /> Levels Selection
               </button>
             </div>
 

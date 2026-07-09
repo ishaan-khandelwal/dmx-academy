@@ -61,7 +61,7 @@ const getAllSubmissions = async (req, res, next) => {
       whereClause.status = status;
     }
 
-    if (req.user.role !== 'ADMIN') {
+    if (req.user && req.user.role !== 'ADMIN') {
       whereClause.user = {
         instituteId: req.user.instituteId
       };
@@ -132,7 +132,7 @@ const getSingleSubmission = async (req, res, next) => {
       });
     }
 
-    if (req.user.role !== 'ADMIN' && submission.user.instituteId !== req.user.instituteId) {
+    if (!req.user || (req.user.role !== 'ADMIN' && submission.user.instituteId !== req.user.instituteId)) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to view this submission.',
