@@ -1,7 +1,7 @@
 /**
  * Resolves the backend API base URL dynamically.
  */
-export function getApiBase(fallbackPort = 5001) {
+export function getApiBase(fallbackPort = 5472) {
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
