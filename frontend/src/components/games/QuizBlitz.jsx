@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, XCircle,
-  Trophy, RotateCcw, Play, Clock, Zap, Star, AlertCircle, Volume2, VolumeX
+  Trophy, RotateCcw, Play, Clock, Zap, Star, AlertCircle, Volume2, VolumeX, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";

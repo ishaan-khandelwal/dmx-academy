@@ -164,12 +164,27 @@ function QuizForm({ form, onChange }) {
       <div>
         <label className="block text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>Correct Answer *</label>
         <div className="flex gap-2">
-          {["A", "B", "C", "D"].map(opt => (
-            <button key={opt} type="button" onClick={() => onChange("correct_option", opt)}
-              className={`flex-1 py-2 rounded-xl border text-xs font-black transition-all cursor-pointer ${form.correct_option === opt ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300" : "border-white/10 text-white/40 hover:text-white/70"}`}>
-              {opt}
-            </button>
-          ))}
+          {["A", "B", "C", "D"].map(opt => {
+            const isSelected = form.correct_option === opt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => onChange("correct_option", opt)}
+                className={`flex-1 py-2 rounded-xl border text-xs font-black transition-all cursor-pointer ${
+                  isSelected
+                    ? "bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400 dark:bg-emerald-500/20"
+                    : "hover:bg-black/5 dark:hover:bg-white/5"
+                }`}
+                style={{
+                  borderColor: isSelected ? "rgb(16, 185, 129)" : "var(--border-primary)",
+                  color: isSelected ? undefined : "var(--text-secondary)"
+                }}
+              >
+                {opt}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -493,12 +508,12 @@ function validateForm(type, form) {
 }
 
 // ─── Question card display ─────────────────────────────────────────────────────
-function QuestionCard({ q, type, onEdit, onDelete }) {
+function QuestionCard({ q, type, onEdit, onDelete, canManage }) {
   const preview = {
     quiz: `[Lvl ${q.level || 1}] ${q.track} • ${q.question?.slice(0, 80)}${q.question?.length > 80 ? "…" : ""}`,
     match: `[Lvl ${q.level || 1}] ${q.track} • ${q.term} → ${q.definition?.slice(0, 60)}${q.definition?.length > 60 ? "…" : ""}`,
     debug: `[Lvl ${q.level || 1}] ${q.track} • ${q.title} (${(q.buggy_lines?.length || 1)} bug${(q.buggy_lines?.length || 1) > 1 ? 's' : ''} on line${(q.buggy_lines?.length || 1) > 1 ? 's' : ''} ${(q.buggy_lines || [{line_number: q.buggy_line_number}]).map(b => b.line_number).join(', ')})`,
-    fillin: `[Lvl ${q.level || 1}] ${q.lang} • ${q.title} — ${q.blanks?.length || 1} blank${(q.blanks?.length || 1) > 1 ? "s" : ""}`,
+    fillin: `[Lvl ${q.level || 1}] ${q.track || q.lang} • ${q.title} — ${q.blanks?.length || 1} blank${(q.blanks?.length || 1) > 1 ? "s" : ""}`,
   }[type];
 
   return (
@@ -509,19 +524,26 @@ function QuestionCard({ q, type, onEdit, onDelete }) {
       className="flex items-start justify-between gap-4 p-4 rounded-2xl border group transition-all hover:border-white/20"
       style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)" }}
     >
-      <p className="text-xs text-white/60 font-mono flex-1 leading-relaxed">{preview}</p>
-      <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={() => onEdit(q)} title="Edit"
-          className="p-1.5 rounded-lg hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors cursor-pointer"
-          style={{ color: "var(--text-muted)" }}>
-          <Edit3 size={13} />
-        </button>
-        <button onClick={() => onDelete(q.id)} title="Delete"
-          className="p-1.5 rounded-lg hover:bg-rose-500/10 hover:text-rose-400 transition-colors cursor-pointer"
-          style={{ color: "var(--text-muted)" }}>
-          <Trash2 size={13} />
-        </button>
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <p className="text-xs font-mono flex-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{preview}</p>
+        {!canManage && (
+          <span className="shrink-0 text-[9px] font-bold text-amber-400/60 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded uppercase tracking-wide">Built-in</span>
+        )}
       </div>
+      {canManage && (
+        <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onEdit(q)} title="Edit"
+            className="p-1.5 rounded-lg hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors cursor-pointer"
+            style={{ color: "var(--text-muted)" }}>
+            <Edit3 size={13} />
+          </button>
+          <button onClick={() => onDelete(q.id)} title="Delete"
+            className="p-1.5 rounded-lg hover:bg-rose-500/10 hover:text-rose-400 transition-colors cursor-pointer"
+            style={{ color: "var(--text-muted)" }}>
+            <Trash2 size={13} />
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -975,15 +997,23 @@ export default function ArcadeQuestionsPage() {
         ) : (
           <AnimatePresence>
             <div className="space-y-2">
-              {filtered.map(q => (
-                <QuestionCard
-                  key={q.id}
-                  q={q}
-                  type={activeType}
-                  onEdit={openEditForm}
-                  onDelete={(id) => setDeleteConfirm(id)}
-                />
-              ))}
+              {filtered.map(q => {
+                const isAdmin = user?.role === 'ADMIN';
+                const isInstituteAdmin = user?.role === 'INSTITUTE_ADMIN';
+                const questionInstituteId = q.instituteId ? Number(q.instituteId) : null;
+                const userInstituteId = user?.instituteId ? Number(user.instituteId) : null;
+                const canManage = isAdmin || (isInstituteAdmin && questionInstituteId !== null && questionInstituteId === userInstituteId);
+                return (
+                  <QuestionCard
+                    key={q.id}
+                    q={q}
+                    type={activeType}
+                    onEdit={openEditForm}
+                    onDelete={(id) => setDeleteConfirm(id)}
+                    canManage={canManage}
+                  />
+                );
+              })}
             </div>
           </AnimatePresence>
         )}

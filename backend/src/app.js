@@ -127,21 +127,7 @@ const seedDefaultUsers = async () => {
       }
     }
 
-    // Demote any other users who might have ADMIN roles to USER
-    const demoted = await prisma.user.updateMany({
-      where: {
-        role: 'ADMIN',
-        NOT: {
-          email: 'admin@synapse.com'
-        }
-      },
-      data: {
-        role: 'USER'
-      }
-    });
-    if (demoted.count > 0) {
-      console.log(`[SEED] Demoted ${demoted.count} other users back to USER role.`);
-    }
+    // No longer auto-demoting custom admins to allow custom super admins to persist.
 
   } catch (err) {
     console.error('[SEED] Failed to seed default users:', err);

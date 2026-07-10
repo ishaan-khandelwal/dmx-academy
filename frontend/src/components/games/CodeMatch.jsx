@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
-  ArrowLeft, Trophy, RotateCcw, Play, Clock, Zap, Star, AlertCircle, Volume2, VolumeX, Grid
+  ArrowLeft, Trophy, RotateCcw, Play, Clock, Zap, Star, AlertCircle, Volume2, VolumeX, Grid, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
